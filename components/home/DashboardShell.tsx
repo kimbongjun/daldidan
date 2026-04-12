@@ -10,10 +10,28 @@ import TrafficWidget from "@/components/widgets/TrafficWidget";
 import { FALLBACK_DEALS, FALLBACK_STOCKS } from "@/lib/data/fallback";
 import { MarketResponse, ShoppingResponse } from "@/lib/data/types";
 import { useLiveQuery } from "@/lib/data/useLiveQuery";
+import type { BlogPostSummary } from "@/lib/blog-shared";
 
-export default function DashboardShell() {
-  const marketState = useLiveQuery<MarketResponse>("/api/market");
-  const shoppingState = useLiveQuery<ShoppingResponse>("/api/shopping");
+type DashboardShellProps = {
+  initialBlogPosts: BlogPostSummary[];
+  initialMarketData: MarketResponse;
+  initialShoppingData: ShoppingResponse;
+};
+
+export default function DashboardShell({
+  initialBlogPosts,
+  initialMarketData,
+  initialShoppingData,
+}: DashboardShellProps) {
+  const marketState = useLiveQuery<MarketResponse>("/api/market", {
+    initialData: initialMarketData,
+    revalidateOnMount: false,
+  });
+  const shoppingState = useLiveQuery<ShoppingResponse>("/api/shopping", {
+    initialData: initialShoppingData,
+    revalidateOnMount: false,
+    intervalMs: 1000 * 60 * 10,
+  });
 
   const marketData = marketState.data;
   const shoppingData = shoppingState.data;
@@ -26,7 +44,7 @@ export default function DashboardShell() {
           stock={<StockWidget stocks={marketData?.stocks ?? FALLBACK_STOCKS} source={marketData?.source ?? "fallback"} fetchedAt={marketData?.fetchedAt} />}
           shopping={<ShoppingWidget deals={shoppingData?.deals ?? FALLBACK_DEALS} source={shoppingData?.source ?? "fallback"} />}
           traffic={<TrafficWidget />}
-          blog={<BlogWidget />}
+          blog={<BlogWidget initialPosts={initialBlogPosts} />}
         />
         <Footer />
       </div>

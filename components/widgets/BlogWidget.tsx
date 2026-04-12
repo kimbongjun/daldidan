@@ -7,11 +7,19 @@ import { ArrowRight, BookOpenText, PenLine } from "lucide-react";
 import type { BlogPostSummary } from "@/lib/blog-shared";
 import { formatBlogDate } from "@/lib/blog-shared";
 
-export default function BlogWidget() {
-  const [posts, setPosts] = useState<BlogPostSummary[]>([]);
-  const [loading, setLoading] = useState(true);
+type BlogWidgetProps = {
+  initialPosts?: BlogPostSummary[];
+};
+
+export default function BlogWidget({ initialPosts }: BlogWidgetProps) {
+  const [posts, setPosts] = useState<BlogPostSummary[]>(initialPosts ?? []);
+  const [loading, setLoading] = useState(initialPosts === undefined);
 
   useEffect(() => {
+    if (initialPosts !== undefined) {
+      return;
+    }
+
     let active = true;
     const controller = new AbortController();
 
@@ -34,7 +42,7 @@ export default function BlogWidget() {
       active = false;
       controller.abort();
     };
-  }, []);
+  }, [initialPosts]);
 
   return (
     <div className="bento-card gradient-orange h-full flex flex-col p-5 gap-4">

@@ -8,7 +8,14 @@ type QueryState<T> = {
   error: string | null;
 };
 
-export function useLiveQuery<T>(url: string, initialData: T | null = null) {
+type LiveQueryOptions<T> = {
+  initialData?: T | null;
+  intervalMs?: number;
+  revalidateOnMount?: boolean;
+};
+
+export function useLiveQuery<T>(url: string, options: LiveQueryOptions<T> = {}) {
+  const initialData = options.initialData ?? null;
   const [state, setState] = useState<QueryState<T>>({
     data: initialData,
     isLoading: initialData === null,
@@ -17,6 +24,8 @@ export function useLiveQuery<T>(url: string, initialData: T | null = null) {
 
   useEffect(() => {
     let active = true;
+    const intervalMs = options.intervalMs ?? 1000 * 60 * 2;
+    const shouldFetchOnMount = options.revalidateOnMount ?? initialData === null;
 
     async function load(signal?: AbortSignal) {
       if (typeof document !== "undefined" && document.visibilityState === "hidden") {
@@ -41,19 +50,21 @@ export function useLiveQuery<T>(url: string, initialData: T | null = null) {
     }
 
     const initialController = new AbortController();
-    load(initialController.signal);
+    if (shouldFetchOnMount) {
+      load(initialController.signal);
+    }
 
     const timer = window.setInterval(() => {
       const controller = new AbortController();
       load(controller.signal);
-    }, 1000 * 60 * 2);
+    }, intervalMs);
 
     return () => {
       active = false;
       initialController.abort();
       window.clearInterval(timer);
     };
-  }, [url]);
+  }, [initialData, options.intervalMs, options.revalidateOnMount, url]);
 
   return state;
 }

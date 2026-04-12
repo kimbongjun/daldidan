@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createPublicClient } from "@/lib/supabase/server";
 import type { BlogPostDetail, BlogPostSummary, EditableBlogPost } from "@/lib/blog-shared";
 
 function mapSummary(post: {
@@ -31,7 +31,7 @@ export function extractFirstImageFromHtml(contentHtml: string) {
 }
 
 export async function getPublishedBlogPosts(limit = 9) {
-  const supabase = await createClient();
+  const supabase = createPublicClient();
   const { data, error } = await supabase
     .from("blog_posts")
     .select("id, slug, title, description, thumbnail_url, content_html, author_name, published_at, created_at")
@@ -45,7 +45,7 @@ export async function getPublishedBlogPosts(limit = 9) {
 }
 
 export async function getBlogPostBySlug(slug: string) {
-  const supabase = await createClient();
+  const supabase = createPublicClient();
   const { data, error } = await supabase
     .from("blog_posts")
     .select("id, slug, title, description, thumbnail_url, author_name, published_at, created_at, content_html")
