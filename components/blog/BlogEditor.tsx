@@ -27,9 +27,7 @@ import { EmbedBlock, parseYouTubeEmbedUrl } from "@/lib/blog-embeds";
 import { MapInputBlock } from "@/components/blog/MapInputBlock";
 import { uploadImagesToStorage } from "@/lib/image-upload";
 
-export const DEFAULT_EDITOR_HTML = `
-  <p>블로그 본문을 작성해주세요.</p>
-`;
+export const DEFAULT_EDITOR_HTML = "";
 
 interface EditorValue {
   html: string;

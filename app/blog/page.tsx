@@ -39,7 +39,14 @@ export default async function BlogPage() {
                   {post.thumbnailUrl ? (
                     <Image src={post.thumbnailUrl} alt={post.title} fill sizes="(max-width:768px) 100vw, (max-width:1280px) 50vw, 33vw" className="object-cover" unoptimized />
                   ) : (
-                    <div className="w-full h-full" style={{ background: "linear-gradient(135deg, rgba(234,88,12,0.18), rgba(234,88,12,0.04))" }} />
+                    <div className="w-full h-full flex flex-col items-center justify-center gap-2"
+                      style={{ background: "linear-gradient(135deg, rgba(234,88,12,0.1), rgba(234,88,12,0.03))" }}>
+                      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="rgba(234,88,12,0.4)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
+                        <polyline points="21 15 16 10 5 21"/>
+                      </svg>
+                      <span style={{ fontSize: "0.7rem", color: "rgba(234,88,12,0.45)", fontWeight: 600 }}>이미지 없음</span>
+                    </div>
                   )}
                 </div>
                 <div className="p-4 flex flex-col gap-3">

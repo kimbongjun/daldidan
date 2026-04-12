@@ -33,8 +33,7 @@ const BlogEditor = dynamic(() => import("@/components/blog/BlogEditor"), {
   ),
 });
 
-// DEFAULT_EDITOR_HTML은 에디터가 dynamic이므로 직접 정의
-const DEFAULT_HTML = `<p>블로그 본문을 작성해주세요.</p>`;
+const DEFAULT_HTML = "";
 
 interface EditorValue {
   html: string;
