@@ -16,6 +16,14 @@ export interface EditableBlogPost extends BlogPostDetail {
   contentJson: unknown;
 }
 
+export function extractDescriptionFromHtml(html: string, maxLen = 160): string {
+  return html
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxLen);
+}
+
 export function formatBlogDate(value: string) {
   return new Intl.DateTimeFormat("ko-KR", {
     year: "numeric",

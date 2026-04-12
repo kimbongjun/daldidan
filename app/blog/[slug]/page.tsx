@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
+import BlogComments from "@/components/blog/BlogComments";
 import { canEditBlogPost, getBlogPostBySlug } from "@/lib/blog";
 import { formatBlogDate } from "@/lib/blog-shared";
 
@@ -24,19 +25,21 @@ export default async function BlogDetailPage({ params }: { params: Promise<{ slu
         <PageHeader title={post.title} subtitle={`${formatBlogDate(post.publishedAt)} · ${post.authorName}`} accentColor={ACCENT} />
 
         <article className="grid lg:grid-cols-[minmax(0,1fr)_280px] gap-6">
-          <section className="bento-card overflow-hidden">
-            {post.thumbnailUrl ? (
-              <div className="relative aspect-[16/9]" style={{ background: "var(--border)" }}>
-                <Image src={post.thumbnailUrl} alt={post.title} fill sizes="(max-width:1024px) 100vw, 70vw" className="object-cover" unoptimized />
+          <div className="flex flex-col gap-6">
+            <section className="bento-card overflow-hidden">
+              {post.thumbnailUrl ? (
+                <div className="relative aspect-[16/9]" style={{ background: "var(--border)" }}>
+                  <Image src={post.thumbnailUrl} alt={post.title} fill sizes="(max-width:1024px) 100vw, 70vw" className="object-cover" unoptimized />
+                </div>
+              ) : null}
+              <div className="p-6 sm:p-8">
+                <div className="blog-prose" dangerouslySetInnerHTML={{ __html: post.contentHtml }} />
               </div>
-            ) : null}
-            <div className="p-6 sm:p-8 flex flex-col gap-6">
-              <div>
-                <p className="text-sm leading-relaxed" style={{ color: "var(--text-muted)" }}>{post.description}</p>
-              </div>
-              <div className="blog-prose" dangerouslySetInnerHTML={{ __html: post.contentHtml }} />
-            </div>
-          </section>
+            </section>
+
+            {/* 댓글 */}
+            <BlogComments postId={post.id} />
+          </div>
 
           <aside className="flex flex-col gap-4">
             <div className="bento-card p-5 flex flex-col gap-2">

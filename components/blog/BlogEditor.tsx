@@ -93,7 +93,7 @@ export default function BlogEditor({
         allowBase64: true,
       }),
     ],
-    content: value.html || DEFAULT_EDITOR_HTML,
+    content: value.html,
     editorProps: {
       attributes: {
         class: "blog-editor-content",

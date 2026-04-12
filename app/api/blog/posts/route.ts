@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { ensureUniqueBlogSlug, extractFirstImageFromHtml, getPublishedBlogPosts } from "@/lib/blog";
+import { extractDescriptionFromHtml } from "@/lib/blog-shared";
 import { createClient } from "@/lib/supabase/server";
 
 export async function GET(request: NextRequest) {
@@ -20,19 +21,17 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json() as {
     title?: string;
-    description?: string;
-    thumbnailUrl?: string;
     contentHtml?: string;
     contentJson?: unknown;
   };
 
   const title = body.title?.trim() ?? "";
-  const description = body.description?.trim() ?? "";
   const contentHtml = body.contentHtml?.trim() ?? "";
-  const resolvedThumbnail = body.thumbnailUrl?.trim() || extractFirstImageFromHtml(contentHtml);
+  const description = extractDescriptionFromHtml(contentHtml);
+  const resolvedThumbnail = extractFirstImageFromHtml(contentHtml);
 
-  if (!title || !description || !contentHtml) {
-    return NextResponse.json({ error: "제목, 설명, 본문을 모두 입력해주세요." }, { status: 400 });
+  if (!title || !contentHtml) {
+    return NextResponse.json({ error: "제목과 본문을 입력해주세요." }, { status: 400 });
   }
 
   const slug = await ensureUniqueBlogSlug(title);
@@ -83,19 +82,17 @@ export async function PATCH(request: NextRequest) {
   const body = await request.json() as {
     id?: string;
     title?: string;
-    description?: string;
-    thumbnailUrl?: string;
     contentHtml?: string;
     contentJson?: unknown;
   };
 
   const id = body.id?.trim() ?? "";
   const title = body.title?.trim() ?? "";
-  const description = body.description?.trim() ?? "";
   const contentHtml = body.contentHtml?.trim() ?? "";
-  const resolvedThumbnail = body.thumbnailUrl?.trim() || extractFirstImageFromHtml(contentHtml);
+  const description = extractDescriptionFromHtml(contentHtml);
+  const resolvedThumbnail = extractFirstImageFromHtml(contentHtml);
 
-  if (!id || !title || !description || !contentHtml) {
+  if (!id || !title || !contentHtml) {
     return NextResponse.json({ error: "수정에 필요한 정보가 부족합니다." }, { status: 400 });
   }
 
