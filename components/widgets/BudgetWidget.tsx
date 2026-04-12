@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ArrowRight, LogIn, TrendingDown, TrendingUp, Wallet } from "lucide-react";
+import { ArrowRight, LogIn, TrendingDown, TrendingUp, Wallet, PieChart } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { User } from "@supabase/supabase-js";
 
@@ -30,11 +30,10 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 export default function BudgetWidget() {
-  const [user, setUser] = useState<User | null | undefined>(undefined); // undefined = 로딩 중
+  const [user, setUser] = useState<User | null | undefined>(undefined);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // 세션 감지
   useEffect(() => {
     const supabase = createClient();
     supabase.auth.getUser().then(({ data }) => setUser(data.user ?? null));
@@ -44,7 +43,6 @@ export default function BudgetWidget() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // 거래 목록 로드
   useEffect(() => {
     if (!user) return;
     let active = true;
@@ -72,31 +70,38 @@ export default function BudgetWidget() {
     };
   }, [user]);
 
-  // 집계
   const income = transactions.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0);
   const expense = transactions.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0);
   const balance = income - expense;
 
-  const recentExpenses = transactions
+  // 카테고리별 지출 집계
+  const categoryTotals = transactions
     .filter((t) => t.type === "expense")
+    .reduce<Record<string, number>>((acc, t) => {
+      acc[t.category] = (acc[t.category] ?? 0) + t.amount;
+      return acc;
+    }, {});
+  const topCategories = Object.entries(categoryTotals)
+    .sort((a, b) => b[1] - a[1])
     .slice(0, 4);
 
-  // ── 로딩 중 (세션 확인 전) ──
+  const savingRate = income > 0 ? Math.round(((income - expense) / income) * 100) : 0;
+
   if (user === undefined) {
     return (
       <div className="bento-card gradient-indigo h-full flex flex-col p-5 items-center justify-center gap-2">
         <div style={{ width: 28, height: 28, borderRadius: "50%", border: "3px solid #6366F1", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }} />
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     );
   }
 
-  // ── 비로그인 ──
   if (!user) {
     return (
       <div className="bento-card gradient-indigo h-full flex flex-col p-5 gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "#6366F1" }}>가계부</p>
-          <h2 className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>분석 중심 관리</h2>
+          <h2 className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>분석 요약</h2>
         </div>
         <div className="flex-1 flex flex-col items-center justify-center gap-3">
           <div style={{ width: 48, height: 48, borderRadius: "0.875rem", background: "rgba(99,102,241,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -116,24 +121,23 @@ export default function BudgetWidget() {
     );
   }
 
-  // ── 로그인 상태 ──
   return (
     <div className="bento-card gradient-indigo h-full flex flex-col p-5 gap-4">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "#6366F1" }}>가계부</p>
-          <h2 className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>분석 중심 관리</h2>
+          <h2 className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>분석 요약</h2>
         </div>
         <Link
           href="/budget"
           className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg transition-opacity hover:opacity-70"
           style={{ background: "#6366F122", color: "#6366F1" }}
         >
-          수정/분석 <ArrowRight size={11} />
+          상세보기 <ArrowRight size={11} />
         </Link>
       </div>
 
-      {/* 요약 카드 */}
+      {/* 수입/지출/잔액 요약 */}
       <div className="grid grid-cols-3 gap-2">
         {[
           { label: "잔액", value: balance, color: balance >= 0 ? "#10B981" : "#F43F5E", icon: <Wallet size={13} /> },
@@ -147,13 +151,36 @@ export default function BudgetWidget() {
         ))}
       </div>
 
-      {/* 거래 목록 or 안내 */}
-      <div className="flex flex-col gap-2 flex-1 overflow-auto scrollbar-hide">
+      {/* 저축률 */}
+      <div className="rounded-xl p-3" style={{ background: "rgba(255,255,255,0.04)" }}>
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>저축률</span>
+          <span className="text-sm font-black" style={{ color: savingRate >= 0 ? "#10B981" : "#F43F5E" }}>{savingRate}%</span>
+        </div>
+        <div style={{ height: 6, borderRadius: 999, background: "rgba(255,255,255,0.08)", overflow: "hidden" }}>
+          <div
+            style={{
+              width: `${Math.min(Math.max(savingRate, 0), 100)}%`,
+              height: "100%",
+              borderRadius: 999,
+              background: savingRate >= 0 ? "#10B981" : "#F43F5E",
+              transition: "width 0.6s ease",
+            }}
+          />
+        </div>
+      </div>
+
+      {/* 카테고리별 지출 */}
+      <div className="flex flex-col gap-2 flex-1">
+        <div className="flex items-center gap-1.5">
+          <PieChart size={12} style={{ color: "#6366F1" }} />
+          <p className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>카테고리별 지출</p>
+        </div>
         {loading ? (
           <div className="flex-1 flex items-center justify-center">
             <div style={{ width: 20, height: 20, borderRadius: "50%", border: "2px solid #6366F1", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }} />
           </div>
-        ) : recentExpenses.length === 0 ? (
+        ) : topCategories.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-2">
             <p className="text-sm" style={{ color: "var(--text-muted)" }}>아직 거래 내역이 없습니다.</p>
             <Link href="/budget" className="text-xs font-semibold" style={{ color: "#6366F1" }}>
@@ -161,37 +188,25 @@ export default function BudgetWidget() {
             </Link>
           </div>
         ) : (
-          <>
-            <p className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>최근 소비 내역</p>
-            {recentExpenses.map((transaction) => (
-              <Link
-                key={transaction.id}
-                href={`/budget?transaction=${transaction.id}`}
-                className="rounded-xl px-3 py-2.5 flex items-center justify-between gap-2 transition-opacity hover:opacity-80"
-                style={{ background: "rgba(255,255,255,0.03)" }}
-              >
-                <div className="flex items-center gap-2 min-w-0">
-                  <div
-                    className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0"
-                    style={{ background: (CATEGORY_COLORS[transaction.category] ?? "#8B8BA7") + "22", color: CATEGORY_COLORS[transaction.category] ?? "#8B8BA7" }}
-                  >
-                    {transaction.category.slice(0, 1)}
+          <div className="flex flex-col gap-2">
+            {topCategories.map(([cat, amt]) => {
+              const pct = expense > 0 ? Math.round((amt / expense) * 100) : 0;
+              const color = CATEGORY_COLORS[cat] ?? "#8B8BA7";
+              return (
+                <div key={cat}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>{cat}</span>
+                    <span className="text-xs" style={{ color }}>
+                      {(amt / 10000).toFixed(1)}만원 · {pct}%
+                    </span>
                   </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold truncate" style={{ color: "var(--text-primary)" }}>
-                      {transaction.note || transaction.category}
-                    </p>
-                    <p className="text-xs truncate" style={{ color: "var(--text-muted)" }}>
-                      {transaction.category} · {transaction.date}
-                    </p>
+                  <div style={{ height: 4, borderRadius: 999, background: "rgba(255,255,255,0.08)", overflow: "hidden" }}>
+                    <div style={{ width: `${pct}%`, height: "100%", borderRadius: 999, background: color, transition: "width 0.6s ease" }} />
                   </div>
                 </div>
-                <span className="text-sm font-bold shrink-0" style={{ color: CATEGORY_COLORS[transaction.category] ?? "#8B8BA7" }}>
-                  {transaction.amount.toLocaleString()}원
-                </span>
-              </Link>
-            ))}
-          </>
+              );
+            })}
+          </div>
         )}
       </div>
 

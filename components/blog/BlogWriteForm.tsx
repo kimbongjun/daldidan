@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ImagePlus, LoaderCircle, PenLine } from "lucide-react";
+import { ImagePlus, LoaderCircle, PenLine, Trash2 } from "lucide-react";
 import BlogEditor, { DEFAULT_EDITOR_HTML } from "@/components/blog/BlogEditor";
 import { filesToDataUrls } from "@/lib/image-upload";
 import { sendNativeNotification } from "@/lib/notifications";
@@ -35,6 +35,7 @@ export default function BlogWriteForm({
       : EMPTY_CONTENT,
   );
   const [submitting, setSubmitting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [thumbnailUploading, setThumbnailUploading] = useState(false);
   const [error, setError] = useState("");
   const thumbnailInputRef = useRef<HTMLInputElement | null>(null);
@@ -85,6 +86,35 @@ export default function BlogWriteForm({
     }
   };
 
+  const handleDelete = async () => {
+    if (!initialPost?.id || deleting) return;
+    if (!confirm("정말 이 글을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.")) return;
+
+    setDeleting(true);
+    setError("");
+
+    try {
+      const response = await fetch("/api/blog/posts", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: initialPost.id }),
+      });
+
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.error ?? "글을 삭제하지 못했습니다.");
+      }
+
+      router.push("/blog");
+      router.refresh();
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "글을 삭제하지 못했습니다.");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const handleThumbnailUpload = async (files: FileList | null) => {
     if (!files?.length) return;
 
@@ -120,10 +150,7 @@ export default function BlogWriteForm({
       <section className="bento-card p-5 sm:p-6 flex flex-col gap-5">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "#EA580C" }}>블로그 작성</p>
-            <h2 className="text-2xl font-black leading-tight" style={{ color: "var(--text-primary)" }}>
-              {isEditMode ? "기존 글을 자연스럽게 다듬는 편집기" : "생각을 문서처럼 정리하는 에디터"}
-            </h2>
+            <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "#EA580C" }}>블로그 작성</p>            
           </div>
           <div
             className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0"
@@ -141,7 +168,7 @@ export default function BlogWriteForm({
         />
 
         <textarea
-          placeholder="리스트 카드와 위젯에 보여줄 짧은 설명"
+          placeholder="글 요약 내용"
           value={description}
           onChange={(event) => setDescription(event.target.value)}
           rows={3}
@@ -198,10 +225,7 @@ export default function BlogWriteForm({
 
       <aside className="flex flex-col gap-4">
         <div className="bento-card p-5 flex flex-col gap-3">
-          <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>발행 체크</p>
-          <p className="text-sm leading-relaxed" style={{ color: "var(--text-muted)" }}>
-            제목, 설명, 본문이 모두 채워지면 {isEditMode ? "수정 내용을 바로 반영합니다." : "즉시 공개 글로 발행됩니다."} 썸네일은 비워도 저장할 수 있습니다.
-          </p>
+          <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>발행 체크</p>          
           <button
             type="button"
             onClick={handleSubmit}
@@ -218,13 +242,21 @@ export default function BlogWriteForm({
               isEditMode ? "수정 저장" : "게시하기"
             )}
           </button>
-        </div>
-
-        <div className="bento-card p-5 flex flex-col gap-3">
-          <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>작성 팁</p>
-          <p className="text-sm leading-relaxed" style={{ color: "var(--text-muted)" }}>
-            첫 문단은 문제 정의, 중간은 정리된 섹션, 마지막은 한 줄 결론으로 구성하면 읽기 흐름이 좋아집니다.
-          </p>
+          {isEditMode && (
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={deleting}
+              className="pressable w-full py-3 rounded-2xl font-bold transition-opacity disabled:opacity-45 flex items-center justify-center gap-2"
+              style={{ background: "rgba(244,63,94,0.12)", color: "#F43F5E", border: "1px solid rgba(244,63,94,0.25)" }}
+            >
+              {deleting ? (
+                <><LoaderCircle size={16} className="animate-spin" />삭제 중</>
+              ) : (
+                <><Trash2 size={15} />글 삭제</>
+              )}
+            </button>
+          )}
         </div>
       </aside>
     </div>

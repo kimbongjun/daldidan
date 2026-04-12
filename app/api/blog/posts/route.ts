@@ -136,3 +136,45 @@ export async function PATCH(request: NextRequest) {
 
   return NextResponse.json({ slug }, { status: 200 });
 }
+
+export async function DELETE(request: NextRequest) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
+  }
+
+  const { id } = await request.json() as { id?: string };
+
+  if (!id?.trim()) {
+    return NextResponse.json({ error: "삭제할 글의 ID가 필요합니다." }, { status: 400 });
+  }
+
+  const { data: existing, error: fetchError } = await supabase
+    .from("blog_posts")
+    .select("id, slug")
+    .eq("id", id)
+    .eq("author_id", user.id)
+    .maybeSingle();
+
+  if (fetchError || !existing) {
+    return NextResponse.json({ error: "삭제할 글을 찾지 못했습니다." }, { status: 404 });
+  }
+
+  const { error } = await supabase
+    .from("blog_posts")
+    .delete()
+    .eq("id", id)
+    .eq("author_id", user.id);
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  revalidatePath("/");
+  revalidatePath("/blog");
+  revalidatePath(`/blog/${existing.slug}`);
+
+  return NextResponse.json({ ok: true }, { status: 200 });
+}
