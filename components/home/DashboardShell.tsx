@@ -5,35 +5,27 @@ import Header from "@/components/Header";
 import BudgetWidget from "@/components/widgets/BudgetWidget";
 import BlogWidget from "@/components/widgets/BlogWidget";
 import ShoppingWidget from "@/components/widgets/ShoppingWidget";
-import StockWidget from "@/components/widgets/StockWidget";
 import TrafficWidget from "@/components/widgets/TrafficWidget";
-import { FALLBACK_DEALS, FALLBACK_STOCKS } from "@/lib/data/fallback";
-import { MarketResponse, ShoppingResponse } from "@/lib/data/types";
+import { FALLBACK_DEALS } from "@/lib/data/fallback";
+import { ShoppingResponse } from "@/lib/data/types";
 import { useLiveQuery } from "@/lib/data/useLiveQuery";
 import type { BlogPostSummary } from "@/lib/blog-shared";
 
 type DashboardShellProps = {
   initialBlogPosts: BlogPostSummary[];
-  initialMarketData: MarketResponse;
   initialShoppingData: ShoppingResponse;
 };
 
 export default function DashboardShell({
   initialBlogPosts,
-  initialMarketData,
   initialShoppingData,
 }: DashboardShellProps) {
-  const marketState = useLiveQuery<MarketResponse>("/api/market", {
-    initialData: initialMarketData,
-    revalidateOnMount: false,
-  });
   const shoppingState = useLiveQuery<ShoppingResponse>("/api/shopping", {
     initialData: initialShoppingData,
     revalidateOnMount: false,
     intervalMs: 1000 * 60 * 10,
   });
 
-  const marketData = marketState.data;
   const shoppingData = shoppingState.data;
 
   return (
@@ -41,7 +33,6 @@ export default function DashboardShell({
       <div style={{ maxWidth: 1400, margin: "0 auto", padding: "0 1rem 3rem", width: "100%", boxSizing: "border-box" }}>
         <Header />        
         <BentoGrid
-          stock={<StockWidget stocks={marketData?.stocks ?? FALLBACK_STOCKS} source={marketData?.source ?? "fallback"} fetchedAt={marketData?.fetchedAt} />}
           shopping={<ShoppingWidget deals={shoppingData?.deals ?? FALLBACK_DEALS} source={shoppingData?.source ?? "fallback"} />}
           traffic={<TrafficWidget />}
           blog={<BlogWidget initialPosts={initialBlogPosts} />}
@@ -53,12 +44,10 @@ export default function DashboardShell({
 }
 
 function BentoGrid({
-  stock,
   shopping,
   traffic,
   blog,
 }: {
-  stock: React.ReactNode;
   shopping: React.ReactNode;
   traffic: React.ReactNode;
   blog: React.ReactNode;
@@ -88,11 +77,10 @@ function BentoGrid({
             gap: 1rem;
             width: 100%;
             grid-template-columns: minmax(0,1fr) minmax(0,1fr) minmax(0,1fr);
-            grid-template-rows: 460px 500px 360px;
+            grid-template-rows: 460px 500px;
             grid-template-areas:
               "budget  blog   shopping"
-              "traffic traffic  traffic"
-              "stock    stock    stock";
+              "traffic traffic  traffic";
           }
         }
       `}</style>
@@ -102,7 +90,6 @@ function BentoGrid({
         <div style={{ gridArea: "budget",   minWidth: 0 }}><BudgetWidget /></div>
         <div style={{ gridArea: "blog",     minWidth: 0 }}>{blog}</div>                
         <div style={{ gridArea: "shopping", minWidth: 0 }}>{shopping}</div>
-        <div style={{ gridArea: "stock",    minWidth: 0 }}>{stock}</div>
         <div style={{ gridArea: "traffic",  minWidth: 0 }}>{traffic}</div>        
       </div>
 
@@ -111,7 +98,6 @@ function BentoGrid({
         <div style={{ minWidth: 0, height: 420 }}><BudgetWidget /></div>
         <div style={{ minWidth: 0, height: 320  }}>{blog}</div>        
         <div style={{ minWidth: 0, height: 380 }}>{shopping}</div>
-        <div style={{ minWidth: 0, height: 340, gridColumn: "span 2"}}>{stock}</div>
         <div style={{ minWidth: 0, height: 520, gridColumn: "span 2" }}>{traffic}</div>
       </div>
 
@@ -120,7 +106,6 @@ function BentoGrid({
         <div style={{ minWidth: 0, height: 480 }}><BudgetWidget /></div>
         <div style={{ minWidth: 0, height: 360 }}>{blog}</div>                
         <div style={{ minWidth: 0, height: 380 }}>{shopping}</div>
-        <div style={{ minWidth: 0, height: 460 }}>{stock}</div>
         <div style={{ minWidth: 0, height: 560 }}>{traffic}</div>
       </div>
     </div>

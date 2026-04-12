@@ -1,39 +1,4 @@
-export type StockMarket = "KR" | "US";
 export type EventType = "movie" | "concert" | "exhibition";
-
-export interface MarketQuote {
-  symbol: string;
-  name: string;
-  displaySymbol?: string;
-  sector?: string;
-  listingMarket?: string;
-  market: StockMarket;
-  exchange: string;
-  price: number;
-  currency: string;
-  change: number;
-  changePct: number;
-  previousClose: number;
-  dayHigh?: number;
-  dayLow?: number;
-  volume?: number;
-  marketCap?: number;
-  range52w?: {
-    high: number;
-    low: number;
-  };
-  sparkline: number[];
-  updatedAt: string;
-}
-
-export interface MarketIndexQuote {
-  symbol: string;
-  name: string;
-  region: "KR" | "US" | "JP" | "CN";
-  value: number;
-  change: number;
-  changePct: number;
-}
 
 export interface ShoppingDeal {
   id: string;
@@ -77,13 +42,6 @@ export interface CultureDetail extends CultureItem {
   cast?: string[];
   priceInfo?: string;
   status?: string;
-}
-
-export interface MarketResponse {
-  indices: MarketIndexQuote[];
-  stocks: MarketQuote[];
-  source: string;
-  fetchedAt: string;
 }
 
 export interface UsedItem {
