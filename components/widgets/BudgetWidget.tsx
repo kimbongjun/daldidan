@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ArrowRight, LogIn, TrendingDown, TrendingUp, Wallet, PieChart } from "lucide-react";
+import { ArrowRight, LogIn, TrendingDown, TrendingUp, Wallet } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { User } from "@supabase/supabase-js";
 
@@ -15,19 +15,6 @@ interface Transaction {
   date: string;
 }
 
-const CATEGORY_COLORS: Record<string, string> = {
-  식비: "#F59E0B",
-  교통: "#06B6D4",
-  쇼핑: "#F43F5E",
-  문화: "#7C3AED",
-  의료: "#10B981",
-  통신: "#6366F1",
-  공과금: "#EC4899",
-  구독비: "#14B8A6",
-  대출: "#EF4444",
-  급여: "#10B981",
-  기타: "#8B8BA7",
-};
 
 export default function BudgetWidget() {
   const [user, setUser] = useState<User | null | undefined>(undefined);
@@ -73,18 +60,6 @@ export default function BudgetWidget() {
   const income = transactions.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0);
   const expense = transactions.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0);
   const balance = income - expense;
-
-  // 카테고리별 지출 집계
-  const categoryTotals = transactions
-    .filter((t) => t.type === "expense")
-    .reduce<Record<string, number>>((acc, t) => {
-      acc[t.category] = (acc[t.category] ?? 0) + t.amount;
-      return acc;
-    }, {});
-  const topCategories = Object.entries(categoryTotals)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 4);
-
   const savingRate = income > 0 ? Math.round(((income - expense) / income) * 100) : 0;
 
   if (user === undefined) {
@@ -170,45 +145,20 @@ export default function BudgetWidget() {
         </div>
       </div>
 
-      {/* 카테고리별 지출 */}
-      <div className="flex flex-col gap-2 flex-1">
-        <div className="flex items-center gap-1.5">
-          <PieChart size={12} style={{ color: "#6366F1" }} />
-          <p className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>카테고리별 지출</p>
+      {/* 거래 없을 때 안내 */}
+      {!loading && transactions.length === 0 && (
+        <div className="flex-1 flex flex-col items-center justify-center gap-2">
+          <p className="text-sm" style={{ color: "var(--text-muted)" }}>아직 거래 내역이 없습니다.</p>
+          <Link href="/budget" className="text-xs font-semibold" style={{ color: "#6366F1" }}>
+            + 첫 거래 추가하기
+          </Link>
         </div>
-        {loading ? (
-          <div className="flex-1 flex items-center justify-center">
-            <div style={{ width: 20, height: 20, borderRadius: "50%", border: "2px solid #6366F1", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }} />
-          </div>
-        ) : topCategories.length === 0 ? (
-          <div className="flex-1 flex flex-col items-center justify-center gap-2">
-            <p className="text-sm" style={{ color: "var(--text-muted)" }}>아직 거래 내역이 없습니다.</p>
-            <Link href="/budget" className="text-xs font-semibold" style={{ color: "#6366F1" }}>
-              + 첫 거래 추가하기
-            </Link>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {topCategories.map(([cat, amt]) => {
-              const pct = expense > 0 ? Math.round((amt / expense) * 100) : 0;
-              const color = CATEGORY_COLORS[cat] ?? "#8B8BA7";
-              return (
-                <div key={cat}>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>{cat}</span>
-                    <span className="text-xs" style={{ color }}>
-                      {(amt / 10000).toFixed(1)}만원 · {pct}%
-                    </span>
-                  </div>
-                  <div style={{ height: 4, borderRadius: 999, background: "rgba(255,255,255,0.08)", overflow: "hidden" }}>
-                    <div style={{ width: `${pct}%`, height: "100%", borderRadius: 999, background: color, transition: "width 0.6s ease" }} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+      )}
+      {loading && (
+        <div className="flex-1 flex items-center justify-center">
+          <div style={{ width: 20, height: 20, borderRadius: "50%", border: "2px solid #6366F1", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }} />
+        </div>
+      )}
 
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
