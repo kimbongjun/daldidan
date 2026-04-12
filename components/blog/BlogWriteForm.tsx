@@ -1,21 +1,45 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { LoaderCircle, PenLine, Trash2 } from "lucide-react";
-import BlogEditor, { DEFAULT_EDITOR_HTML } from "@/components/blog/BlogEditor";
 import { sendNativeNotification } from "@/lib/notifications";
 import type { EditableBlogPost } from "@/lib/blog-shared";
+
+// 에디터는 클라이언트 전용 무거운 번들이므로 dynamic import로 분리
+// → 글 작성 페이지의 초기 로드 속도 향상
+const BlogEditor = dynamic(() => import("@/components/blog/BlogEditor"), {
+  ssr: false,
+  loading: () => (
+    <div
+      style={{
+        minHeight: 380,
+        borderRadius: "1.75rem",
+        background: "var(--bg-input)",
+        border: "1px solid var(--border)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "0.5rem",
+        color: "var(--text-muted)",
+        fontSize: "0.875rem",
+      }}
+    >
+      <LoaderCircle size={16} style={{ animation: "spin 0.8s linear infinite" }} />
+      에디터 로딩 중...
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+    </div>
+  ),
+});
+
+// DEFAULT_EDITOR_HTML은 에디터가 dynamic이므로 직접 정의
+const DEFAULT_HTML = `<p>블로그 본문을 작성해주세요.</p>`;
 
 interface EditorValue {
   html: string;
   json: unknown;
 }
-
-const EMPTY_CONTENT: EditorValue = {
-  html: DEFAULT_EDITOR_HTML,
-  json: null,
-};
 
 export default function BlogWriteForm({
   initialPost,
@@ -25,11 +49,10 @@ export default function BlogWriteForm({
   const router = useRouter();
   const isEditMode = Boolean(initialPost);
   const [title, setTitle] = useState(initialPost?.title ?? "");
-  const [content, setContent] = useState<EditorValue>(
-    initialPost
-      ? { html: initialPost.contentHtml, json: initialPost.contentJson }
-      : EMPTY_CONTENT,
-  );
+  const [content, setContent] = useState<EditorValue>({
+    html: initialPost?.contentHtml ?? DEFAULT_HTML,
+    json: null, // content_json은 저장하지 않음 (렌더링엔 html만 사용)
+  });
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
@@ -41,7 +64,6 @@ export default function BlogWriteForm({
 
   const handleSubmit = async () => {
     if (!canSubmit || submitting) return;
-
     setSubmitting(true);
     setError("");
 
@@ -49,16 +71,15 @@ export default function BlogWriteForm({
       const response = await fetch("/api/blog/posts", {
         method: isEditMode ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
+        // content_json 제외 — payload 크기 최소화
         body: JSON.stringify({
           id: initialPost?.id,
           title,
           contentHtml: content.html,
-          contentJson: content.json,
         }),
       });
 
       const payload = await response.json();
-
       if (!response.ok) {
         throw new Error(payload.error ?? "글을 저장하지 못했습니다.");
       }
@@ -81,7 +102,6 @@ export default function BlogWriteForm({
   const handleDelete = async () => {
     if (!initialPost?.id || deleting) return;
     if (!confirm("정말 이 글을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.")) return;
-
     setDeleting(true);
     setError("");
 
@@ -93,7 +113,6 @@ export default function BlogWriteForm({
       });
 
       const payload = await response.json();
-
       if (!response.ok) {
         throw new Error(payload.error ?? "글을 삭제하지 못했습니다.");
       }
@@ -137,7 +156,7 @@ export default function BlogWriteForm({
         <input
           placeholder="글 제목"
           value={title}
-          onChange={(event) => setTitle(event.target.value)}
+          onChange={(e) => setTitle(e.target.value)}
           style={{ ...inputStyle, fontSize: "1.25rem", fontWeight: 800 }}
         />
 

@@ -22,7 +22,6 @@ export async function POST(request: NextRequest) {
   const body = await request.json() as {
     title?: string;
     contentHtml?: string;
-    contentJson?: unknown;
   };
 
   const title = body.title?.trim() ?? "";
@@ -55,7 +54,6 @@ export async function POST(request: NextRequest) {
       description,
       thumbnail_url: resolvedThumbnail || null,
       content_html: contentHtml,
-      content_json: body.contentJson ?? null,
       is_published: true,
       published_at: publishedAt,
     });
@@ -83,7 +81,6 @@ export async function PATCH(request: NextRequest) {
     id?: string;
     title?: string;
     contentHtml?: string;
-    contentJson?: unknown;
   };
 
   const id = body.id?.trim() ?? "";
@@ -117,7 +114,6 @@ export async function PATCH(request: NextRequest) {
       description,
       thumbnail_url: resolvedThumbnail || null,
       content_html: contentHtml,
-      content_json: body.contentJson ?? null,
     })
     .eq("id", id)
     .eq("author_id", user.id);

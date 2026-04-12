@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 import { EmbedBlock, parseYouTubeEmbedUrl } from "@/lib/blog-embeds";
 import { MapInputBlock } from "@/components/blog/MapInputBlock";
-import { filesToDataUrls } from "@/lib/image-upload";
+import { uploadImagesToStorage } from "@/lib/image-upload";
 
 export const DEFAULT_EDITOR_HTML = `
   <p>블로그 본문을 작성해주세요.</p>
@@ -94,14 +94,14 @@ export default function BlogEditor({
 
   const insertFiles = async (files: FileList | File[]) => {
     if (!editor) return;
-    editor.chain().focus().run();
     setUploadingImages(true);
     setUploadError("");
     try {
-      const items = await filesToDataUrls(files);
+      const items = await uploadImagesToStorage(files);
+      if (items.length === 0) return;
       const chain = editor.chain().focus();
-      items.forEach(({ src, name }) => {
-        chain.setImage({ src, alt: name });
+      items.forEach(({ url, name }) => {
+        chain.setImage({ src: url, alt: name });
         chain.createParagraphNear();
       });
       chain.run();
@@ -292,7 +292,7 @@ export default function BlogEditor({
             style={{ background: "rgba(234,88,12,0.12)", color: "#EA580C" }}
           >
             <LoaderCircle size={12} className="animate-spin" />
-            이미지를 업로드하는 중입니다...
+            WebP 변환 후 업로드 중...
           </div>
         ) : null}
 
