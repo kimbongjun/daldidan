@@ -26,6 +26,36 @@ export async function createClient() {
   );
 }
 
+// 미들웨어 전용 — NextResponse 쿠키 쓰기 지원
+export function createMiddlewareClient(
+  request: Request,
+  response: { headers: Headers },
+) {
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.headers
+            .get("cookie")
+            ?.split(";")
+            .map((c) => {
+              const [name, ...rest] = c.trim().split("=");
+              return { name: name.trim(), value: rest.join("=") };
+            }) ?? [];
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            const cookieVal = `${name}=${value}; Path=${options?.path ?? "/"}${options?.maxAge !== undefined ? `; Max-Age=${options.maxAge}` : ""}${options?.sameSite ? `; SameSite=${options.sameSite}` : ""}${options?.secure ? "; Secure" : ""}${options?.httpOnly ? "; HttpOnly" : ""}`;
+            response.headers.append("Set-Cookie", cookieVal);
+          });
+        },
+      },
+    },
+  );
+}
+
 // Service Role — RLS 우회, 서버 전용
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 

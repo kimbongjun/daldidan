@@ -126,14 +126,7 @@ const TRAVEL_SPOTS: TravelSpot[] = [
   { id: "4", name: "강릉 안목 해변", location: "강원도", category: "카페거리", rating: 4.5, price: "KTX 56,800원~" },
 ];
 
-const TRANSACTIONS: Transaction[] = [
-  { id: "1", type: "expense", category: "식비", amount: 12000, note: "점심", date: "2026-04-10" },
-  { id: "2", type: "expense", category: "교통", amount: 1500, note: "지하철", date: "2026-04-10" },
-  { id: "3", type: "income", category: "급여", amount: 3200000, note: "4월 급여", date: "2026-04-01" },
-  { id: "4", type: "expense", category: "쇼핑", amount: 89000, note: "의류", date: "2026-04-08" },
-  { id: "5", type: "expense", category: "문화", amount: 15000, note: "영화", date: "2026-04-07" },
-  { id: "6", type: "expense", category: "식비", amount: 34000, note: "저녁 외식", date: "2026-04-06" },
-];
+const TRANSACTIONS: Transaction[] = [];
 
 interface AppState {
   weatherCities: WeatherData[];

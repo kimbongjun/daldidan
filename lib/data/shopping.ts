@@ -41,7 +41,7 @@ function toDeal(item: NaverShoppingItem): ShoppingDeal | null {
   if (!Number.isFinite(originalPrice) || originalPrice <= salePrice) return null;
 
   const discountPct = Math.round(((originalPrice - salePrice) / originalPrice) * 100);
-  if (discountPct < 8) return null;
+  if (discountPct < 1) return null;
 
   return {
     id: `naver-${item.productId}`,
@@ -108,8 +108,14 @@ export async function getShoppingDeals(): Promise<ShoppingResponse> {
     }
 
     const deals = [...deduped.values()].sort((a, b) => b.discountPct - a.discountPct).slice(0, 18);
+
     if (!deals.length) {
-      throw new Error("No shopping deals available");
+      return {
+        deals: FALLBACK_DEALS,
+        source: "fallback",
+        fetchedAt: new Date().toISOString(),
+        error: "할인 상품을 찾지 못했습니다. 샘플 데이터를 표시합니다.",
+      };
     }
 
     return {

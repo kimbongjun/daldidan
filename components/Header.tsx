@@ -1,17 +1,47 @@
 "use client";
-import { useEffect, useState } from "react";
-import { Bell, Settings, Sparkles, Moon, Sun } from "lucide-react";
+
+import { useEffect, useRef, useState } from "react";
+import { Bell, LogOut, Settings, Sparkles, User, Moon, Sun } from "lucide-react";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 import { useThemeStore } from "@/store/useThemeStore";
+import { createClient } from "@/lib/supabase/client";
+import { signOut } from "@/lib/supabase/actions/auth";
+import type { User as SupabaseUser } from "@supabase/supabase-js";
+import Link from "next/link";
 
 export default function Header() {
   const [now, setNow] = useState(new Date());
+  const [user, setUser] = useState<SupabaseUser | null>(null);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const { theme, toggle } = useThemeStore();
 
+  // 시계
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 60000);
     return () => clearInterval(id);
+  }, []);
+
+  // 유저 세션 감지
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => setUser(data.user));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
+      setUser(session?.user ?? null);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // 드롭다운 외부 클릭 닫기
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
   }, []);
 
   const hour = now.getHours();
@@ -21,6 +51,8 @@ export default function Header() {
     hour < 18 ? "좋은 오후예요" : "좋은 저녁이에요";
 
   const isLight = theme === "light";
+
+  const avatarLetter = user?.email?.[0]?.toUpperCase() ?? "U";
 
   return (
     <header className="flex items-center justify-between py-6 px-1">
@@ -81,6 +113,74 @@ export default function Header() {
         >
           <Settings size={16} style={{ color: "var(--text-muted)" }} />
         </button>
+
+        {/* 유저 아이콘 */}
+        {user ? (
+          <div ref={dropdownRef} style={{ position: "relative" }}>
+            <button
+              onClick={() => setDropdownOpen((v) => !v)}
+              className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm transition-all hover:opacity-80"
+              style={{ background: "linear-gradient(135deg, #7C3AED, #06B6D4)", color: "#fff", border: "none", cursor: "pointer" }}
+              aria-label="유저 메뉴"
+            >
+              {avatarLetter}
+            </button>
+
+            {dropdownOpen && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: "calc(100% + 0.5rem)",
+                  right: 0,
+                  minWidth: 200,
+                  background: "var(--bg-card)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "0.875rem",
+                  boxShadow: "var(--shadow-card)",
+                  overflow: "hidden",
+                  zIndex: 50,
+                }}
+              >
+                <div style={{ padding: "0.75rem 1rem", borderBottom: "1px solid var(--border)" }}>
+                  <p style={{ fontSize: "0.7rem", color: "var(--text-muted)", margin: 0 }}>로그인 계정</p>
+                  <p style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-primary)", margin: "0.15rem 0 0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {user.email}
+                  </p>
+                </div>
+                <form action={signOut}>
+                  <button
+                    type="submit"
+                    style={{
+                      width: "100%",
+                      padding: "0.75rem 1rem",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.5rem",
+                      fontSize: "0.85rem",
+                      color: "#F43F5E",
+                      background: "transparent",
+                      border: "none",
+                      cursor: "pointer",
+                      textAlign: "left",
+                    }}
+                  >
+                    <LogOut size={14} />
+                    로그아웃
+                  </button>
+                </form>
+              </div>
+            )}
+          </div>
+        ) : (
+          <Link
+            href="/login"
+            className="w-9 h-9 rounded-xl flex items-center justify-center transition-colors hover:opacity-80"
+            style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+            aria-label="로그인"
+          >
+            <User size={16} style={{ color: "var(--text-muted)" }} />
+          </Link>
+        )}
       </div>
     </header>
   );
