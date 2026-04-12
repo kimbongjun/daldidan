@@ -15,6 +15,7 @@ import {
   LoaderCircle,
   Link2,
   List,
+  X,
   ListOrdered,
   MapPinned,
   Quote,
@@ -45,6 +46,7 @@ export default function BlogEditor({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [uploadingImages, setUploadingImages] = useState(false);
+  const [uploadError, setUploadError] = useState("");
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -94,6 +96,7 @@ export default function BlogEditor({
     if (!editor) return;
     editor.chain().focus().run();
     setUploadingImages(true);
+    setUploadError("");
     try {
       const items = await filesToDataUrls(files);
       const chain = editor.chain().focus();
@@ -102,6 +105,8 @@ export default function BlogEditor({
         chain.createParagraphNear();
       });
       chain.run();
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "이미지 업로드에 실패했습니다.");
     } finally {
       setUploadingImages(false);
     }
@@ -167,6 +172,21 @@ export default function BlogEditor({
 
   return (
     <div className="flex flex-col gap-3">
+      {uploadError && (
+        <div
+          className="rounded-xl px-4 py-2.5 text-sm flex items-center justify-between gap-3"
+          style={{ background: "rgba(244,63,94,0.1)", border: "1px solid rgba(244,63,94,0.3)", color: "#F43F5E" }}
+        >
+          <span>{uploadError}</span>
+          <button
+            type="button"
+            onClick={() => setUploadError("")}
+            style={{ background: "transparent", border: "none", cursor: "pointer", color: "#F43F5E", padding: 0, flexShrink: 0 }}
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
       {/* 툴바 */}
       <div
         className="rounded-[1.5rem] p-3 flex flex-wrap gap-2"

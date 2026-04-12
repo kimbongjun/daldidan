@@ -26,8 +26,13 @@ function mapSummary(post: {
 }
 
 export function extractFirstImageFromHtml(contentHtml: string) {
-  const match = contentHtml.match(/<img[^>]+src=["']([^"']+)["'][^>]*>/i);
-  return match?.[1]?.trim() || null;
+  // base64 data URL은 thumbnail_url 컬럼 패턴 제약 위반이므로 http(s):// URL만 반환
+  const allMatches = [...contentHtml.matchAll(/<img[^>]+src=["']([^"']+)["'][^>]*/gi)];
+  for (const match of allMatches) {
+    const src = match[1]?.trim();
+    if (src && /^https?:\/\//i.test(src)) return src;
+  }
+  return null;
 }
 
 function resolveSlugCandidates(slug: string) {
