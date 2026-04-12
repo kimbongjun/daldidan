@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ArrowRight, BookOpenText } from "lucide-react";
+import { ArrowRight, BookOpenText, PenLine } from "lucide-react";
 import type { BlogPostSummary } from "@/lib/blog-shared";
 import { formatBlogDate } from "@/lib/blog-shared";
 
@@ -12,11 +12,28 @@ export default function BlogWidget() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/blog/posts?limit=3")
+    let active = true;
+    const controller = new AbortController();
+
+    fetch("/api/blog/posts?limit=3", { signal: controller.signal })
       .then((response) => response.json())
-      .then((data) => setPosts(Array.isArray(data) ? data : []))
-      .catch(() => setPosts([]))
-      .finally(() => setLoading(false));
+      .then((data) => {
+        if (!active) return;
+        setPosts(Array.isArray(data) ? data : []);
+      })
+      .catch(() => {
+        if (!active) return;
+        setPosts([]);
+      })
+      .finally(() => {
+        if (!active) return;
+        setLoading(false);
+      });
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
   }, []);
 
   return (
@@ -26,13 +43,22 @@ export default function BlogWidget() {
           <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "#EA580C" }}>블로그</p>
           <h2 className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>최신 아티클</h2>
         </div>
-        <Link
-          href="/blog"
-          className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg transition-opacity hover:opacity-70"
-          style={{ background: "#EA580C22", color: "#EA580C" }}
-        >
-          상세보기 <ArrowRight size={11} />
-        </Link>
+        <div className="flex items-center gap-2 shrink-0">
+          <Link
+            href="/blog/write"
+            className="pressable flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg transition-opacity hover:opacity-70"
+            style={{ background: "#EA580C", color: "#fff" }}
+          >
+            글쓰기 <PenLine size={11} />
+          </Link>
+          <Link
+            href="/blog"
+            className="pressable flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg transition-opacity hover:opacity-70"
+            style={{ background: "#EA580C22", color: "#EA580C" }}
+          >
+            상세보기 <ArrowRight size={11} />
+          </Link>
+        </div>
       </div>
 
       <div className="flex flex-col gap-3 flex-1 overflow-auto scrollbar-hide">
@@ -60,8 +86,8 @@ export default function BlogWidget() {
           posts.map((post) => (
             <Link
               key={post.id}
-              href={`/blog/${post.slug}`}
-              className="rounded-2xl overflow-hidden flex gap-3 p-2 transition-opacity hover:opacity-80"
+              href={`/blog/${encodeURIComponent(post.slug)}`}
+              className="pressable rounded-2xl overflow-hidden flex gap-3 p-2 transition-opacity hover:opacity-80"
               style={{ background: "rgba(255,255,255,0.04)" }}
             >
               <div className="relative w-24 shrink-0 rounded-xl overflow-hidden" style={{ background: "var(--border)", aspectRatio: "1 / 1" }}>

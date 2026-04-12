@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import type { BlogPostDetail, BlogPostSummary } from "@/lib/blog-shared";
+import type { BlogPostDetail, BlogPostSummary, EditableBlogPost } from "@/lib/blog-shared";
 
 function mapSummary(post: {
   id: string;
@@ -51,6 +51,42 @@ export async function getBlogPostBySlug(slug: string) {
     ...mapSummary(data),
     contentHtml: data.content_html ?? "",
   } satisfies BlogPostDetail;
+}
+
+export async function getEditableBlogPostBySlug(slug: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data, error } = await supabase
+    .from("blog_posts")
+    .select("id, slug, title, description, thumbnail_url, author_name, published_at, created_at, content_html, content_json")
+    .eq("slug", slug)
+    .eq("author_id", user.id)
+    .maybeSingle();
+
+  if (error || !data) return null;
+
+  return {
+    ...mapSummary(data),
+    contentHtml: data.content_html ?? "",
+    contentJson: data.content_json ?? null,
+  } satisfies EditableBlogPost;
+}
+
+export async function canEditBlogPost(slug: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return false;
+
+  const { data } = await supabase
+    .from("blog_posts")
+    .select("id")
+    .eq("slug", slug)
+    .eq("author_id", user.id)
+    .maybeSingle();
+
+  return Boolean(data);
 }
 
 export function slugifyBlogTitle(input: string) {

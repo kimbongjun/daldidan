@@ -10,12 +10,8 @@ import TrafficWidget from "@/components/widgets/TrafficWidget";
 import { FALLBACK_DEALS, FALLBACK_STOCKS } from "@/lib/data/fallback";
 import { MarketResponse, ShoppingResponse } from "@/lib/data/types";
 import { useLiveQuery } from "@/lib/data/useLiveQuery";
-import { useAppStore } from "@/store/useAppStore";
 
 export default function DashboardShell() {
-  const weather = useAppStore((state) => state.weather);
-  const transactions = useAppStore((state) => state.transactions);
-
   const marketState = useLiveQuery<MarketResponse>("/api/market");
   const shoppingState = useLiveQuery<ShoppingResponse>("/api/shopping");
 

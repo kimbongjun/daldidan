@@ -22,7 +22,7 @@ export default async function BlogPage() {
           </p>
           <Link
             href="/blog/write"
-            className="px-4 py-2 rounded-xl text-sm font-semibold transition-opacity hover:opacity-80"
+            className="pressable px-4 py-2 rounded-xl text-sm font-semibold transition-opacity hover:opacity-80"
             style={{ background: ACCENT, color: "#fff" }}
           >
             글쓰기
@@ -37,7 +37,7 @@ export default async function BlogPage() {
         ) : (
           <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
             {posts.map((post) => (
-              <Link key={post.id} href={`/blog/${post.slug}`} className="bento-card overflow-hidden hover:opacity-90 transition-opacity">
+              <Link key={post.id} href={`/blog/${encodeURIComponent(post.slug)}`} className="pressable bento-card overflow-hidden hover:opacity-90 transition-opacity">
                 <div className="relative aspect-[16/10]" style={{ background: "var(--border)" }}>
                   {post.thumbnailUrl ? (
                     <Image src={post.thumbnailUrl} alt={post.title} fill sizes="(max-width:768px) 100vw, (max-width:1280px) 50vw, 33vw" className="object-cover" unoptimized />

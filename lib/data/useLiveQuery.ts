@@ -18,10 +18,14 @@ export function useLiveQuery<T>(url: string, initialData: T | null = null) {
   useEffect(() => {
     let active = true;
 
-    async function load() {
+    async function load(signal?: AbortSignal) {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+        return;
+      }
+
       setState((current) => ({ ...current, isLoading: current.data === null, error: null }));
       try {
-        const response = await fetch(url, { cache: "no-store" });
+        const response = await fetch(url, { cache: "no-store", signal });
         if (!response.ok) {
           throw new Error("request_failed");
         }
@@ -30,16 +34,23 @@ export function useLiveQuery<T>(url: string, initialData: T | null = null) {
         if (!active) return;
         setState({ data: json, isLoading: false, error: null });
       } catch {
+        if (signal?.aborted) return;
         if (!active) return;
         setState((current) => ({ ...current, isLoading: false, error: "live_fetch_failed" }));
       }
     }
 
-    load();
-    const timer = window.setInterval(load, 1000 * 60 * 2);
+    const initialController = new AbortController();
+    load(initialController.signal);
+
+    const timer = window.setInterval(() => {
+      const controller = new AbortController();
+      load(controller.signal);
+    }, 1000 * 60 * 2);
 
     return () => {
       active = false;
+      initialController.abort();
       window.clearInterval(timer);
     };
   }, [url]);

@@ -11,15 +11,18 @@ import {
   Code2,
   Heading1,
   Heading2,
-  Image as ImageIcon,
   Italic,
   Link2,
   List,
   ListOrdered,
+  MapPinned,
   Quote,
   Redo2,
   Undo2,
+  Video,
 } from "lucide-react";
+import { EmbedBlock, createGoogleMapEmbedSrc, parseYouTubeEmbedUrl } from "@/lib/blog-embeds";
+import { filesToDataUrls } from "@/lib/image-upload";
 
 export const DEFAULT_EDITOR_HTML = `
   <h2>한눈에 보는 요약</h2>
@@ -47,6 +50,7 @@ export default function BlogEditor({
 }) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [uploadingImages, setUploadingImages] = useState(false);
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
@@ -61,6 +65,7 @@ export default function BlogEditor({
         autolink: true,
         defaultProtocol: "https",
       }),
+      EmbedBlock,
       Image.configure({
         inline: false,
         allowBase64: true,
@@ -90,21 +95,24 @@ export default function BlogEditor({
     });
   }, [editor, onChange, value.html]);
 
-  const insertImageFromFile = (file: File) => {
+  const insertFiles = async (files: FileList | File[]) => {
     if (!editor) return;
-    if (!file.type.startsWith("image/")) return;
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      const src = typeof reader.result === "string" ? reader.result : "";
-      if (!src) return;
-      editor.chain().focus().setImage({ src, alt: file.name }).run();
-    };
-    reader.readAsDataURL(file);
-  };
+    setUploadingImages(true);
 
-  const insertFiles = (files: FileList | File[]) => {
-    Array.from(files).forEach(insertImageFromFile);
+    try {
+      const items = await filesToDataUrls(files);
+      const chain = editor.chain().focus();
+
+      items.forEach(({ src, name }) => {
+        chain.setImage({ src, alt: name });
+        chain.createParagraphNear();
+      });
+
+      chain.run();
+    } finally {
+      setUploadingImages(false);
+    }
   };
 
   if (!editor) {
@@ -124,13 +132,65 @@ export default function BlogEditor({
       editor.chain().focus().unsetLink().run();
       return;
     }
+
+    const selectedText = editor.state.doc.textBetween(
+      editor.state.selection.from,
+      editor.state.selection.to,
+      " ",
+    ).trim();
+
+    if (!selectedText) {
+      const label = window.prompt("링크 텍스트를 입력하세요", url.trim());
+      if (label === null || !label.trim()) return;
+      editor
+        .chain()
+        .focus()
+        .insertContent(`<a href="${url.trim()}">${label.trim()}</a>`)
+        .run();
+      return;
+    }
+
     editor.chain().focus().extendMarkRange("link").setLink({ href: url.trim() }).run();
   };
 
-  const insertImage = () => {
-    const url = window.prompt("이미지 URL을 입력하세요");
+  const insertYouTube = () => {
+    const url = window.prompt("유튜브 링크를 입력하세요");
     if (!url?.trim()) return;
-    editor.chain().focus().setImage({ src: url.trim(), alt: "blog image" }).run();
+
+    const src = parseYouTubeEmbedUrl(url);
+    if (!src) {
+      window.alert("유효한 유튜브 링크 형식이 아닙니다.");
+      return;
+    }
+
+    editor.chain().focus().insertContent({
+      type: "embedBlock",
+      attrs: {
+        kind: "youtube",
+        src,
+        title: "YouTube video",
+      },
+    }).run();
+  };
+
+  const insertGoogleMap = () => {
+    const place = window.prompt("지역명 또는 장소명을 입력하세요");
+    if (!place?.trim()) return;
+
+    const src = createGoogleMapEmbedSrc(place);
+    if (!src) {
+      window.alert("지도를 삽입하려면 NEXT_PUBLIC_GOOGLE_MAPS_EMBED_API_KEY 환경 변수가 필요합니다.");
+      return;
+    }
+
+    editor.chain().focus().insertContent({
+      type: "embedBlock",
+      attrs: {
+        kind: "map",
+        src,
+        title: `${place.trim()} 지도`,
+      },
+    }).run();
   };
 
   return (
@@ -172,13 +232,16 @@ export default function BlogEditor({
         <ToolbarButton label="링크" onClick={setLink} active={editor.isActive("link")}>
           <Link2 size={15} />
         </ToolbarButton>
-        <ToolbarButton label="이미지" onClick={insertImage} active={false}>
-          <ImageIcon size={15} />
+        <ToolbarButton label="유튜브" onClick={insertYouTube} active={false}>
+          <Video size={15} />
+        </ToolbarButton>
+        <ToolbarButton label="지도" onClick={insertGoogleMap} active={false}>
+          <MapPinned size={15} />
         </ToolbarButton>
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          className="px-3 h-9 rounded-xl text-xs font-semibold transition-colors"
+          className="pressable px-3 h-9 rounded-xl text-xs font-semibold transition-colors"
           style={{
             background: "var(--bg-input)",
             color: "var(--text-muted)",
@@ -193,9 +256,9 @@ export default function BlogEditor({
           accept="image/*"
           multiple
           className="hidden"
-          onChange={(event) => {
+          onChange={async (event) => {
             if (!event.target.files?.length) return;
-            insertFiles(event.target.files);
+            await insertFiles(event.target.files);
             event.target.value = "";
           }}
         />
@@ -221,19 +284,27 @@ export default function BlogEditor({
           if (related && event.currentTarget.contains(related)) return;
           setIsDragging(false);
         }}
-        onDrop={(event) => {
+        onDrop={async (event) => {
           event.preventDefault();
           setIsDragging(false);
           if (!event.dataTransfer.files?.length) return;
-          insertFiles(event.dataTransfer.files);
+          await insertFiles(event.dataTransfer.files);
         }}
       >
         <div
           className="px-5 py-4 text-xs font-semibold"
           style={{ color: "var(--text-muted)", borderBottom: "1px solid var(--border)", background: "rgba(234,88,12,0.08)" }}
         >
-          Notion-like template · 이미지를 여기로 드래그하거나 업로드하세요
+          Notion-like template · 이미지는 드래그/업로드, 유튜브와 지도는 링크/지역명으로 삽입하세요
         </div>
+        {uploadingImages ? (
+          <div
+            className="absolute inset-x-0 top-[53px] z-10 px-5 py-2 text-xs font-semibold"
+            style={{ background: "rgba(234,88,12,0.12)", color: "#EA580C" }}
+          >
+            이미지를 업로드하는 중입니다...
+          </div>
+        ) : null}
         {isDragging ? (
           <div
             className="absolute inset-0 z-10 flex items-center justify-center text-sm font-semibold"
@@ -264,7 +335,7 @@ function ToolbarButton({
       type="button"
       aria-label={label}
       onClick={onClick}
-      className="w-9 h-9 rounded-xl flex items-center justify-center transition-colors"
+      className="pressable w-9 h-9 rounded-xl flex items-center justify-center transition-colors"
       style={{
         background: active ? "rgba(234,88,12,0.16)" : "var(--bg-input)",
         color: active ? "#EA580C" : "var(--text-muted)",

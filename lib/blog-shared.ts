@@ -12,6 +12,10 @@ export interface BlogPostDetail extends BlogPostSummary {
   contentHtml: string;
 }
 
+export interface EditableBlogPost extends BlogPostDetail {
+  contentJson: unknown;
+}
+
 export function formatBlogDate(value: string) {
   return new Intl.DateTimeFormat("ko-KR", {
     year: "numeric",

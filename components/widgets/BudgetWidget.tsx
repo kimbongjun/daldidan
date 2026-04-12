@@ -47,12 +47,29 @@ export default function BudgetWidget() {
   // 거래 목록 로드
   useEffect(() => {
     if (!user) return;
+    let active = true;
     setLoading(true);
-    fetch("/api/transactions")
+    const controller = new AbortController();
+
+    fetch("/api/transactions", { signal: controller.signal })
       .then((r) => r.json())
-      .then((data) => setTransactions(Array.isArray(data) ? data : []))
-      .catch(() => setTransactions([]))
-      .finally(() => setLoading(false));
+      .then((data) => {
+        if (!active) return;
+        setTransactions(Array.isArray(data) ? data : []);
+      })
+      .catch(() => {
+        if (!active) return;
+        setTransactions([]);
+      })
+      .finally(() => {
+        if (!active) return;
+        setLoading(false);
+      });
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
   }, [user]);
 
   // 집계
