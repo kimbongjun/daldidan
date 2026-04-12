@@ -2,7 +2,6 @@
 
 import Footer from "@/components/Footer";
 import Header from "@/components/Header";
-import QuickStats from "@/components/QuickStats";
 import BudgetWidget from "@/components/widgets/BudgetWidget";
 import BlogWidget from "@/components/widgets/BlogWidget";
 import ShoppingWidget from "@/components/widgets/ShoppingWidget";
@@ -26,8 +25,7 @@ export default function DashboardShell() {
   return (
     <div style={{ background: "var(--bg-base)", minHeight: "100vh", width: "100%", overflowX: "hidden" }}>
       <div style={{ maxWidth: 1400, margin: "0 auto", padding: "0 1rem 3rem", width: "100%", boxSizing: "border-box" }}>
-        <Header />
-        <QuickStats stocks={marketData?.stocks ?? FALLBACK_STOCKS} weather={weather} transactions={transactions} />
+        <Header />        
         <BentoGrid
           stock={<StockWidget stocks={marketData?.stocks ?? FALLBACK_STOCKS} source={marketData?.source ?? "fallback"} fetchedAt={marketData?.fetchedAt} />}
           shopping={<ShoppingWidget deals={shoppingData?.deals ?? FALLBACK_DEALS} source={shoppingData?.source ?? "fallback"} />}
@@ -78,9 +76,9 @@ function BentoGrid({
             grid-template-columns: minmax(0,1fr) minmax(0,1fr) minmax(0,1fr);
             grid-template-rows: 460px 500px 360px;
             grid-template-areas:
-              "budget  stock   shopping"
+              "budget  blog   shopping"
               "traffic traffic  traffic"
-              "blog    blog    blog";
+              "stock    stock    stock";
           }
         }
       `}</style>
@@ -88,28 +86,28 @@ function BentoGrid({
       {/* 데스크톱 */}
       <div className="bento-desktop">
         <div style={{ gridArea: "budget",   minWidth: 0 }}><BudgetWidget /></div>
-        <div style={{ gridArea: "stock",    minWidth: 0 }}>{stock}</div>        
+        <div style={{ gridArea: "blog",     minWidth: 0 }}>{blog}</div>                
         <div style={{ gridArea: "shopping", minWidth: 0 }}>{shopping}</div>
-        <div style={{ gridArea: "traffic",  minWidth: 0 }}>{traffic}</div>
-        <div style={{ gridArea: "blog",     minWidth: 0 }}>{blog}</div>
+        <div style={{ gridArea: "stock",    minWidth: 0 }}>{stock}</div>
+        <div style={{ gridArea: "traffic",  minWidth: 0 }}>{traffic}</div>        
       </div>
 
       {/* 태블릿 */}
       <div className="bento-tablet"> 
         <div style={{ minWidth: 0, height: 420 }}><BudgetWidget /></div>
-        <div style={{ minWidth: 0, height: 340 }}>{stock}</div>        
+        <div style={{ minWidth: 0, height: 320  }}>{blog}</div>        
         <div style={{ minWidth: 0, height: 380 }}>{shopping}</div>
+        <div style={{ minWidth: 0, height: 340, gridColumn: "span 2"}}>{stock}</div>
         <div style={{ minWidth: 0, height: 520, gridColumn: "span 2" }}>{traffic}</div>
-        <div style={{ minWidth: 0, height: 320, gridColumn: "span 2" }}>{blog}</div>
       </div>
 
       {/* 모바일 */}
       <div className="bento-mobile">       
         <div style={{ minWidth: 0, height: 480 }}><BudgetWidget /></div>
-        <div style={{ minWidth: 0, height: 460 }}>{stock}</div>        
+        <div style={{ minWidth: 0, height: 360 }}>{blog}</div>                
         <div style={{ minWidth: 0, height: 380 }}>{shopping}</div>
+        <div style={{ minWidth: 0, height: 460 }}>{stock}</div>
         <div style={{ minWidth: 0, height: 560 }}>{traffic}</div>
-        <div style={{ minWidth: 0, height: 360 }}>{blog}</div>
       </div>
     </div>
   );
