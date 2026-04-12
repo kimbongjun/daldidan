@@ -1,3 +1,4 @@
+import { KR_STOCKS } from "@/lib/stockList";
 import { FALLBACK_INDICES, FALLBACK_STOCKS } from "@/lib/data/fallback";
 import { MarketIndexQuote, MarketQuote, MarketResponse } from "@/lib/data/types";
 
@@ -6,139 +7,140 @@ const INDEX_SYMBOLS = [
   { symbol: "^KQ11", name: "KOSDAQ", region: "KR" as const },
 ];
 
-const STOCK_SYMBOLS = [
-  { symbol: "005930.KS", name: "삼성전자", market: "KR" as const, exchange: "KOSPI", displaySymbol: "005930", sector: "반도체", listingMarket: "KOSPI" },
-  { symbol: "000660.KS", name: "SK하이닉스", market: "KR" as const, exchange: "KOSPI", displaySymbol: "000660", sector: "반도체", listingMarket: "KOSPI" },
-  { symbol: "005380.KS", name: "현대차", market: "KR" as const, exchange: "KOSPI", displaySymbol: "005380", sector: "자동차", listingMarket: "KOSPI" },
-  { symbol: "035420.KS", name: "NAVER", market: "KR" as const, exchange: "KOSPI", displaySymbol: "035420", sector: "IT/인터넷", listingMarket: "KOSPI" },
-  { symbol: "051910.KS", name: "LG화학", market: "KR" as const, exchange: "KOSPI", displaySymbol: "051910", sector: "화학", listingMarket: "KOSPI" },
-  { symbol: "373220.KS", name: "LG에너지솔루션", market: "KR" as const, exchange: "KOSPI", displaySymbol: "373220", sector: "2차전지", listingMarket: "KOSPI" },
-  { symbol: "293490.KQ", name: "카카오게임즈", market: "KR" as const, exchange: "KOSDAQ", displaySymbol: "293490", sector: "게임", listingMarket: "KOSDAQ" },
-  { symbol: "196170.KQ", name: "알테오젠", market: "KR" as const, exchange: "KOSDAQ", displaySymbol: "196170", sector: "바이오", listingMarket: "KOSDAQ" },
-];
+type YahooChartMeta = {
+  currency?: string;
+  regularMarketPrice?: number;
+  previousClose?: number;
+  chartPreviousClose?: number;
+  regularMarketDayHigh?: number;
+  regularMarketDayLow?: number;
+  regularMarketVolume?: number;
+  fiftyTwoWeekHigh?: number;
+  fiftyTwoWeekLow?: number;
+};
 
 type YahooChartResult = {
   chart?: {
     result?: Array<{
-      meta?: {
-        currency?: string;
-        regularMarketPrice?: number;
-        previousClose?: number;
-        chartPreviousClose?: number;
-        regularMarketDayHigh?: number;
-        regularMarketDayLow?: number;
-        regularMarketVolume?: number;
-        fiftyTwoWeekHigh?: number;
-        fiftyTwoWeekLow?: number;
-      };
+      meta?: YahooChartMeta;
       timestamp?: number[];
       indicators?: {
         quote?: Array<{
           close?: Array<number | null>;
-          volume?: Array<number | null>;
         }>;
       };
     }>;
   };
 };
 
-async function fetchYahooChart(symbol: string, range = "1d", interval = "2m") {
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${range}&interval=${interval}&includePrePost=false`;
-  const response = await fetch(url, {
-    next: { revalidate: 60 },
-    headers: {
-      "User-Agent": "Mozilla/5.0",
-      Accept: "application/json",
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`Yahoo chart failed for ${symbol}`);
+async function fetchYahooChart(symbol: string): Promise<YahooChartResult | null> {
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=5d&interval=1d&includePrePost=false`;
+  try {
+    const response = await fetch(url, {
+      next: { revalidate: 60 },
+      headers: {
+        "User-Agent": "Mozilla/5.0",
+        Accept: "application/json",
+      },
+    });
+    if (!response.ok) return null;
+    return (await response.json()) as YahooChartResult;
+  } catch {
+    return null;
   }
-
-  return (await response.json()) as YahooChartResult;
 }
 
 function compactSeries(series: Array<number | null | undefined>) {
-  return series.filter((value): value is number => typeof value === "number" && Number.isFinite(value));
-}
-
-function mapStock(symbol: (typeof STOCK_SYMBOLS)[number], data: YahooChartResult): MarketQuote | null {
-  const result = data.chart?.result?.[0];
-  const meta = result?.meta;
-  const closes = compactSeries(result?.indicators?.quote?.[0]?.close ?? []);
-  if (!meta || !closes.length) return null;
-
-  const price = meta.regularMarketPrice ?? closes[closes.length - 1];
-  const previousClose = meta.previousClose ?? meta.chartPreviousClose ?? closes[Math.max(0, closes.length - 2)] ?? price;
-  const change = price - previousClose;
-  const changePct = previousClose ? (change / previousClose) * 100 : 0;
-
-  return {
-    symbol: symbol.symbol,
-    name: symbol.name,
-    displaySymbol: symbol.displaySymbol,
-    sector: symbol.sector,
-    listingMarket: symbol.listingMarket,
-    market: symbol.market,
-    exchange: symbol.exchange,
-    price,
-    currency: meta.currency ?? "KRW",
-    change,
-    changePct,
-    previousClose,
-    dayHigh: meta.regularMarketDayHigh,
-    dayLow: meta.regularMarketDayLow,
-    volume: meta.regularMarketVolume,
-    range52w: meta.fiftyTwoWeekHigh && meta.fiftyTwoWeekLow ? { high: meta.fiftyTwoWeekHigh, low: meta.fiftyTwoWeekLow } : undefined,
-    sparkline: closes.slice(-7),
-    updatedAt: new Date().toISOString(),
-  };
+  return series.filter((v): v is number => typeof v === "number" && Number.isFinite(v));
 }
 
 function mapIndex(symbol: (typeof INDEX_SYMBOLS)[number], data: YahooChartResult): MarketIndexQuote | null {
   const result = data.chart?.result?.[0];
   const meta = result?.meta;
   const closes = compactSeries(result?.indicators?.quote?.[0]?.close ?? []);
-  if (!meta || !closes.length) return null;
+  if (!meta) return null;
 
   const value = meta.regularMarketPrice ?? closes[closes.length - 1];
+  if (!value) return null;
   const previousClose = meta.previousClose ?? meta.chartPreviousClose ?? closes[Math.max(0, closes.length - 2)] ?? value;
   const change = value - previousClose;
   const changePct = previousClose ? (change / previousClose) * 100 : 0;
 
-  return {
-    symbol: symbol.symbol,
-    name: symbol.name,
-    region: symbol.region,
-    value,
-    change,
-    changePct,
-  };
+  return { symbol: symbol.symbol, name: symbol.name, region: symbol.region, value, change, changePct };
+}
+
+function normalizeKrSymbol(symbol: string, market: "KOSPI" | "KOSDAQ" | "NYSE" | "NASDAQ") {
+  if (market === "KOSPI") return `${symbol}.KS`;
+  if (market === "KOSDAQ") return `${symbol}.KQ`;
+  return symbol;
 }
 
 export async function getMarketSnapshot(): Promise<MarketResponse> {
+  // 모든 KR 종목 심볼 생성
+  const allSymbols = KR_STOCKS.map((s) => ({
+    yahoo: normalizeKrSymbol(s.symbol, s.market),
+    item: s,
+  }));
+
   try {
-    const [stockCharts, indexCharts] = await Promise.all([
-      Promise.all(STOCK_SYMBOLS.map((item) => fetchYahooChart(item.symbol))),
-      Promise.all(INDEX_SYMBOLS.map((item) => fetchYahooChart(item.symbol))),
+    // 병렬로 모든 종목 + 지수 조회
+    const [stockResults, indexResults] = await Promise.all([
+      Promise.all(allSymbols.map((s) => fetchYahooChart(s.yahoo))),
+      Promise.all(INDEX_SYMBOLS.map((s) => fetchYahooChart(s.symbol))),
     ]);
 
-    const stocks = stockCharts
-      .map((chart, index) => mapStock(STOCK_SYMBOLS[index], chart))
-      .filter((item): item is MarketQuote => item !== null);
-    const indices = indexCharts
-      .map((chart, index) => mapIndex(INDEX_SYMBOLS[index], chart))
-      .filter((item): item is MarketIndexQuote => item !== null);
+    const stocks: MarketQuote[] = [];
+    for (let i = 0; i < allSymbols.length; i++) {
+      const { yahoo, item } = allSymbols[i];
+      const data = stockResults[i];
+      const meta = data?.chart?.result?.[0]?.meta;
+      const closes = compactSeries(data?.chart?.result?.[0]?.indicators?.quote?.[0]?.close ?? []);
 
-    if (!stocks.length || !indices.length) {
-      throw new Error("Market snapshot empty");
+      const price = meta?.regularMarketPrice ?? closes[closes.length - 1] ?? item.price;
+      const previousClose = meta?.previousClose ?? meta?.chartPreviousClose ?? closes[Math.max(0, closes.length - 2)] ?? price;
+      const change = price - previousClose;
+      const changePct = previousClose ? (change / previousClose) * 100 : item.changePct;
+
+      stocks.push({
+        symbol: yahoo,
+        displaySymbol: item.symbol,
+        name: item.name,
+        sector: item.sector,
+        listingMarket: item.market,
+        market: "KR",
+        exchange: item.market === "KOSPI" ? "KOSPI" : "KOSDAQ",
+        price,
+        currency: "KRW",
+        change,
+        changePct,
+        previousClose,
+        dayHigh: meta?.regularMarketDayHigh,
+        dayLow: meta?.regularMarketDayLow,
+        volume: meta?.regularMarketVolume,
+        range52w: meta?.fiftyTwoWeekHigh && meta?.fiftyTwoWeekLow
+          ? { high: meta.fiftyTwoWeekHigh, low: meta.fiftyTwoWeekLow }
+          : undefined,
+        sparkline: closes.length >= 2 ? closes.slice(-7) : [price],
+        updatedAt: new Date().toISOString(),
+      });
     }
+
+    const indices: MarketIndexQuote[] = [];
+    for (let i = 0; i < INDEX_SYMBOLS.length; i++) {
+      const data = indexResults[i];
+      if (!data) continue;
+      const mapped = mapIndex(INDEX_SYMBOLS[i], data);
+      if (mapped) indices.push(mapped);
+    }
+
+    // 최소 1개 이상 실 데이터가 있으면 정상 응답
+    const liveCount = stocks.filter((s) => s.sparkline.length >= 2).length;
+    if (liveCount === 0 && !indices.length) throw new Error("Market snapshot empty");
 
     return {
       stocks,
-      indices,
-      source: "yahoo-finance",
+      indices: indices.length ? indices : FALLBACK_INDICES,
+      source: liveCount > 0 ? "yahoo-finance" : "fallback",
       fetchedAt: new Date().toISOString(),
     };
   } catch {

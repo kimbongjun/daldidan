@@ -15,7 +15,8 @@ export default function StockWidget({
   source: string;
   fetchedAt?: string;
 }) {
-  const ticker = [...stocks, ...stocks];
+  const tickerBase = stocks.slice(0, 12);
+  const ticker = [...tickerBase, ...tickerBase];
 
   return (
     <div className="bento-card gradient-violet h-full flex flex-col p-5 gap-4">

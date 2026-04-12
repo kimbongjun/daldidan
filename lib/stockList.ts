@@ -4,7 +4,7 @@
 export interface StockItem {
   symbol: string;
   name: string;
-  market: "KOSPI" | "KOSDAQ" | "NYSE" | "NASDAQ";
+  market: "KOSPI" | "KOSDAQ";
   sector: string;
   price: number;
   changePct: number;
