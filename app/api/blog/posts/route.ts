@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
-import { ensureUniqueBlogSlug, getPublishedBlogPosts } from "@/lib/blog";
+import { ensureUniqueBlogSlug, extractFirstImageFromHtml, getPublishedBlogPosts } from "@/lib/blog";
 import { createClient } from "@/lib/supabase/server";
 
 export async function GET(request: NextRequest) {
@@ -29,6 +29,7 @@ export async function POST(request: NextRequest) {
   const title = body.title?.trim() ?? "";
   const description = body.description?.trim() ?? "";
   const contentHtml = body.contentHtml?.trim() ?? "";
+  const resolvedThumbnail = body.thumbnailUrl?.trim() || extractFirstImageFromHtml(contentHtml);
 
   if (!title || !description || !contentHtml) {
     return NextResponse.json({ error: "제목, 설명, 본문을 모두 입력해주세요." }, { status: 400 });
@@ -53,7 +54,7 @@ export async function POST(request: NextRequest) {
       slug,
       title,
       description,
-      thumbnail_url: body.thumbnailUrl?.trim() || null,
+      thumbnail_url: resolvedThumbnail || null,
       content_html: contentHtml,
       content_json: body.contentJson ?? null,
       is_published: true,
@@ -92,6 +93,7 @@ export async function PATCH(request: NextRequest) {
   const title = body.title?.trim() ?? "";
   const description = body.description?.trim() ?? "";
   const contentHtml = body.contentHtml?.trim() ?? "";
+  const resolvedThumbnail = body.thumbnailUrl?.trim() || extractFirstImageFromHtml(contentHtml);
 
   if (!id || !title || !description || !contentHtml) {
     return NextResponse.json({ error: "수정에 필요한 정보가 부족합니다." }, { status: 400 });
@@ -116,7 +118,7 @@ export async function PATCH(request: NextRequest) {
       slug,
       title,
       description,
-      thumbnail_url: body.thumbnailUrl?.trim() || null,
+      thumbnail_url: resolvedThumbnail || null,
       content_html: contentHtml,
       content_json: body.contentJson ?? null,
     })

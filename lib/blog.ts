@@ -7,26 +7,34 @@ function mapSummary(post: {
   title: string;
   description: string | null;
   thumbnail_url: string | null;
+  content_html?: string | null;
   author_name: string | null;
   published_at: string | null;
   created_at: string;
 }): BlogPostSummary {
+  const fallbackThumbnail = extractFirstImageFromHtml(post.content_html ?? "");
+
   return {
     id: post.id,
     slug: post.slug,
     title: post.title,
     description: post.description ?? "",
-    thumbnailUrl: post.thumbnail_url ?? "",
+    thumbnailUrl: post.thumbnail_url ?? fallbackThumbnail ?? "",
     authorName: post.author_name?.trim() || "달디단 에디터",
     publishedAt: post.published_at ?? post.created_at,
   };
+}
+
+export function extractFirstImageFromHtml(contentHtml: string) {
+  const match = contentHtml.match(/<img[^>]+src=["']([^"']+)["'][^>]*>/i);
+  return match?.[1]?.trim() || null;
 }
 
 export async function getPublishedBlogPosts(limit = 9) {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("blog_posts")
-    .select("id, slug, title, description, thumbnail_url, author_name, published_at, created_at")
+    .select("id, slug, title, description, thumbnail_url, content_html, author_name, published_at, created_at")
     .eq("is_published", true)
     .order("published_at", { ascending: false })
     .order("created_at", { ascending: false })

@@ -7,19 +7,24 @@ import Placeholder from "@tiptap/extension-placeholder";
 import Link from "@tiptap/extension-link";
 import Image from "@tiptap/extension-image";
 import {
+  CheckCircle2,
   Bold,
   Code2,
   Heading1,
   Heading2,
   Italic,
+  LoaderCircle,
   Link2,
   List,
   ListOrdered,
   MapPinned,
+  MapPin,
   Quote,
   Redo2,
+  Search,
   Undo2,
   Video,
+  X,
 } from "lucide-react";
 import { EmbedBlock, createGoogleMapEmbedSrc, parseYouTubeEmbedUrl } from "@/lib/blog-embeds";
 import { filesToDataUrls } from "@/lib/image-upload";
@@ -41,6 +46,14 @@ interface EditorValue {
   json: unknown;
 }
 
+interface PlaceCandidate {
+  id: string;
+  name: string;
+  formattedAddress: string;
+  lat: number;
+  lng: number;
+}
+
 export default function BlogEditor({
   value,
   onChange,
@@ -51,6 +64,12 @@ export default function BlogEditor({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [uploadingImages, setUploadingImages] = useState(false);
+  const [mapModalOpen, setMapModalOpen] = useState(false);
+  const [mapQuery, setMapQuery] = useState("");
+  const [mapCandidates, setMapCandidates] = useState<PlaceCandidate[]>([]);
+  const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
+  const [mapSearching, setMapSearching] = useState(false);
+  const [mapError, setMapError] = useState("");
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
@@ -95,9 +114,13 @@ export default function BlogEditor({
     });
   }, [editor, onChange, value.html]);
 
+  const selectedPlace = mapCandidates.find((place) => place.id === selectedPlaceId) ?? null;
+  const selectedMapPreview = selectedPlace ? createGoogleMapEmbedSrc(selectedPlace.formattedAddress) : null;
+
   const insertFiles = async (files: FileList | File[]) => {
     if (!editor) return;
 
+    editor.chain().focus().run();
     setUploadingImages(true);
 
     try {
@@ -173,24 +196,74 @@ export default function BlogEditor({
     }).run();
   };
 
-  const insertGoogleMap = () => {
-    const place = window.prompt("지역명 또는 장소명을 입력하세요");
-    if (!place?.trim()) return;
+  const openMapModal = () => {
+    setMapModalOpen(true);
+    setMapError("");
+  };
 
-    const src = createGoogleMapEmbedSrc(place);
-    if (!src) {
-      window.alert("지도를 삽입하려면 NEXT_PUBLIC_GOOGLE_MAPS_EMBED_API_KEY 환경 변수가 필요합니다.");
+  const closeMapModal = () => {
+    setMapModalOpen(false);
+    setMapSearching(false);
+    setMapError("");
+    setMapCandidates([]);
+    setSelectedPlaceId(null);
+  };
+
+  const searchPlaceCandidates = async () => {
+    const query = mapQuery.trim();
+    if (!query) {
+      setMapError("장소명을 입력해주세요.");
       return;
     }
 
-    editor.chain().focus().insertContent({
+    setMapSearching(true);
+    setMapError("");
+    setSelectedPlaceId(null);
+
+    try {
+      const response = await fetch("/api/maps/place-search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query }),
+      });
+
+      const payload = await response.json() as { places?: PlaceCandidate[]; error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error ?? "장소 검색에 실패했습니다.");
+      }
+
+      const places = payload.places ?? [];
+      setMapCandidates(places);
+      setSelectedPlaceId(places[0]?.id ?? null);
+      if (places.length === 0) {
+        setMapError("검색된 장소가 없습니다. 장소명을 조금 더 구체적으로 입력해보세요.");
+      }
+    } catch (error) {
+      setMapCandidates([]);
+      setSelectedPlaceId(null);
+      setMapError(error instanceof Error ? error.message : "장소 검색에 실패했습니다.");
+    } finally {
+      setMapSearching(false);
+    }
+  };
+
+  const insertSelectedMap = () => {
+    if (!selectedPlace) return;
+    if (!selectedMapPreview) {
+      setMapError("지도를 삽입하려면 NEXT_PUBLIC_GOOGLE_MAPS_EMBED_API_KEY 환경 변수가 필요합니다.");
+      return;
+    }
+
+    editor?.chain().focus().insertContent({
       type: "embedBlock",
       attrs: {
         kind: "map",
-        src,
-        title: `${place.trim()} 지도`,
+        src: selectedMapPreview,
+        title: `${selectedPlace.name} 지도`,
       },
     }).run();
+
+    closeMapModal();
   };
 
   return (
@@ -235,7 +308,7 @@ export default function BlogEditor({
         <ToolbarButton label="유튜브" onClick={insertYouTube} active={false}>
           <Video size={15} />
         </ToolbarButton>
-        <ToolbarButton label="지도" onClick={insertGoogleMap} active={false}>
+        <ToolbarButton label="지도" onClick={openMapModal} active={false}>
           <MapPinned size={15} />
         </ToolbarButton>
         <button
@@ -314,7 +387,189 @@ export default function BlogEditor({
           </div>
         ) : null}
         <EditorContent editor={editor} />
+        <div className="blog-editor-dock">
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="pressable blog-editor-dock-button"
+          >
+            이미지
+          </button>
+          <button
+            type="button"
+            onClick={insertYouTube}
+            className="pressable blog-editor-dock-button"
+          >
+            유튜브
+          </button>
+          <button
+            type="button"
+            onClick={openMapModal}
+            className="pressable blog-editor-dock-button"
+          >
+            지도
+          </button>
+        </div>
       </div>
+
+      {mapModalOpen ? (
+        <div
+          className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-0 sm:p-4"
+          style={{ background: "rgba(15,15,20,0.7)", backdropFilter: "blur(10px)" }}
+        >
+          <div
+            className="w-full max-w-[980px] overflow-hidden rounded-t-[1.75rem] sm:rounded-[1.75rem] h-[100dvh] sm:h-auto sm:max-h-[92vh] flex flex-col"
+            style={{ background: "var(--bg-card)", border: "1px solid var(--border)", boxShadow: "var(--shadow-card)" }}
+          >
+            <div className="flex items-center justify-between px-4 sm:px-5 py-4 shrink-0" style={{ borderBottom: "1px solid var(--border)" }}>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "#EA580C" }}>Google Map Search</p>
+                <h3 className="text-base sm:text-lg font-black" style={{ color: "var(--text-primary)" }}>장소 검색 후 지도를 확인하고 삽입하세요</h3>
+              </div>
+              <button
+                type="button"
+                onClick={closeMapModal}
+                className="pressable w-10 h-10 rounded-2xl flex items-center justify-center"
+                style={{ background: "var(--bg-input)", color: "var(--text-muted)", border: "1px solid var(--border)" }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-[340px_minmax(0,1fr)] gap-0 flex-1 min-h-0 overflow-hidden">
+              <div className="blog-map-modal-results p-4 sm:p-5 flex flex-col gap-4 min-h-0 overflow-auto">
+                <div className="flex gap-2">
+                  <input
+                    value={mapQuery}
+                    onChange={(event) => setMapQuery(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        void searchPlaceCandidates();
+                      }
+                    }}
+                    placeholder="예: 성수동 서울숲, 부산 해운대"
+                    className="flex-1"
+                    style={{
+                      background: "var(--bg-input)",
+                      border: "1px solid var(--border)",
+                      borderRadius: "1rem",
+                      padding: "0.9rem 1rem",
+                      fontSize: "0.95rem",
+                      color: "var(--text-primary)",
+                      outline: "none",
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void searchPlaceCandidates()}
+                    className="pressable px-4 rounded-2xl font-semibold text-white"
+                    style={{ background: "#EA580C" }}
+                  >
+                    {mapSearching ? <LoaderCircle size={16} className="animate-spin" /> : <Search size={16} />}
+                  </button>
+                </div>
+
+                <div className="rounded-2xl p-3" style={{ background: "rgba(234,88,12,0.08)", color: "var(--text-muted)" }}>
+                  <p className="text-xs leading-relaxed">
+                    장소명을 입력하면 후보 장소와 좌표를 확인할 수 있어요. 원하는 장소를 선택한 뒤 본문에 지도를 삽입하세요.
+                  </p>
+                </div>
+
+                {mapError ? (
+                  <div className="rounded-2xl p-3 text-sm" style={{ background: "rgba(244,63,94,0.12)", color: "#F43F5E" }}>
+                    {mapError}
+                  </div>
+                ) : null}
+
+                <div className="flex flex-col gap-2 min-h-0 overflow-auto scrollbar-hide">
+                  {mapSearching ? (
+                    <div className="rounded-2xl p-4 flex items-center gap-3" style={{ background: "var(--bg-input)", color: "var(--text-muted)" }}>
+                      <LoaderCircle size={16} className="animate-spin" />
+                      <span className="text-sm">좌표를 찾고 있어요...</span>
+                    </div>
+                  ) : mapCandidates.length === 0 ? (
+                    <div className="rounded-2xl p-4 text-sm" style={{ background: "var(--bg-input)", color: "var(--text-muted)" }}>
+                      검색 결과가 여기에 표시됩니다.
+                    </div>
+                  ) : (
+                    mapCandidates.map((place) => {
+                      const selected = place.id === selectedPlaceId;
+                      return (
+                        <button
+                          key={place.id}
+                          type="button"
+                          onClick={() => setSelectedPlaceId(place.id)}
+                          className="pressable text-left rounded-2xl p-4"
+                          style={{
+                            background: selected ? "rgba(234,88,12,0.12)" : "var(--bg-input)",
+                            border: `1px solid ${selected ? "rgba(234,88,12,0.35)" : "var(--border)"}`,
+                          }}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{place.name}</p>
+                              <p className="text-xs mt-1 leading-relaxed" style={{ color: "var(--text-muted)" }}>{place.formattedAddress}</p>
+                              <p className="text-xs mt-2" style={{ color: selected ? "#EA580C" : "var(--text-muted)" }}>
+                                좌표: {place.lat.toFixed(6)}, {place.lng.toFixed(6)}
+                              </p>
+                            </div>
+                            {selected ? <CheckCircle2 size={16} style={{ color: "#EA580C" }} /> : <MapPin size={16} style={{ color: "var(--text-muted)" }} />}
+                          </div>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+              <div className="blog-map-modal-preview p-4 sm:p-5 flex flex-col gap-4 min-h-0 overflow-auto">
+                <div className="rounded-2xl overflow-hidden" style={{ background: "var(--bg-input)", border: "1px solid var(--border)" }}>
+                  <div className="px-4 py-3 text-sm font-semibold" style={{ color: "var(--text-primary)", borderBottom: "1px solid var(--border)" }}>
+                    지도 미리보기
+                  </div>
+                  <div style={{ minHeight: 260, background: "var(--bg-input)" }}>
+                    {selectedPlace && selectedMapPreview ? (
+                      <iframe
+                        src={selectedMapPreview}
+                        title={`${selectedPlace.name} 지도 미리보기`}
+                        loading="lazy"
+                        referrerPolicy="no-referrer-when-downgrade"
+                        className="w-full"
+                        style={{ minHeight: 260, border: 0 }}
+                      />
+                    ) : (
+                      <div className="h-full min-h-[260px] flex items-center justify-center text-sm text-center px-6" style={{ color: "var(--text-muted)" }}>
+                        검색 후 장소를 선택하면 이 영역에 실제 구글 지도가 표시됩니다.
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl p-4 flex items-center justify-between gap-4" style={{ background: "var(--bg-input)", border: "1px solid var(--border)" }}>
+                  <div>
+                    <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                      {selectedPlace ? selectedPlace.name : "선택된 장소 없음"}
+                    </p>
+                    <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+                      {selectedPlace ? selectedPlace.formattedAddress : "왼쪽에서 검색 결과를 선택해 주세요."}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={insertSelectedMap}
+                    disabled={!selectedPlace || !selectedMapPreview}
+                    className="pressable px-4 py-3 rounded-2xl font-semibold text-white disabled:opacity-45"
+                    style={{ background: "#EA580C" }}
+                  >
+                    지도 삽입
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
