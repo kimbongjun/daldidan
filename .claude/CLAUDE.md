@@ -127,7 +127,7 @@ npm run lint     # ESLint 검사
 ## 주의사항
 
 - `date-fns` locale은 `ko`(한국어)를 사용한다.
-- 금액 표시: 원화는 `.toLocaleString() + "원"`, 달러는 `"$" + .toFixed(2)`.
 - 빌드 전 `npx next build`로 타입·lint 오류를 반드시 확인한다.
 - 모든 언어는 꺠지지 않게 `UTF-8` 언어셋을 지킨다.
 - `"use client"` 없이 Zustand 훅을 쓰면 SSR prerender 오류가 발생한다.
+- 업데이트가 완료되면 타입,lint 오류 검증 후 `npm run dev` 와 `git push`를 진행한다.
