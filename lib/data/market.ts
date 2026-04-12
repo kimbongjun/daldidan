@@ -4,27 +4,17 @@ import { MarketIndexQuote, MarketQuote, MarketResponse } from "@/lib/data/types"
 const INDEX_SYMBOLS = [
   { symbol: "^KS11", name: "KOSPI", region: "KR" as const },
   { symbol: "^KQ11", name: "KOSDAQ", region: "KR" as const },
-  { symbol: "^GSPC", name: "S&P 500", region: "US" as const },
-  { symbol: "^IXIC", name: "NASDAQ", region: "US" as const },
-  { symbol: "^DJI", name: "DOW", region: "US" as const },
-  { symbol: "^N225", name: "Nikkei 225", region: "JP" as const },
-  { symbol: "^HSI", name: "Hang Seng", region: "CN" as const },
 ];
 
 const STOCK_SYMBOLS = [
   { symbol: "005930.KS", name: "삼성전자", market: "KR" as const, exchange: "KOSPI", displaySymbol: "005930", sector: "반도체", listingMarket: "KOSPI" },
   { symbol: "000660.KS", name: "SK하이닉스", market: "KR" as const, exchange: "KOSPI", displaySymbol: "000660", sector: "반도체", listingMarket: "KOSPI" },
+  { symbol: "005380.KS", name: "현대차", market: "KR" as const, exchange: "KOSPI", displaySymbol: "005380", sector: "자동차", listingMarket: "KOSPI" },
   { symbol: "035420.KS", name: "NAVER", market: "KR" as const, exchange: "KOSPI", displaySymbol: "035420", sector: "IT/인터넷", listingMarket: "KOSPI" },
   { symbol: "051910.KS", name: "LG화학", market: "KR" as const, exchange: "KOSPI", displaySymbol: "051910", sector: "화학", listingMarket: "KOSPI" },
-  { symbol: "005380.KS", name: "현대차", market: "KR" as const, exchange: "KOSPI", displaySymbol: "005380", sector: "자동차", listingMarket: "KOSPI" },
+  { symbol: "373220.KS", name: "LG에너지솔루션", market: "KR" as const, exchange: "KOSPI", displaySymbol: "373220", sector: "2차전지", listingMarket: "KOSPI" },
   { symbol: "293490.KQ", name: "카카오게임즈", market: "KR" as const, exchange: "KOSDAQ", displaySymbol: "293490", sector: "게임", listingMarket: "KOSDAQ" },
-  { symbol: "041510.KQ", name: "에스엠", market: "KR" as const, exchange: "KOSDAQ", displaySymbol: "041510", sector: "엔터", listingMarket: "KOSDAQ" },
   { symbol: "196170.KQ", name: "알테오젠", market: "KR" as const, exchange: "KOSDAQ", displaySymbol: "196170", sector: "바이오", listingMarket: "KOSDAQ" },
-  { symbol: "AAPL", name: "Apple", market: "US" as const, exchange: "NASDAQ" },
-  { symbol: "NVDA", name: "NVIDIA", market: "US" as const, exchange: "NASDAQ" },
-  { symbol: "MSFT", name: "Microsoft", market: "US" as const, exchange: "NASDAQ" },
-  { symbol: "AMZN", name: "Amazon", market: "US" as const, exchange: "NASDAQ" },
-  { symbol: "TSLA", name: "Tesla", market: "US" as const, exchange: "NASDAQ" },
 ];
 
 type YahooChartResult = {
@@ -87,13 +77,13 @@ function mapStock(symbol: (typeof STOCK_SYMBOLS)[number], data: YahooChartResult
   return {
     symbol: symbol.symbol,
     name: symbol.name,
-    displaySymbol: "displaySymbol" in symbol ? symbol.displaySymbol : symbol.symbol,
-    sector: "sector" in symbol ? symbol.sector : undefined,
-    listingMarket: "listingMarket" in symbol ? symbol.listingMarket : symbol.exchange,
+    displaySymbol: symbol.displaySymbol,
+    sector: symbol.sector,
+    listingMarket: symbol.listingMarket,
     market: symbol.market,
     exchange: symbol.exchange,
     price,
-    currency: meta.currency ?? (symbol.market === "KR" ? "KRW" : "USD"),
+    currency: meta.currency ?? "KRW",
     change,
     changePct,
     previousClose,

@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, ExternalLink, Search, PackageOpen, RefreshCw } from "lucide-react";
+import { ArrowRight, ExternalLink, PackageOpen, RefreshCw, Search } from "lucide-react";
 import { useState, useRef, useCallback } from "react";
 import { ShoppingDeal, ShoppingSearchResult, UsedItem } from "@/lib/data/types";
 
@@ -50,7 +50,7 @@ export default function ShoppingWidget({ deals, source }: { deals: ShoppingDeal[
     inputRef.current?.focus();
   };
 
-  const displayDeals = searchResult ? searchResult.newItems : deals;
+  const displayDeals: ShoppingDeal[] = searchResult ? searchResult.newItems : deals;
   const displayUsed: UsedItem[] = searchResult ? searchResult.usedItems : [];
   const isSearchMode = searchResult !== null;
 
@@ -69,7 +69,11 @@ export default function ShoppingWidget({ deals, source }: { deals: ShoppingDeal[
               : source === "naver-search" ? "Naver Shopping 기반" : "샘플 데이터"}
           </p>
         </div>
-        <Link href="/shopping" className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg transition-opacity hover:opacity-70 shrink-0" style={{ background: "rgba(245,158,11,0.15)", color: "var(--accent-amber)" }}>
+        <Link
+          href="/shopping"
+          className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg transition-opacity hover:opacity-70 shrink-0"
+          style={{ background: "rgba(245,158,11,0.15)", color: "var(--accent-amber)" }}
+        >
           전체보기 <ArrowRight size={11} />
         </Link>
       </div>
@@ -140,7 +144,7 @@ export default function ShoppingWidget({ deals, source }: { deals: ShoppingDeal[
 
       {/* 중고 목록 */}
       {!loading && !error && isSearchMode && tab === "used" && (
-        <div className="flex-1 overflow-auto scrollbar-hide flex flex-col gap-2">
+        <div className="flex-1 overflow-auto scrollbar-hide flex flex-col gap-1.5">
           {displayUsed.length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center gap-2 py-8">
               <PackageOpen size={28} style={{ color: "var(--text-muted)" }} />
@@ -153,7 +157,7 @@ export default function ShoppingWidget({ deals, source }: { deals: ShoppingDeal[
                 href={item.link}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-3 rounded-xl px-3 py-2.5 hover:opacity-80 transition-opacity"
+                className="flex items-center gap-3 rounded-xl px-3 py-2 hover:opacity-80 transition-opacity"
                 style={{ background: "rgba(245,158,11,0.06)" }}
               >
                 <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0 flex items-center justify-center" style={{ background: "rgba(245,158,11,0.12)" }}>
@@ -163,55 +167,55 @@ export default function ShoppingWidget({ deals, source }: { deals: ShoppingDeal[
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate" style={{ color: "var(--text-primary)" }}>{item.title}</p>
-                  <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>{item.mallName}</p>
+                  <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>{item.mallName} · 중고</p>
                 </div>
-                <div className="text-right shrink-0">
-                  <p className="text-sm font-bold" style={{ color: "var(--accent-amber)" }}>{item.price.toLocaleString()}원</p>
-                  <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>중고</p>
-                </div>
+                <p className="text-sm font-bold shrink-0" style={{ color: "var(--accent-amber)" }}>{item.price.toLocaleString()}원</p>
               </a>
             ))
           )}
         </div>
       )}
 
-      {/* 신상품 그리드 (기본 or 검색 new 탭) */}
+      {/* 신상품 리스트 (기본 or 검색 new 탭) */}
       {!loading && !error && (!isSearchMode || tab === "new") && (
-        <div className="grid gap-3 md:grid-cols-2 flex-1 overflow-auto scrollbar-hide">
+        <div className="flex-1 overflow-auto scrollbar-hide flex flex-col gap-1.5">
           {displayDeals.length === 0 ? (
-            <div className="col-span-2 flex flex-col items-center justify-center gap-2 py-8">
+            <div className="flex-1 flex flex-col items-center justify-center gap-2 py-8">
               <PackageOpen size={28} style={{ color: "var(--text-muted)" }} />
               <p className="text-sm" style={{ color: "var(--text-muted)" }}>검색 결과가 없습니다.</p>
             </div>
           ) : (
-            displayDeals.slice(0, 4).map((deal) => (
-              <article key={deal.id} className="rounded-2xl overflow-hidden flex flex-col" style={{ background: "rgba(128,128,128,0.06)" }}>
-                <div className="relative aspect-[16/10]" style={{ background: "var(--border)" }}>
+            displayDeals.slice(0, 6).map((deal) => (
+              <a
+                key={deal.id}
+                href={deal.purchaseUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 rounded-xl px-3 py-2 hover:opacity-80 transition-opacity"
+                style={{ background: "rgba(245,158,11,0.05)" }}
+              >
+                {/* 썸네일 */}
+                <div className="w-11 h-11 rounded-lg overflow-hidden shrink-0 flex items-center justify-center" style={{ background: "rgba(245,158,11,0.12)" }}>
                   {deal.image
-                    ? <Image src={deal.image} alt={deal.title} fill sizes="(max-width:768px) 100vw, 50vw" className="object-cover" unoptimized />
-                    : null}
+                    ? <Image src={deal.image} alt={deal.title} width={44} height={44} className="object-cover w-full h-full" unoptimized />
+                    : <PackageOpen size={16} style={{ color: "var(--accent-amber)" }} />}
+                </div>
+                {/* 정보 */}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold truncate leading-snug" style={{ color: "var(--text-primary)" }}>{deal.title}</p>
+                  <p className="text-xs mt-0.5 truncate" style={{ color: "var(--text-muted)" }}>{deal.store}{deal.brand ? ` · ${deal.brand}` : ""}</p>
+                </div>
+                {/* 가격 + 할인율 */}
+                <div className="text-right shrink-0 flex flex-col items-end gap-0.5">
                   {deal.discountPct > 0 && (
-                    <div className="absolute top-2 left-2 tag" style={{ background: "var(--accent-amber)", color: "#0F0F14" }}>-{deal.discountPct}%</div>
+                    <span className="text-xs font-bold px-1.5 py-0.5 rounded" style={{ background: "rgba(245,158,11,0.2)", color: "var(--accent-amber)" }}>
+                      -{deal.discountPct}%
+                    </span>
                   )}
+                  <p className="text-sm font-black" style={{ color: "var(--accent-amber)" }}>{deal.salePrice.toLocaleString()}원</p>
                 </div>
-                <div className="p-3 flex flex-col gap-2 flex-1">
-                  <div>
-                    <p className="text-sm font-semibold" style={{ color: "var(--text-primary)", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{deal.title}</p>
-                    <p className="text-xs mt-1 truncate" style={{ color: "var(--text-muted)" }}>{deal.store}{deal.brand ? ` · ${deal.brand}` : ""}</p>
-                  </div>
-                  <div className="mt-auto flex items-end justify-between gap-2">
-                    <div>
-                      {deal.discountPct > 0 && (
-                        <p className="text-xs line-through" style={{ color: "var(--text-muted)" }}>{deal.originalPrice.toLocaleString()}원</p>
-                      )}
-                      <p className="text-lg font-black" style={{ color: "var(--accent-amber)" }}>{deal.salePrice.toLocaleString()}원</p>
-                    </div>
-                    <a href={deal.purchaseUrl} target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-lg flex items-center justify-center transition-opacity hover:opacity-70" style={{ background: "rgba(245,158,11,0.15)" }}>
-                      <ExternalLink size={13} style={{ color: "var(--accent-amber)" }} />
-                    </a>
-                  </div>
-                </div>
-              </article>
+                <ExternalLink size={12} className="shrink-0" style={{ color: "var(--text-muted)" }} />
+              </a>
             ))
           )}
         </div>

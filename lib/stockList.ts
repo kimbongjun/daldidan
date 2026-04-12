@@ -66,27 +66,4 @@ export const KR_STOCKS: StockItem[] = [
   { symbol:"058470", name:"리노공업",     market:"KOSDAQ",sector:"반도체",    price:194500,  changePct:0.83  },
 ];
 
-export const US_STOCKS: StockItem[] = [
-  { symbol:"AAPL",  name:"Apple",          market:"NASDAQ", sector:"IT",        price:213.07, changePct:1.02  },
-  { symbol:"NVDA",  name:"NVIDIA",         market:"NASDAQ", sector:"반도체",    price:875.4,  changePct:-1.39 },
-  { symbol:"TSLA",  name:"Tesla",          market:"NASDAQ", sector:"전기차",    price:172.63, changePct:3.22  },
-  { symbol:"MSFT",  name:"Microsoft",      market:"NASDAQ", sector:"IT",        price:415.2,  changePct:0.92  },
-  { symbol:"GOOGL", name:"Alphabet",       market:"NASDAQ", sector:"IT",        price:165.54, changePct:0.75  },
-  { symbol:"AMZN",  name:"Amazon",         market:"NASDAQ", sector:"이커머스",  price:185.0,  changePct:1.55  },
-  { symbol:"META",  name:"Meta",           market:"NASDAQ", sector:"소셜미디어",price:499.3,  changePct:2.11  },
-  { symbol:"NFLX",  name:"Netflix",        market:"NASDAQ", sector:"미디어",    price:625.4,  changePct:0.43  },
-  { symbol:"AMD",   name:"AMD",            market:"NASDAQ", sector:"반도체",    price:169.8,  changePct:-0.82 },
-  { symbol:"INTC",  name:"Intel",          market:"NASDAQ", sector:"반도체",    price:30.45,  changePct:-1.23 },
-  { symbol:"QCOM",  name:"Qualcomm",       market:"NASDAQ", sector:"반도체",    price:167.2,  changePct:0.58  },
-  { symbol:"AVGO",  name:"Broadcom",       market:"NASDAQ", sector:"반도체",    price:1321.5, changePct:1.77  },
-  { symbol:"JPM",   name:"JPMorgan Chase", market:"NYSE",   sector:"금융",      price:211.4,  changePct:0.34  },
-  { symbol:"BAC",   name:"Bank of America",market:"NYSE",   sector:"금융",      price:38.75,  changePct:0.52  },
-  { symbol:"V",     name:"Visa",           market:"NYSE",   sector:"금융",      price:281.3,  changePct:0.67  },
-  { symbol:"JNJ",   name:"Johnson&Johnson",market:"NYSE",   sector:"헬스케어",  price:156.2,  changePct:-0.11 },
-  { symbol:"WMT",   name:"Walmart",        market:"NYSE",   sector:"유통",      price:67.8,   changePct:0.29  },
-  { symbol:"DIS",   name:"Disney",         market:"NYSE",   sector:"미디어",    price:111.3,  changePct:1.08  },
-  { symbol:"PLTR",  name:"Palantir",       market:"NYSE",   sector:"AI/데이터", price:22.85,  changePct:4.35  },
-  { symbol:"COIN",  name:"Coinbase",       market:"NASDAQ", sector:"핀테크",    price:234.6,  changePct:-2.47 },
-];
-
-export const ALL_STOCKS: StockItem[] = [...KR_STOCKS, ...US_STOCKS];
+export const ALL_STOCKS: StockItem[] = KR_STOCKS;

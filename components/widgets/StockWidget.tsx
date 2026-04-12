@@ -24,7 +24,7 @@ export default function StockWidget({
           <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "#7C3AED" }}>주식</p>
           <h2 className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>실시간 시장 현황</h2>
           <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
-            {source === "yahoo-finance" ? "실데이터 시세 반영" : "샘플 데이터"}{fetchedAt ? ` · ${new Date(fetchedAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 기준` : ""}
+            국내 KOSPI·KOSDAQ {source === "yahoo-finance" ? "· 실시간" : "· 샘플"}{fetchedAt ? ` · ${new Date(fetchedAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 기준` : ""}
           </p>
         </div>
         <Link href="/stock" className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg transition-opacity hover:opacity-70" style={{ background: "#7C3AED22", color: "#7C3AED" }}>
@@ -36,7 +36,7 @@ export default function StockWidget({
         <div className="flex gap-6 animate-ticker whitespace-nowrap">
           {ticker.map((stock, index) => (
             <span key={`${stock.symbol}-${index}`} className="inline-flex items-center gap-1.5 text-sm">
-              <span className="font-semibold" style={{ color: "var(--text-primary)" }}>{stock.displaySymbol ?? stock.symbol.replace(".KS", "").replace(".KQ", "")}</span>
+              <span className="font-semibold" style={{ color: "var(--text-primary)" }}>{stock.name}</span>
               <span className={clsx("font-bold", stock.change >= 0 ? "text-emerald-400" : "text-rose-400")}>
                 {formatMoney(stock.price, stock.currency)}
               </span>
@@ -59,9 +59,9 @@ export default function StockWidget({
             <div className="flex items-center gap-2.5">
               <div
                 className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0"
-                style={{ background: stock.market === "KR" ? "#06B6D422" : "#F59E0B22", color: stock.market === "KR" ? "#06B6D4" : "#F59E0B" }}
+                style={{ background: stock.exchange === "KOSPI" ? "#06B6D422" : "#7C3AED22", color: stock.exchange === "KOSPI" ? "#06B6D4" : "#7C3AED" }}
               >
-                {stock.market}
+                {stock.exchange === "KOSPI" ? "KP" : "KQ"}
               </div>
               <div className="min-w-0">
                 <p className="text-sm font-semibold leading-none truncate" style={{ color: "var(--text-primary)" }}>{stock.name}</p>

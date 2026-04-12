@@ -1,5 +1,6 @@
 "use client";
 
+import Footer from "@/components/Footer";
 import Header from "@/components/Header";
 import QuickStats from "@/components/QuickStats";
 import BudgetWidget from "@/components/widgets/BudgetWidget";
@@ -32,6 +33,7 @@ export default function DashboardShell() {
           shopping={<ShoppingWidget deals={shoppingData?.deals ?? FALLBACK_DEALS} source={shoppingData?.source ?? "fallback"} />}
           traffic={<TrafficWidget />}
         />
+        <Footer />
       </div>
     </div>
   );

@@ -9,6 +9,7 @@ import { formatMoney, formatNumber } from "@/lib/data/format";
 import { buildStockCatalog } from "@/lib/data/stockCatalog";
 import { MarketQuote, MarketResponse } from "@/lib/data/types";
 import { useLiveQuery } from "@/lib/data/useLiveQuery";
+import Footer from "@/components/Footer";
 import { BarChart2, Search, TrendingDown, TrendingUp } from "lucide-react";
 
 const ACCENT = "#7C3AED";
@@ -46,11 +47,11 @@ export default function StockPage() {
   return (
     <div className="min-h-screen" style={{ background: "var(--bg-base)" }}>
       <div className="max-w-[1240px] mx-auto px-4 sm:px-6 pb-12">
-        <PageHeader title="주식 시장" subtitle="국내/미국 대표 종목 실시간 시세" accentColor={ACCENT} />
+        <PageHeader title="주식 시장" subtitle="국내 KOSPI · KOSDAQ 주요 종목 실시간 시세" accentColor={ACCENT} />
 
         <section className="mb-6">
           <h2 className="text-sm font-bold mb-3" style={{ color: "var(--text-muted)" }}>주요 지수</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             {indices.map((index) => (
               <div key={index.symbol} className="bento-card p-3">
                 <div className="flex items-center justify-between mb-1">
@@ -99,7 +100,7 @@ export default function StockPage() {
                     }}
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0" style={{ background: stock.market === "KR" ? "#06B6D422" : "#F59E0B22", color: stock.market === "KR" ? "#06B6D4" : "#F59E0B" }}>
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0" style={{ background: stock.exchange === "KOSPI" ? "#06B6D422" : "#7C3AED22", color: stock.exchange === "KOSPI" ? "#06B6D4" : "#7C3AED" }}>
                         {stock.market}
                       </div>
                       <div className="min-w-0">
@@ -129,6 +130,7 @@ export default function StockPage() {
             {active ? <StockDetail stock={active} /> : <EmptyState />}
           </div>
         </div>
+        <Footer />
       </div>
     </div>
   );
@@ -153,7 +155,7 @@ function StockDetail({ stock }: { stock: MarketQuote }) {
     <div className="bento-card p-5 flex flex-col gap-5 sticky top-6">
       <div>
         <div className="flex items-center gap-2 mb-1">
-          <span className="text-xs font-bold px-2 py-0.5 rounded" style={{ background: stock.market === "KR" ? "#06B6D422" : "#F59E0B22", color: stock.market === "KR" ? "#06B6D4" : "#F59E0B" }}>{stock.exchange}</span>
+          <span className="text-xs font-bold px-2 py-0.5 rounded" style={{ background: stock.exchange === "KOSPI" ? "#06B6D422" : "#7C3AED22", color: stock.exchange === "KOSPI" ? "#06B6D4" : "#7C3AED" }}>{stock.exchange}</span>
           <span className="text-xs" style={{ color: "var(--text-muted)" }}>{stock.displaySymbol ?? stock.symbol}</span>
         </div>
         <h3 className="text-xl font-black" style={{ color: "var(--text-primary)" }}>{stock.name}</h3>
