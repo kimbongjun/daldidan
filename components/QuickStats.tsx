@@ -19,7 +19,7 @@ export default function QuickStats({
   const currentMonthLabel = `${now.getMonth() + 1}월`;
 
   const samsung = stocks.find((item) => item.symbol === "005930.KS");
-  const apple = stocks.find((item) => item.symbol === "AAPL");
+  const hynix = stocks.find((item) => item.symbol === "000660.KS");
   const monthExpense = transactions
     .filter((item) => item.type === "expense" && item.date.startsWith(currentYearMonth))
     .reduce((sum, item) => sum + item.amount, 0);
@@ -33,11 +33,11 @@ export default function QuickStats({
       up: samsung ? samsung.changePct >= 0 : true,
     },
     {
-      label: "Apple",
-      value: apple ? formatMoney(apple.price, apple.currency) : "-",
-      sub: apple ? `${apple.changePct >= 0 ? "+" : ""}${apple.changePct.toFixed(2)}%` : "",
-      color: apple && apple.changePct >= 0 ? "#10B981" : "#F43F5E",
-      up: apple ? apple.changePct >= 0 : true,
+      label: "SK하이닉스",
+      value: hynix ? formatMoney(hynix.price, hynix.currency) : "-",
+      sub: hynix ? `${hynix.changePct >= 0 ? "+" : ""}${hynix.changePct.toFixed(2)}%` : "",
+      color: hynix && hynix.changePct >= 0 ? "#10B981" : "#F43F5E",
+      up: hynix ? hynix.changePct >= 0 : true,
     },
     {
       label: "서울 날씨",
