@@ -111,27 +111,33 @@ function CCTVViewer({ cam }: { cam: TrafficCCTV }) {
           <div key={x} style={{ position: "absolute", bottom: "10%", left: `${x}%`, width: 2, height: "40%", background: "rgba(255,255,255,0.08)" }} />
         ))}
         {/* Cars */}
-        {Array.from({ length: cars }).map((_, i) => (
-          <div
-            key={`${cam.id}-${i}-${tick}`}
-            style={{
-              position: "absolute",
-              bottom: `${18 + (i % 3) * 10}%`,
-              left: `${((i * 37 + tick * 5) % 110) - 10}%`,
-              width: 28,
-              height: 14,
-              borderRadius: 3,
-              background: i % 4 === 0 ? "#EA580C55" : "rgba(255,255,255,0.15)",
-              transition: "left 3s linear",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 9,
-            }}
-          >
-            🚗
-          </div>
-        ))}
+        {Array.from({ length: cars }).map((_, i) => {
+          const lane = i % 3;
+          const xPct = ((i * 37 + tick * 18) % 120) - 10;
+          return (
+            <div
+              key={`${cam.id}-${i}`}
+              style={{
+                position: "absolute",
+                bottom: `${20 + lane * 12}%`,
+                left: 0,
+                width: 28,
+                height: 14,
+                borderRadius: 3,
+                background: i % 4 === 0 ? "#EA580C55" : "rgba(255,255,255,0.15)",
+                transform: `translateX(${xPct}vw)`,
+                transition: "transform 3s linear",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 9,
+                willChange: "transform",
+              }}
+            >
+              🚗
+            </div>
+          );
+        })}
         {/* Scanline effect */}
         <div style={{ position: "absolute", inset: 0, backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.08) 2px, rgba(0,0,0,0.08) 4px)" }} />
       </div>
@@ -334,7 +340,7 @@ export default function TrafficWidget() {
 
           <div
             className="scrollbar-hide"
-            style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.4rem", overflowY: "auto" }}
+            style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: "0.4rem", overflowY: "auto" }}
           >
             {trafficCCTVs.map((cam) => (
               <CCTVCard
@@ -348,7 +354,7 @@ export default function TrafficWidget() {
 
           {activeCam && (
             <p style={{ fontSize: "0.65rem", color: "var(--text-muted)", textAlign: "center", margin: 0 }}>
-              {activeCam.status === "사고" ? CCTV_SCENE["정체"].desc : CCTV_SCENE[activeCam.status].desc}
+              {CCTV_SCENE[activeCam.status].desc}
             </p>
           )}
         </div>

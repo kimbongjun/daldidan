@@ -82,7 +82,7 @@ function BentoGrid({
             gap: 1rem;
             width: 100%;
             grid-template-columns: minmax(0,1fr) minmax(0,2fr) minmax(0,1fr);
-            grid-template-rows: 460px 400px 480px;
+            grid-template-rows: 460px 400px 520px;
             grid-template-areas:
               "weather stock budget"
               "shopping event travel"
@@ -108,7 +108,7 @@ function BentoGrid({
         <div style={{ minWidth: 0, height: 380 }}>{culture}</div>
         <div style={{ minWidth: 0, height: 380 }}><TravelWidget /></div>
         <div style={{ minWidth: 0, height: 420 }}><BudgetWidget /></div>
-        <div style={{ minWidth: 0, height: 480, gridColumn: "span 2" }}>{traffic}</div>
+        <div style={{ minWidth: 0, height: 520, gridColumn: "span 2" }}>{traffic}</div>
       </div>
 
       <div className="bento-mobile">
@@ -118,7 +118,7 @@ function BentoGrid({
         <div style={{ minWidth: 0, height: 380 }}>{culture}</div>
         <div style={{ minWidth: 0, height: 380 }}><TravelWidget /></div>
         <div style={{ minWidth: 0, height: 500 }}><BudgetWidget /></div>
-        <div style={{ minWidth: 0, height: 520 }}>{traffic}</div>
+        <div style={{ minWidth: 0, height: 560 }}>{traffic}</div>
       </div>
     </div>
   );

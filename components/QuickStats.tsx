@@ -14,10 +14,14 @@ export default function QuickStats({
   weather: WeatherData | null;
   transactions: Transaction[];
 }) {
+  const now = new Date();
+  const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const currentMonthLabel = `${now.getMonth() + 1}월`;
+
   const samsung = stocks.find((item) => item.symbol === "005930.KS");
   const apple = stocks.find((item) => item.symbol === "AAPL");
   const monthExpense = transactions
-    .filter((item) => item.type === "expense" && item.date.startsWith("2026-04"))
+    .filter((item) => item.type === "expense" && item.date.startsWith(currentYearMonth))
     .reduce((sum, item) => sum + item.amount, 0);
 
   const stats = [
@@ -43,9 +47,9 @@ export default function QuickStats({
       up: true,
     },
     {
-      label: "4월 지출",
+      label: `${currentMonthLabel} 지출`,
       value: formatLargeWon(monthExpense),
-      sub: "이번 달",
+      sub: "이번 달 합계",
       color: "#F59E0B",
       up: false,
     },

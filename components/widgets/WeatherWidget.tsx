@@ -25,10 +25,10 @@ export default function WeatherWidget() {
 
       {/* Main temp */}
       <div className="flex items-center gap-4">
-        <span className="text-6xl">{w.icon}</span>
-        <div>
-          <p className="text-5xl font-black text-white leading-none">{w.temp}°</p>
-          <p className="text-sm mt-1" style={{ color: "#8B8BA7" }}>{w.condition}</p>
+        <span className="text-6xl leading-none">{w.icon}</span>
+        <div className="min-w-0">
+          <p className="text-5xl font-black leading-none" style={{ color: "var(--text-primary)" }}>{w.temp}°</p>
+          <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>{w.condition}</p>
         </div>
       </div>
 
@@ -41,20 +41,20 @@ export default function WeatherWidget() {
         ].map((item) => (
           <div key={item.label} className="rounded-xl p-2.5 text-center" style={{ background: "rgba(6,182,212,0.08)" }}>
             <div className="flex justify-center mb-1" style={{ color: "#06B6D4" }}>{item.icon}</div>
-            <p className="text-xs" style={{ color: "#8B8BA7" }}>{item.label}</p>
-            <p className="text-sm font-bold text-white">{item.value}</p>
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>{item.label}</p>
+            <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{item.value}</p>
           </div>
         ))}
       </div>
 
       {/* Forecast */}
-      <div className="flex gap-2 mt-auto">
+      <div className="flex gap-1.5 mt-auto">
         {w.forecast.slice(0, 4).map((f) => (
-          <div key={f.day} className="flex-1 rounded-xl p-2 text-center" style={{ background: "rgba(255,255,255,0.03)" }}>
-            <p className="text-xs mb-1" style={{ color: "#8B8BA7" }}>{f.day}</p>
-            <p className="text-xl">{f.icon}</p>
-            <p className="text-xs font-semibold text-white">{f.high}°</p>
-            <p className="text-xs" style={{ color: "#8B8BA7" }}>{f.low}°</p>
+          <div key={f.day} className="flex-1 rounded-xl p-2 text-center min-w-0" style={{ background: "rgba(255,255,255,0.03)" }}>
+            <p className="text-xs mb-1 truncate" style={{ color: "var(--text-muted)" }}>{f.day}</p>
+            <p className="text-lg leading-snug">{f.icon}</p>
+            <p className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>{f.high}°</p>
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>{f.low}°</p>
           </div>
         ))}
       </div>

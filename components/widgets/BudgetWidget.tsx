@@ -38,7 +38,7 @@ export default function BudgetWidget() {
       <div className="flex items-center justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "#6366F1" }}>가계부</p>
-          <h2 className="text-lg font-bold text-white">분석 중심 관리</h2>
+          <h2 className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>분석 중심 관리</h2>
         </div>
         <Link href="/budget" className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg transition-opacity hover:opacity-70" style={{ background: "#6366F122", color: "#6366F1" }}>
           수정/분석 <ArrowRight size={11} />
@@ -59,18 +59,16 @@ export default function BudgetWidget() {
       </div>    
 
       <div className="flex flex-col gap-2 flex-1 overflow-auto scrollbar-hide">
+        <p className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>이번 달 주요 지출</p>
         {topCategories.map(([category, amount]) => (
-          <div key={category} className="rounded-xl px-3 py-2.5 flex items-center justify-between" style={{ background: "rgba(255,255,255,0.03)" }}>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold" style={{ background: (CATEGORY_COLORS[category] ?? "#8B8BA7") + "22", color: CATEGORY_COLORS[category] ?? "#8B8BA7" }}>
+          <div key={category} className="rounded-xl px-3 py-2.5 flex items-center justify-between gap-2" style={{ background: "rgba(255,255,255,0.03)" }}>
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0" style={{ background: (CATEGORY_COLORS[category] ?? "#8B8BA7") + "22", color: CATEGORY_COLORS[category] ?? "#8B8BA7" }}>
                 {category.slice(0, 1)}
               </div>
-              <div>
-                <p className="text-sm font-semibold text-white">{category}</p>
-                <p className="text-xs" style={{ color: "#8B8BA7" }}>이번 달 주요 지출</p>
-              </div>
+              <p className="text-sm font-semibold truncate" style={{ color: "var(--text-primary)" }}>{category}</p>
             </div>
-            <span className="text-sm font-bold" style={{ color: CATEGORY_COLORS[category] ?? "#8B8BA7" }}>{amount.toLocaleString()}원</span>
+            <span className="text-sm font-bold shrink-0" style={{ color: CATEGORY_COLORS[category] ?? "#8B8BA7" }}>{amount.toLocaleString()}원</span>
           </div>
         ))}
       </div>

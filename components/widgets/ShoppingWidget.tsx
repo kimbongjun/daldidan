@@ -57,16 +57,16 @@ export default function ShoppingWidget({ deals, source }: { deals: ShoppingDeal[
   return (
     <div className="bento-card gradient-amber h-full flex flex-col p-5 gap-3">
       {/* 헤더 */}
-      <div className="flex items-start justify-between shrink-0">
-        <div>
+      <div className="flex items-start justify-between shrink-0 gap-2">
+        <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--accent-amber)" }}>쇼핑</p>
-          <h2 className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>
-            {isSearchMode ? `"${searchResult.keyword}" 검색 결과` : "실시간 할인 상품"}
+          <h2 className="text-lg font-bold truncate" style={{ color: "var(--text-primary)" }}>
+            {isSearchMode ? `"${searchResult.keyword}" 검색결과` : "실시간 할인 상품"}
           </h2>
           <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
             {isSearchMode
               ? `신상품 ${searchResult.newItems.length}개 · 중고 ${searchResult.usedItems.length}개`
-              : source === "naver-search" ? "Naver Shopping 기반" : "API 키 연결 전 fallback"}
+              : source === "naver-search" ? "Naver Shopping 기반" : "샘플 데이터"}
           </p>
         </div>
         <Link href="/shopping" className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg transition-opacity hover:opacity-70 shrink-0" style={{ background: "rgba(245,158,11,0.15)", color: "var(--accent-amber)" }}>
@@ -196,8 +196,8 @@ export default function ShoppingWidget({ deals, source }: { deals: ShoppingDeal[
                 </div>
                 <div className="p-3 flex flex-col gap-2 flex-1">
                   <div>
-                    <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{deal.title}</p>
-                    <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>{deal.store}{deal.brand ? ` · ${deal.brand}` : ""}</p>
+                    <p className="text-sm font-semibold" style={{ color: "var(--text-primary)", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{deal.title}</p>
+                    <p className="text-xs mt-1 truncate" style={{ color: "var(--text-muted)" }}>{deal.store}{deal.brand ? ` · ${deal.brand}` : ""}</p>
                   </div>
                   <div className="mt-auto flex items-end justify-between gap-2">
                     <div>

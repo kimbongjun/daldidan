@@ -20,11 +20,11 @@ export default function StockWidget({
   return (
     <div className="bento-card gradient-violet h-full flex flex-col p-5 gap-4">
       <div className="flex items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "#7C3AED" }}>주식</p>
-          <h2 className="text-lg font-bold text-white">실시간 시장 현황</h2>
+          <h2 className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>실시간 시장 현황</h2>
           <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
-            {source === "yahoo-finance" ? "실데이터 시세 반영" : "fallback 데이터"}{fetchedAt ? ` · ${new Date(fetchedAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 기준` : ""}
+            {source === "yahoo-finance" ? "실데이터 시세 반영" : "샘플 데이터"}{fetchedAt ? ` · ${new Date(fetchedAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 기준` : ""}
           </p>
         </div>
         <Link href="/stock" className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg transition-opacity hover:opacity-70" style={{ background: "#7C3AED22", color: "#7C3AED" }}>
@@ -36,7 +36,7 @@ export default function StockWidget({
         <div className="flex gap-6 animate-ticker whitespace-nowrap">
           {ticker.map((stock, index) => (
             <span key={`${stock.symbol}-${index}`} className="inline-flex items-center gap-1.5 text-sm">
-              <span className="font-semibold text-white">{stock.displaySymbol ?? stock.symbol.replace(".KS", "").replace(".KQ", "")}</span>
+              <span className="font-semibold" style={{ color: "var(--text-primary)" }}>{stock.displaySymbol ?? stock.symbol.replace(".KS", "").replace(".KQ", "")}</span>
               <span className={clsx("font-bold", stock.change >= 0 ? "text-emerald-400" : "text-rose-400")}>
                 {formatMoney(stock.price, stock.currency)}
               </span>
@@ -63,13 +63,13 @@ export default function StockWidget({
               >
                 {stock.market}
               </div>
-              <div>
-                <p className="text-sm font-semibold text-white leading-none">{stock.name}</p>
-                <p className="text-xs mt-0.5" style={{ color: "#8B8BA7" }}>{stock.displaySymbol ?? stock.symbol}</p>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold leading-none truncate" style={{ color: "var(--text-primary)" }}>{stock.name}</p>
+                <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>{stock.displaySymbol ?? stock.symbol}</p>
               </div>
             </div>
-            <div className="text-right">
-              <p className="text-sm font-bold text-white">{formatMoney(stock.price, stock.currency)}</p>
+            <div className="text-right shrink-0">
+              <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{formatMoney(stock.price, stock.currency)}</p>
               <p className={clsx("text-xs flex items-center gap-0.5 justify-end", stock.change >= 0 ? "text-emerald-400" : "text-rose-400")}>
                 {stock.change >= 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
                 {stock.change >= 0 ? "+" : ""}{stock.changePct.toFixed(2)}%
