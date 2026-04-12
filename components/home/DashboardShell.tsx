@@ -56,7 +56,7 @@ function BentoGrid({
             gap: 1rem;
             width: 100%;
             grid-template-columns: minmax(0,1fr) minmax(0,2fr);
-            grid-template-rows: 500px;
+            
             grid-template-areas:
               "budget blog";
           }

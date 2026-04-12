@@ -14,15 +14,12 @@ export default async function BlogPage() {
   return (
     <div className="min-h-screen" style={{ background: "var(--bg-base)" }}>
       <div className="max-w-[1200px] mx-auto px-4 sm:px-6 pb-12">
-        <PageHeader title="블로그" subtitle="최신 글 9개를 카드형으로 한눈에" accentColor={ACCENT} />
+        <PageHeader title="블로그" subtitle="달디단의 인생스토리" accentColor={ACCENT} />
 
-        <div className="flex items-center justify-between gap-3 mb-5">
-          <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-            썸네일, 제목, 설명, 날짜, 작성자를 한 화면에서 확인할 수 있어요.
-          </p>
+        <div className="flex items-center justify-between gap-3 mb-5">          
           <Link
             href="/blog/write"
-            className="pressable px-4 py-2 rounded-xl text-sm font-semibold transition-opacity hover:opacity-80"
+            className="pressable px-4 py-2 rounded-xl text-sm ml-auto font-semibold transition-opacity hover:opacity-80"
             style={{ background: ACCENT, color: "#fff" }}
           >
             글쓰기
