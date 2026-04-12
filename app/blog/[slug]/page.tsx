@@ -9,16 +9,9 @@ const ACCENT = "#EA580C";
 
 export default async function BlogDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const decodedSlug = (() => {
-    try {
-      return decodeURIComponent(slug);
-    } catch {
-      return slug;
-    }
-  })();
   const [post, editable] = await Promise.all([
-    getBlogPostBySlug(decodedSlug),
-    canEditBlogPost(decodedSlug),
+    getBlogPostBySlug(slug),
+    canEditBlogPost(slug),
   ]);
 
   if (!post) {

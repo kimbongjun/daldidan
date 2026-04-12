@@ -30,6 +30,21 @@ export function extractFirstImageFromHtml(contentHtml: string) {
   return match?.[1]?.trim() || null;
 }
 
+function resolveSlugCandidates(slug: string) {
+  const candidates = new Set([slug.trim()]);
+
+  try {
+    const decoded = decodeURIComponent(slug);
+    if (decoded.trim()) {
+      candidates.add(decoded.trim());
+    }
+  } catch {
+    // 이미 디코딩된 값이거나 malformed encoding 이면 원본만 사용
+  }
+
+  return [...candidates].filter(Boolean);
+}
+
 export async function getPublishedBlogPosts(limit = 9) {
   const supabase = createPublicClient();
   const { data, error } = await supabase
@@ -46,18 +61,25 @@ export async function getPublishedBlogPosts(limit = 9) {
 
 export async function getBlogPostBySlug(slug: string) {
   const supabase = createPublicClient();
+  const candidates = resolveSlugCandidates(slug);
   const { data, error } = await supabase
     .from("blog_posts")
     .select("id, slug, title, description, thumbnail_url, author_name, published_at, created_at, content_html")
-    .eq("slug", slug)
+    .in("slug", candidates)
     .eq("is_published", true)
-    .maybeSingle();
+    .limit(2);
 
   if (error || !data) return null;
 
+  const matched = candidates
+    .map((candidate) => data.find((post) => post.slug === candidate))
+    .find(Boolean);
+
+  if (!matched) return null;
+
   return {
-    ...mapSummary(data),
-    contentHtml: data.content_html ?? "",
+    ...mapSummary(matched),
+    contentHtml: matched.content_html ?? "",
   } satisfies BlogPostDetail;
 }
 
@@ -65,20 +87,27 @@ export async function getEditableBlogPostBySlug(slug: string) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
+  const candidates = resolveSlugCandidates(slug);
 
   const { data, error } = await supabase
     .from("blog_posts")
     .select("id, slug, title, description, thumbnail_url, author_name, published_at, created_at, content_html, content_json")
-    .eq("slug", slug)
+    .in("slug", candidates)
     .eq("author_id", user.id)
-    .maybeSingle();
+    .limit(2);
 
   if (error || !data) return null;
 
+  const matched = candidates
+    .map((candidate) => data.find((post) => post.slug === candidate))
+    .find(Boolean);
+
+  if (!matched) return null;
+
   return {
-    ...mapSummary(data),
-    contentHtml: data.content_html ?? "",
-    contentJson: data.content_json ?? null,
+    ...mapSummary(matched),
+    contentHtml: matched.content_html ?? "",
+    contentJson: matched.content_json ?? null,
   } satisfies EditableBlogPost;
 }
 
@@ -86,15 +115,16 @@ export async function canEditBlogPost(slug: string) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return false;
+  const candidates = resolveSlugCandidates(slug);
 
   const { data } = await supabase
     .from("blog_posts")
-    .select("id")
-    .eq("slug", slug)
+    .select("id, slug")
+    .in("slug", candidates)
     .eq("author_id", user.id)
-    .maybeSingle();
+    .limit(2);
 
-  return Boolean(data);
+  return candidates.some((candidate) => data?.some((post) => post.slug === candidate));
 }
 
 export function slugifyBlogTitle(input: string) {

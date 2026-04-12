@@ -7,15 +7,7 @@ const ACCENT = "#EA580C";
 
 export default async function BlogEditPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const decodedSlug = (() => {
-    try {
-      return decodeURIComponent(slug);
-    } catch {
-      return slug;
-    }
-  })();
-
-  const post = await getEditableBlogPostBySlug(decodedSlug);
+  const post = await getEditableBlogPostBySlug(slug);
 
   if (!post) {
     notFound();
