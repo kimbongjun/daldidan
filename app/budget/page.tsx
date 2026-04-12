@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import PageHeader from "@/components/PageHeader";
+import { sendNativeNotification } from "@/lib/notifications";
 import { PencilLine, Plus, Trash2, TrendingDown, TrendingUp, Wallet } from "lucide-react";
 
 const ACCENT = "#6366F1";
@@ -47,6 +48,7 @@ export default function BudgetPage() {
   const [period, setPeriod] = useState<Period>("monthly");
   const [editingId, setEditingId] = useState<string | null>(null); // null = 새 거래 추가 모드
   const [showEditor, setShowEditor] = useState(false);
+  const [selectedTransactionId, setSelectedTransactionId] = useState<string | null>(null);
 
   // ── 거래 목록 로드 ──────────────────────────────────────────
   const loadTransactions = useCallback(async () => {
@@ -64,6 +66,23 @@ export default function BudgetPage() {
 
   useEffect(() => { loadTransactions(); }, [loadTransactions]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const params = new URLSearchParams(window.location.search);
+    setSelectedTransactionId(params.get("transaction"));
+  }, []);
+
+  useEffect(() => {
+    if (!selectedTransactionId || transactions.length === 0) return;
+
+    const matched = transactions.find((transaction) => transaction.id === selectedTransactionId);
+    if (!matched) return;
+
+    setEditingId(matched.id);
+    setShowEditor(true);
+  }, [selectedTransactionId, transactions]);
+
   // ── 집계 ──────────────────────────────────────────────────
   const income = transactions.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0);
   const expense = transactions.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0);
@@ -80,6 +99,10 @@ export default function BudgetPage() {
     if (res.ok) {
       const created = await res.json() as Transaction;
       setTransactions((prev) => [created, ...prev]);
+      sendNativeNotification(
+        "가계부 내역이 추가되었어요",
+        `${created.note || created.category} · ${created.amount.toLocaleString()}원`,
+      );
     }
     setShowEditor(false);
     setEditingId(null);
@@ -124,7 +147,7 @@ export default function BudgetPage() {
           ].map((item) => (
             <div key={item.label} className="bento-card p-4">
               <div className="flex items-center gap-2 mb-2" style={{ color: item.color }}>{item.icon}<span className="text-sm font-semibold">{item.label}</span></div>
-              <p className="text-2xl font-black" style={{ color: item.color }}>{(Math.abs(item.value) / 10000).toFixed(1)}만원</p>
+              <p className="text-md md:text-2xl font-black" style={{ color: item.color }}>{(Math.abs(item.value) / 10000).toFixed(1)}만원</p>
               <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>{item.value.toLocaleString()}원</p>
             </div>
           ))}
@@ -198,7 +221,10 @@ export default function BudgetPage() {
               ) : (
                 transactions.map((tx) => (
                   <div key={tx.id} className="flex items-center gap-2.5 rounded-xl px-3 py-2.5"
-                    style={{ background: editingId === tx.id ? ACCENT + "11" : "rgba(255,255,255,0.03)" }}>
+                    style={{
+                      background: editingId === tx.id ? ACCENT + "11" : "rgba(255,255,255,0.03)",
+                      border: selectedTransactionId === tx.id ? `1px solid ${ACCENT}55` : "1px solid transparent",
+                    }}>
                     <button onClick={() => openEdit(tx.id)} className="flex items-center gap-2.5 flex-1 min-w-0 text-left">
                       <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-xs font-bold"
                         style={{ background: (CATEGORY_COLORS[tx.category] ?? "#8B8BA7") + "22", color: CATEGORY_COLORS[tx.category] ?? "#8B8BA7" }}>

@@ -1,11 +1,18 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Bell, LogOut, Settings, Sparkles, User, Moon, Sun } from "lucide-react";
+import { Bell, BellOff, LogOut, Sparkles, User, Moon, Sun } from "lucide-react";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 import { useThemeStore } from "@/store/useThemeStore";
+import { useNotificationStore } from "@/store/useNotificationStore";
 import { createClient } from "@/lib/supabase/client";
+import {
+  disableNativeNotifications,
+  enableNativeNotifications,
+  getNativeNotificationPermission,
+  supportsNativeNotifications,
+} from "@/lib/notifications";
 import { signOut } from "@/lib/supabase/actions/auth";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
 import Link from "next/link";
@@ -14,8 +21,12 @@ export default function Header() {
   const [now, setNow] = useState(new Date());
   const [user, setUser] = useState<SupabaseUser | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [notificationMenuOpen, setNotificationMenuOpen] = useState(false);
+  const [permission, setPermission] = useState<NotificationPermission | "unsupported">("unsupported");
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const notificationRef = useRef<HTMLDivElement>(null);
   const { theme, toggle } = useThemeStore();
+  const notificationEnabled = useNotificationStore((state) => state.enabled);
 
   // 시계
   useEffect(() => {
@@ -39,9 +50,16 @@ export default function Header() {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setDropdownOpen(false);
       }
+      if (notificationRef.current && !notificationRef.current.contains(e.target as Node)) {
+        setNotificationMenuOpen(false);
+      }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  useEffect(() => {
+    setPermission(getNativeNotificationPermission());
   }, []);
 
   const hour = now.getHours();
@@ -53,6 +71,23 @@ export default function Header() {
   const isLight = theme === "light";
 
   const avatarLetter = user?.email?.[0]?.toUpperCase() ?? "U";
+  const notificationSupported = supportsNativeNotifications();
+
+  const handleNotificationToggle = async () => {
+    if (notificationEnabled) {
+      disableNativeNotifications();
+      setPermission(getNativeNotificationPermission());
+      return;
+    }
+
+    const result = await enableNativeNotifications();
+    if (!result.ok) {
+      setPermission(getNativeNotificationPermission());
+      return;
+    }
+
+    setPermission(getNativeNotificationPermission());
+  };
 
   return (
     <header className="flex items-center justify-between py-6 px-1">
@@ -98,21 +133,72 @@ export default function Header() {
           }
         </button>
 
-        {/* 알림 */}
-        <button
-          className="w-9 h-9 rounded-xl flex items-center justify-center transition-colors hover:opacity-80"
-          style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
-        >
-          <Bell size={16} style={{ color: "var(--text-muted)" }} />
-        </button>
+        <div ref={notificationRef} style={{ position: "relative" }}>
+          <button
+            onClick={() => setNotificationMenuOpen((value) => !value)}
+            className="w-9 h-9 rounded-xl flex items-center justify-center transition-colors hover:opacity-80"
+            style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+            aria-label="알림 설정"
+          >
+            {notificationEnabled ? (
+              <Bell size={16} style={{ color: "#F59E0B" }} />
+            ) : (
+              <BellOff size={16} style={{ color: "var(--text-muted)" }} />
+            )}
+          </button>
 
-        {/* 설정 */}
-        <button
-          className="w-9 h-9 rounded-xl flex items-center justify-center transition-colors hover:opacity-80"
-          style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
-        >
-          <Settings size={16} style={{ color: "var(--text-muted)" }} />
-        </button>
+          {notificationMenuOpen && (
+            <div
+              style={{
+                position: "absolute",
+                top: "calc(100% + 0.5rem)",
+                right: 0,
+                width: 250,
+                background: "var(--bg-card)",
+                border: "1px solid var(--border)",
+                borderRadius: "0.875rem",
+                boxShadow: "var(--shadow-card)",
+                overflow: "hidden",
+                zIndex: 50,
+              }}
+            >
+              <div style={{ padding: "0.9rem 1rem", borderBottom: "1px solid var(--border)" }}>
+                <p style={{ fontSize: "0.8rem", fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>콘텐츠 생성 알림</p>
+                <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: "0.35rem 0 0" }}>
+                  가계부와 블로그를 작성하면 브라우저 네이티브 알림을 보냅니다.
+                </p>
+              </div>
+              <div style={{ padding: "0.9rem 1rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem" }}>
+                  <div>
+                    <p style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--text-primary)", margin: 0 }}>
+                      {notificationEnabled ? "알림 허용됨" : "알림 비허용"}
+                    </p>
+                    <p style={{ fontSize: "0.72rem", color: "var(--text-muted)", margin: "0.25rem 0 0" }}>
+                      {!notificationSupported
+                        ? "현재 브라우저는 알림을 지원하지 않습니다."
+                        : permission === "denied"
+                          ? "브라우저에서 차단되어 있어 브라우저 설정에서 허용이 필요합니다."
+                          : "필요할 때 언제든 on/off 할 수 있습니다."}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleNotificationToggle}
+                    disabled={!notificationSupported || permission === "denied"}
+                    className="px-3 py-2 rounded-lg text-xs font-semibold transition-opacity disabled:opacity-40"
+                    style={{
+                      background: notificationEnabled ? "rgba(244,63,94,0.12)" : "rgba(245,158,11,0.16)",
+                      color: notificationEnabled ? "#F43F5E" : "#F59E0B",
+                    }}
+                  >
+                    {notificationEnabled ? "끄기" : "켜기"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* 유저 아이콘 */}
         {user ? (

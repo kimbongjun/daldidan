@@ -60,15 +60,8 @@ export default function BudgetWidget() {
   const expense = transactions.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0);
   const balance = income - expense;
 
-  const topCategories = Object.entries(
-    transactions
-      .filter((t) => t.type === "expense")
-      .reduce<Record<string, number>>((acc, t) => {
-        acc[t.category] = (acc[t.category] ?? 0) + t.amount;
-        return acc;
-      }, {}),
-  )
-    .sort((a, b) => b[1] - a[1])
+  const recentExpenses = transactions
+    .filter((t) => t.type === "expense")
     .slice(0, 4);
 
   // ── 로딩 중 (세션 확인 전) ──
@@ -143,7 +136,7 @@ export default function BudgetWidget() {
           <div className="flex-1 flex items-center justify-center">
             <div style={{ width: 20, height: 20, borderRadius: "50%", border: "2px solid #6366F1", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }} />
           </div>
-        ) : topCategories.length === 0 ? (
+        ) : recentExpenses.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-2">
             <p className="text-sm" style={{ color: "var(--text-muted)" }}>아직 거래 내역이 없습니다.</p>
             <Link href="/budget" className="text-xs font-semibold" style={{ color: "#6366F1" }}>
@@ -152,26 +145,34 @@ export default function BudgetWidget() {
           </div>
         ) : (
           <>
-            <p className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>이번 달 주요 지출</p>
-            {topCategories.map(([category, amount]) => (
-              <div
-                key={category}
-                className="rounded-xl px-3 py-2.5 flex items-center justify-between gap-2"
+            <p className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>최근 소비 내역</p>
+            {recentExpenses.map((transaction) => (
+              <Link
+                key={transaction.id}
+                href={`/budget?transaction=${transaction.id}`}
+                className="rounded-xl px-3 py-2.5 flex items-center justify-between gap-2 transition-opacity hover:opacity-80"
                 style={{ background: "rgba(255,255,255,0.03)" }}
               >
                 <div className="flex items-center gap-2 min-w-0">
                   <div
                     className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0"
-                    style={{ background: (CATEGORY_COLORS[category] ?? "#8B8BA7") + "22", color: CATEGORY_COLORS[category] ?? "#8B8BA7" }}
+                    style={{ background: (CATEGORY_COLORS[transaction.category] ?? "#8B8BA7") + "22", color: CATEGORY_COLORS[transaction.category] ?? "#8B8BA7" }}
                   >
-                    {category.slice(0, 1)}
+                    {transaction.category.slice(0, 1)}
                   </div>
-                  <p className="text-sm font-semibold truncate" style={{ color: "var(--text-primary)" }}>{category}</p>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold truncate" style={{ color: "var(--text-primary)" }}>
+                      {transaction.note || transaction.category}
+                    </p>
+                    <p className="text-xs truncate" style={{ color: "var(--text-muted)" }}>
+                      {transaction.category} · {transaction.date}
+                    </p>
+                  </div>
                 </div>
-                <span className="text-sm font-bold shrink-0" style={{ color: CATEGORY_COLORS[category] ?? "#8B8BA7" }}>
-                  {amount.toLocaleString()}원
+                <span className="text-sm font-bold shrink-0" style={{ color: CATEGORY_COLORS[transaction.category] ?? "#8B8BA7" }}>
+                  {transaction.amount.toLocaleString()}원
                 </span>
-              </div>
+              </Link>
             ))}
           </>
         )}

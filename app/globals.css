@@ -146,6 +146,114 @@ body {
 .animate-ticker { animation: ticker 30s linear infinite; }
 .animate-ticker:hover { animation-play-state: paused; }
 
+.clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.blog-editor-content {
+  min-height: 420px;
+  padding: 1.5rem 1.5rem 2rem;
+  color: var(--text-primary);
+  outline: none;
+  font-size: 1rem;
+  line-height: 1.8;
+}
+
+.blog-editor-content h1,
+.blog-editor-content h2,
+.blog-editor-content h3 {
+  font-weight: 800;
+  line-height: 1.3;
+  margin: 1.2em 0 0.5em;
+}
+
+.blog-editor-content h1 { font-size: 1.85rem; }
+.blog-editor-content h2 { font-size: 1.45rem; }
+.blog-editor-content h3 { font-size: 1.15rem; }
+
+.blog-editor-content p,
+.blog-editor-content ul,
+.blog-editor-content ol,
+.blog-editor-content blockquote,
+.blog-editor-content pre {
+  margin: 0.8rem 0;
+}
+
+.blog-editor-content ul,
+.blog-editor-content ol,
+.blog-prose ul,
+.blog-prose ol {
+  padding-left: 1.4rem;
+}
+
+.blog-editor-content blockquote,
+.blog-prose blockquote {
+  border-left: 3px solid rgba(234,88,12,0.45);
+  padding-left: 1rem;
+  color: var(--text-muted);
+}
+
+.blog-editor-content pre,
+.blog-prose pre {
+  background: #111827;
+  color: #F9FAFB;
+  border-radius: 1rem;
+  padding: 1rem;
+  overflow-x: auto;
+}
+
+.blog-editor-content img,
+.blog-prose img {
+  width: 100%;
+  height: auto;
+  border-radius: 1rem;
+  margin: 1rem 0;
+}
+
+.blog-editor-content a,
+.blog-prose a {
+  color: var(--accent-orange);
+  text-decoration: underline;
+  text-underline-offset: 0.2rem;
+}
+
+.blog-editor-content .is-editor-empty:first-child::before {
+  color: var(--text-muted);
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.blog-prose {
+  color: var(--text-primary);
+  line-height: 1.85;
+  font-size: 1rem;
+}
+
+.blog-prose h1,
+.blog-prose h2,
+.blog-prose h3 {
+  font-weight: 800;
+  line-height: 1.3;
+  margin: 1.3em 0 0.55em;
+}
+
+.blog-prose h1 { font-size: 2rem; }
+.blog-prose h2 { font-size: 1.6rem; }
+.blog-prose h3 { font-size: 1.25rem; }
+
+.blog-prose p,
+.blog-prose ul,
+.blog-prose ol,
+.blog-prose blockquote,
+.blog-prose pre {
+  margin: 0.85rem 0;
+}
+
 /* ── Theme-aware utility overrides ───────────────────────────────────────── */
 [data-theme="light"] input,
 [data-theme="light"] select,

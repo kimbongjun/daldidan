@@ -1,6 +1,61 @@
+type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[];
+
 export type Database = {
   public: {
     Tables: {
+      blog_posts: {
+        Row: {
+          id: string;
+          author_id: string;
+          author_name: string;
+          slug: string;
+          title: string;
+          description: string;
+          thumbnail_url: string | null;
+          content_html: string;
+          content_json: Json | null;
+          is_published: boolean;
+          published_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          author_id: string;
+          author_name?: string;
+          slug: string;
+          title: string;
+          description?: string;
+          thumbnail_url?: string | null;
+          content_html?: string;
+          content_json?: Json | null;
+          is_published?: boolean;
+          published_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          author_id?: string;
+          author_name?: string;
+          slug?: string;
+          title?: string;
+          description?: string;
+          thumbnail_url?: string | null;
+          content_html?: string;
+          content_json?: Json | null;
+          is_published?: boolean;
+          published_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
       transactions: {
         Row: {
           id: string;

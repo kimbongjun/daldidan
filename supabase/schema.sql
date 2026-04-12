@@ -265,7 +265,33 @@ create index if not exists idx_search_history_user
 
 
 -- ══════════════════════════════════════════════════════════════
--- 8. updated_at 자동 갱신 트리거
+-- 8. 블로그 (Blog)
+-- ══════════════════════════════════════════════════════════════
+create table if not exists public.blog_posts (
+  id            uuid primary key default uuid_generate_v4(),
+  author_id     uuid not null references public.profiles(id) on delete cascade,
+  author_name   text not null default '',
+  slug          text not null unique,
+  title         text not null,
+  description   text not null default '',
+  thumbnail_url text,
+  content_html  text not null default '',
+  content_json  jsonb,
+  is_published  boolean not null default true,
+  published_at  timestamptz,
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now()
+);
+
+create index if not exists idx_blog_posts_published
+  on public.blog_posts (is_published, published_at desc, created_at desc);
+
+create index if not exists idx_blog_posts_author
+  on public.blog_posts (author_id, created_at desc);
+
+
+-- ══════════════════════════════════════════════════════════════
+-- 9. updated_at 자동 갱신 트리거
 -- ══════════════════════════════════════════════════════════════
 create or replace function public.set_updated_at()
 returns trigger language plpgsql as $$
@@ -281,4 +307,8 @@ create trigger set_updated_at_transactions
 
 create trigger set_updated_at_profiles
   before update on public.profiles
+  for each row execute procedure public.set_updated_at();
+
+create trigger set_updated_at_blog_posts
+  before update on public.blog_posts
   for each row execute procedure public.set_updated_at();

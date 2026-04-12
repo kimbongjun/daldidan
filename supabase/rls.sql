@@ -112,3 +112,23 @@ create policy "본인 검색 기록만 조회"
 create policy "본인 검색 기록만 추가"
   on public.search_history for insert
   with check (auth.uid() = user_id);
+
+
+-- ── blog_posts ────────────────────────────────────────────────
+alter table public.blog_posts enable row level security;
+
+create policy "공개 블로그 조회 또는 작성자 본인 조회"
+  on public.blog_posts for select
+  using (is_published = true or auth.uid() = author_id);
+
+create policy "본인 블로그만 작성"
+  on public.blog_posts for insert
+  with check (auth.uid() = author_id);
+
+create policy "본인 블로그만 수정"
+  on public.blog_posts for update
+  using (auth.uid() = author_id);
+
+create policy "본인 블로그만 삭제"
+  on public.blog_posts for delete
+  using (auth.uid() = author_id);
