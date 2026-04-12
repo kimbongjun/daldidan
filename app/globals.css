@@ -9,6 +9,7 @@
   --accent-rose:    #F43F5E;
   --accent-emerald: #10B981;
   --accent-indigo:  #6366F1;
+  --accent-orange:  #EA580C;
 
   --bg-base:        #0F0F14;
   --bg-card:        #16161F;
@@ -31,6 +32,7 @@
   --accent-rose:    #E11D48;
   --accent-emerald: #059669;
   --accent-indigo:  #4F46E5;
+  --accent-orange:  #C2410C;
 
   --bg-base:        #EEF1F6;
   --bg-card:        #FFFFFF;
@@ -86,6 +88,7 @@ body {
 .gradient-rose    { background: linear-gradient(135deg, rgba(244,63,94,0.13),  rgba(244,63,94,0.04));  }
 .gradient-emerald { background: linear-gradient(135deg, rgba(16,185,129,0.13), rgba(16,185,129,0.04)); }
 .gradient-indigo  { background: linear-gradient(135deg, rgba(99,102,241,0.13), rgba(99,102,241,0.04)); }
+.gradient-orange  { background: linear-gradient(135deg, rgba(234,88,12,0.13),  rgba(234,88,12,0.04));  }
 
 /* light mode: slightly more opaque overlays */
 [data-theme="light"] .gradient-violet  { background: linear-gradient(135deg, rgba(124,58,237,0.08), rgba(124,58,237,0.02)); }
@@ -94,6 +97,7 @@ body {
 [data-theme="light"] .gradient-rose    { background: linear-gradient(135deg, rgba(244,63,94,0.08),  rgba(244,63,94,0.02));  }
 [data-theme="light"] .gradient-emerald { background: linear-gradient(135deg, rgba(16,185,129,0.08), rgba(16,185,129,0.02)); }
 [data-theme="light"] .gradient-indigo  { background: linear-gradient(135deg, rgba(99,102,241,0.08), rgba(99,102,241,0.02)); }
+[data-theme="light"] .gradient-orange  { background: linear-gradient(135deg, rgba(234,88,12,0.08),  rgba(234,88,12,0.02));  }
 [data-theme="light"] .gradient-violet,
 [data-theme="light"] .gradient-cyan,
 [data-theme="light"] .gradient-amber,
@@ -110,6 +114,7 @@ body {
 .accent-rose    { color: var(--accent-rose);    }
 .accent-emerald { color: var(--accent-emerald); }
 .accent-indigo  { color: var(--accent-indigo);  }
+.accent-orange  { color: var(--accent-orange);  }
 
 /* ── Tag / Badge ──────────────────────────────────────────────────────────── */
 .tag {

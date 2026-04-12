@@ -6,6 +6,7 @@ import BudgetWidget from "@/components/widgets/BudgetWidget";
 import EventWidget from "@/components/widgets/EventWidget";
 import ShoppingWidget from "@/components/widgets/ShoppingWidget";
 import StockWidget from "@/components/widgets/StockWidget";
+import TrafficWidget from "@/components/widgets/TrafficWidget";
 import TravelWidget from "@/components/widgets/TravelWidget";
 import WeatherWidget from "@/components/widgets/WeatherWidget";
 import { FALLBACK_CULTURE_ITEMS, FALLBACK_DEALS, FALLBACK_STOCKS } from "@/lib/data/fallback";
@@ -34,6 +35,7 @@ export default function DashboardShell() {
           stock={<StockWidget stocks={marketData?.stocks ?? FALLBACK_STOCKS} source={marketData?.source ?? "fallback"} fetchedAt={marketData?.fetchedAt} />}
           shopping={<ShoppingWidget deals={shoppingData?.deals ?? FALLBACK_DEALS} source={shoppingData?.source ?? "fallback"} />}
           culture={<EventWidget items={cultureData?.items ?? FALLBACK_CULTURE_ITEMS} source={cultureData?.source ?? "fallback"} />}
+          traffic={<TrafficWidget />}
         />
       </div>
     </div>
@@ -44,10 +46,12 @@ function BentoGrid({
   stock,
   shopping,
   culture,
+  traffic,
 }: {
   stock: React.ReactNode;
   shopping: React.ReactNode;
   culture: React.ReactNode;
+  traffic: React.ReactNode;
 }) {
   return (
     <div style={{ width: "100%", marginTop: "1rem" }}>
@@ -78,10 +82,11 @@ function BentoGrid({
             gap: 1rem;
             width: 100%;
             grid-template-columns: minmax(0,1fr) minmax(0,2fr) minmax(0,1fr);
-            grid-template-rows: 460px 400px;
+            grid-template-rows: 460px 400px 480px;
             grid-template-areas:
               "weather stock budget"
-              "shopping event travel";
+              "shopping event travel"
+              "traffic traffic traffic";
           }
         }
       `}</style>
@@ -93,6 +98,7 @@ function BentoGrid({
         <div style={{ gridArea: "shopping", minWidth: 0 }}>{shopping}</div>
         <div style={{ gridArea: "event", minWidth: 0 }}>{culture}</div>
         <div style={{ gridArea: "travel", minWidth: 0 }}><TravelWidget /></div>
+        <div style={{ gridArea: "traffic", minWidth: 0 }}>{traffic}</div>
       </div>
 
       <div className="bento-tablet">
@@ -102,6 +108,7 @@ function BentoGrid({
         <div style={{ minWidth: 0, height: 380 }}>{culture}</div>
         <div style={{ minWidth: 0, height: 380 }}><TravelWidget /></div>
         <div style={{ minWidth: 0, height: 420 }}><BudgetWidget /></div>
+        <div style={{ minWidth: 0, height: 480, gridColumn: "span 2" }}>{traffic}</div>
       </div>
 
       <div className="bento-mobile">
@@ -111,6 +118,7 @@ function BentoGrid({
         <div style={{ minWidth: 0, height: 380 }}>{culture}</div>
         <div style={{ minWidth: 0, height: 380 }}><TravelWidget /></div>
         <div style={{ minWidth: 0, height: 500 }}><BudgetWidget /></div>
+        <div style={{ minWidth: 0, height: 520 }}>{traffic}</div>
       </div>
     </div>
   );

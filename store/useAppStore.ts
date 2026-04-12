@@ -39,6 +39,27 @@ export interface TravelSpot {
   tag?: string;
 }
 
+export interface RoadSegment {
+  id: string;
+  name: string;
+  type: "고속도로" | "국도" | "도시고속";
+  from: string;
+  to: string;
+  status: "원활" | "서행" | "정체" | "사고";
+  speed: number;
+  travelTime: number;
+  distance: number;
+}
+
+export interface TrafficCCTV {
+  id: string;
+  road: string;
+  location: string;
+  status: "원활" | "서행" | "정체" | "사고";
+  direction: string;
+  updatedAt: string;
+}
+
 export interface Transaction {
   id: string;
   type: "income" | "expense";
@@ -47,6 +68,26 @@ export interface Transaction {
   note: string;
   date: string;
 }
+
+const ROAD_SEGMENTS: RoadSegment[] = [
+  { id: "r1", name: "경부고속도로", type: "고속도로", from: "서울", to: "수원", status: "서행", speed: 42, travelTime: 38, distance: 29 },
+  { id: "r2", name: "서해안고속도로", type: "고속도로", from: "목포", to: "서울", status: "원활", speed: 98, travelTime: 14, distance: 22 },
+  { id: "r3", name: "영동고속도로", type: "고속도로", from: "인천", to: "강릉", status: "정체", speed: 18, travelTime: 67, distance: 19 },
+  { id: "r4", name: "중부내륙고속도로", type: "고속도로", from: "충주", to: "대구", status: "원활", speed: 107, travelTime: 9, distance: 16 },
+  { id: "r5", name: "국도 1호선", type: "국도", from: "서울", to: "인천", status: "서행", speed: 35, travelTime: 45, distance: 26 },
+  { id: "r6", name: "올림픽대로", type: "도시고속", from: "강서", to: "잠실", status: "사고", speed: 12, travelTime: 55, distance: 11 },
+  { id: "r7", name: "강변북로", type: "도시고속", from: "가양", to: "한남", status: "서행", speed: 28, travelTime: 32, distance: 15 },
+  { id: "r8", name: "남해고속도로", type: "고속도로", from: "부산", to: "순천", status: "원활", speed: 112, travelTime: 8, distance: 15 },
+];
+
+const TRAFFIC_CCTVS: TrafficCCTV[] = [
+  { id: "c1", road: "경부고속도로", location: "한남대교 남단", status: "서행", direction: "부산 방향", updatedAt: "14:23" },
+  { id: "c2", road: "올림픽대로", location: "여의도 진입로", status: "사고" as const, direction: "잠실 방향", updatedAt: "14:21" },
+  { id: "c3", road: "영동고속도로", location: "판교 분기점", status: "정체", direction: "강릉 방향", updatedAt: "14:22" },
+  { id: "c4", road: "강변북로", location: "성산대교 북단", status: "서행", direction: "한남 방향", updatedAt: "14:20" },
+  { id: "c5", road: "서해안고속도로", location: "안산 IC", status: "원활", direction: "목포 방향", updatedAt: "14:23" },
+  { id: "c6", road: "남해고속도로", location: "부산 기점", status: "원활", direction: "순천 방향", updatedAt: "14:19" },
+];
 
 const WEATHER_CITIES: WeatherData[] = [
   {
@@ -99,6 +140,8 @@ interface AppState {
   weather: WeatherData | null;
   travelSpots: TravelSpot[];
   transactions: Transaction[];
+  roadSegments: RoadSegment[];
+  trafficCCTVs: TrafficCCTV[];
   removeTransaction: (id: string) => void;
   updateTransaction: (id: string, patch: Omit<Transaction, "id">) => void;
 }
@@ -108,6 +151,8 @@ export const useAppStore = create<AppState>((set) => ({
   weather: WEATHER_CITIES[0],
   travelSpots: TRAVEL_SPOTS,
   transactions: TRANSACTIONS,
+  roadSegments: ROAD_SEGMENTS,
+  trafficCCTVs: TRAFFIC_CCTVS,
 
   removeTransaction: (id) =>
     set((state) => ({
