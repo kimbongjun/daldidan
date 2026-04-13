@@ -31,12 +31,8 @@ export default async function BlogPage({
   return (
     <div className="min-h-screen" style={{ background: "var(--bg-base)" }}>
       <div className="max-w-[1200px] mx-auto px-4 sm:px-6 pb-12">
-        <PageHeader title="블로그" subtitle="달디단의 인생스토리" accentColor={ACCENT} />
-
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
-          <Suspense fallback={<div />}>
-            <BlogCategoryFilter activeCategory={activeCategory} />
-          </Suspense>
+        <div className="flex items-center justify-between">
+          <PageHeader title="블로그" subtitle="달디단의 인생스토리" accentColor={ACCENT} />
           <Link
             href="/blog/write"
             className="pressable px-4 py-2 rounded-xl text-sm font-semibold transition-opacity hover:opacity-80"
@@ -44,6 +40,12 @@ export default async function BlogPage({
           >
             글쓰기
           </Link>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3 mb-5">
+          <Suspense fallback={<div />}>
+            <BlogCategoryFilter activeCategory={activeCategory} />
+          </Suspense>
         </div>
 
         {posts.length === 0 ? (
