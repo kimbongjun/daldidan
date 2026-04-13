@@ -45,6 +45,17 @@ export default async function BlogDetailPage({ params }: { params: Promise<{ slu
           <aside className="flex flex-col gap-4">
             <div className="bento-card p-5 flex flex-col gap-2">
               <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: ACCENT }}>Article Meta</p>
+              {post.category && (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm" style={{ color: "var(--text-muted)" }}>카테고리:</span>
+                  <span
+                    className="px-2 py-0.5 rounded-lg text-xs font-bold"
+                    style={{ background: "rgba(234,88,12,0.15)", color: ACCENT }}
+                  >
+                    {post.category}
+                  </span>
+                </div>
+              )}
               <p className="text-sm" style={{ color: "var(--text-primary)" }}>작성자: {post.authorName}</p>
               <p className="text-sm" style={{ color: "var(--text-primary)" }}>발행일: {formatBlogDate(post.publishedAt)}</p>
             </div>

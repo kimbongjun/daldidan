@@ -1,3 +1,6 @@
+export const BLOG_CATEGORIES = ["여행", "스윙", "일상", "육아", "재테크", "기타"] as const;
+export type BlogCategory = (typeof BLOG_CATEGORIES)[number];
+
 export interface BlogPostSummary {
   id: string;
   slug: string;
@@ -8,6 +11,7 @@ export interface BlogPostSummary {
   publishedAt: string;
   viewCount: number;
   commentCount: number;
+  category: string | null;
 }
 
 export interface BlogPostDetail extends BlogPostSummary {

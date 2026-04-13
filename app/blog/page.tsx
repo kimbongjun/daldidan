@@ -1,6 +1,8 @@
 import Image from "next/image";
 import Link from "next/link";
+import { Suspense } from "react";
 import PageHeader from "@/components/PageHeader";
+import BlogCategoryFilter from "@/components/blog/BlogCategoryFilter";
 import { getPublishedBlogPosts } from "@/lib/blog";
 import { formatBlogDate } from "@/lib/blog-shared";
 
@@ -8,18 +10,36 @@ const ACCENT = "#EA580C";
 
 export const revalidate = 300;
 
-export default async function BlogPage() {
-  const posts = await getPublishedBlogPosts(9);
+const CATEGORY_COLORS: Record<string, { bg: string; color: string }> = {
+  여행: { bg: "rgba(16,185,129,0.15)", color: "#10B981" },
+  스윙: { bg: "rgba(99,102,241,0.15)", color: "#6366F1" },
+  일상: { bg: "rgba(234,88,12,0.15)", color: "#EA580C" },
+  육아: { bg: "rgba(244,63,94,0.15)", color: "#F43F5E" },
+  재테크: { bg: "rgba(245,158,11,0.15)", color: "#F59E0B" },
+  기타: { bg: "rgba(139,139,167,0.15)", color: "#8B8BA7" },
+};
+
+export default async function BlogPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ category?: string }>;
+}) {
+  const { category } = await searchParams;
+  const activeCategory = category ?? "";
+  const posts = await getPublishedBlogPosts(9, activeCategory || undefined);
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg-base)" }}>
       <div className="max-w-[1200px] mx-auto px-4 sm:px-6 pb-12">
         <PageHeader title="블로그" subtitle="달디단의 인생스토리" accentColor={ACCENT} />
 
-        <div className="flex items-center justify-between gap-3 mb-5">          
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+          <Suspense fallback={<div />}>
+            <BlogCategoryFilter activeCategory={activeCategory} />
+          </Suspense>
           <Link
             href="/blog/write"
-            className="pressable px-4 py-2 rounded-xl text-sm ml-auto font-semibold transition-opacity hover:opacity-80"
+            className="pressable px-4 py-2 rounded-xl text-sm font-semibold transition-opacity hover:opacity-80"
             style={{ background: ACCENT, color: "#fff" }}
           >
             글쓰기
@@ -28,37 +48,52 @@ export default async function BlogPage() {
 
         {posts.length === 0 ? (
           <div className="bento-card p-8 text-center">
-            <p className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>아직 공개된 글이 없습니다.</p>
-            <p className="text-sm mt-2" style={{ color: "var(--text-muted)" }}>첫 글을 발행하면 이 공간에 3x3 카드로 노출됩니다.</p>
+            <p className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>
+              {activeCategory ? `'${activeCategory}' 카테고리 글이 없습니다.` : "아직 공개된 글이 없습니다."}
+            </p>
+            <p className="text-sm mt-2" style={{ color: "var(--text-muted)" }}>
+              {activeCategory ? "다른 카테고리를 선택하거나 전체 글을 확인해 보세요." : "첫 글을 발행하면 이 공간에 3x3 카드로 노출됩니다."}
+            </p>
           </div>
         ) : (
           <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {posts.map((post) => (
-              <Link key={post.id} href={`/blog/${encodeURIComponent(post.slug)}`} className="pressable bento-card overflow-hidden hover:opacity-90 transition-opacity">
-                <div className="relative aspect-[16/10]" style={{ background: "var(--border)" }}>
-                  {post.thumbnailUrl ? (
-                    <Image src={post.thumbnailUrl} alt={post.title} fill sizes="(max-width:768px) 100vw, (max-width:1280px) 50vw, 33vw" className="object-cover" unoptimized />
-                  ) : (
-                    <div className="w-full h-full flex flex-col items-center justify-center gap-2"
-                      style={{ background: "linear-gradient(135deg, rgba(234,88,12,0.1), rgba(234,88,12,0.03))" }}>
-                      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="rgba(234,88,12,0.4)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
-                        <polyline points="21 15 16 10 5 21"/>
-                      </svg>
-                      <span style={{ fontSize: "0.7rem", color: "rgba(234,88,12,0.45)", fontWeight: 600 }}>이미지 없음</span>
-                    </div>
-                  )}
-                </div>
-                <div className="p-4 flex flex-col gap-3">
-                  <div className="flex items-center justify-between gap-3 text-xs" style={{ color: "var(--text-muted)" }}>
-                    <span>{formatBlogDate(post.publishedAt)}</span>
-                    <span>{post.authorName}</span>
+            {posts.map((post) => {
+              const catStyle = post.category ? CATEGORY_COLORS[post.category] : null;
+              return (
+                <Link key={post.id} href={`/blog/${encodeURIComponent(post.slug)}`} className="pressable bento-card overflow-hidden hover:opacity-90 transition-opacity">
+                  <div className="relative aspect-[16/10]" style={{ background: "var(--border)" }}>
+                    {post.thumbnailUrl ? (
+                      <Image src={post.thumbnailUrl} alt={post.title} fill sizes="(max-width:768px) 100vw, (max-width:1280px) 50vw, 33vw" className="object-cover" unoptimized />
+                    ) : (
+                      <div className="w-full h-full flex flex-col items-center justify-center gap-2"
+                        style={{ background: "linear-gradient(135deg, rgba(234,88,12,0.1), rgba(234,88,12,0.03))" }}>
+                        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="rgba(234,88,12,0.4)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
+                          <polyline points="21 15 16 10 5 21"/>
+                        </svg>
+                        <span style={{ fontSize: "0.7rem", color: "rgba(234,88,12,0.45)", fontWeight: 600 }}>이미지 없음</span>
+                      </div>
+                    )}
+                    {post.category && catStyle && (
+                      <span
+                        className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-lg text-xs font-bold"
+                        style={{ background: catStyle.bg, color: catStyle.color, backdropFilter: "blur(4px)" }}
+                      >
+                        {post.category}
+                      </span>
+                    )}
                   </div>
-                  <p className="text-lg font-black leading-snug" style={{ color: "var(--text-primary)" }}>{post.title}</p>
-                  <p className="text-sm leading-relaxed" style={{ color: "var(--text-muted)" }}>{post.description}</p>
-                </div>
-              </Link>
-            ))}
+                  <div className="p-4 flex flex-col gap-3">
+                    <div className="flex items-center justify-between gap-3 text-xs" style={{ color: "var(--text-muted)" }}>
+                      <span>{formatBlogDate(post.publishedAt)}</span>
+                      <span>{post.authorName}</span>
+                    </div>
+                    <p className="text-lg font-black leading-snug" style={{ color: "var(--text-primary)" }}>{post.title}</p>
+                    <p className="text-sm leading-relaxed" style={{ color: "var(--text-muted)" }}>{post.description}</p>
+                  </div>
+                </Link>
+              );
+            })}
           </div>
         )}
       </div>

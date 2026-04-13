@@ -22,10 +22,12 @@ export async function POST(request: NextRequest) {
   const body = await request.json() as {
     title?: string;
     contentHtml?: string;
+    category?: string;
   };
 
   const title = body.title?.trim() ?? "";
   const contentHtml = body.contentHtml?.trim() ?? "";
+  const category = body.category?.trim() || null;
   const description = extractDescriptionFromHtml(contentHtml);
   const resolvedThumbnail = extractFirstImageFromHtml(contentHtml);
 
@@ -56,6 +58,7 @@ export async function POST(request: NextRequest) {
       content_html: contentHtml,
       is_published: true,
       published_at: publishedAt,
+      category,
     });
 
   if (error) {
@@ -81,11 +84,13 @@ export async function PATCH(request: NextRequest) {
     id?: string;
     title?: string;
     contentHtml?: string;
+    category?: string;
   };
 
   const id = body.id?.trim() ?? "";
   const title = body.title?.trim() ?? "";
   const contentHtml = body.contentHtml?.trim() ?? "";
+  const category = body.category?.trim() || null;
   const description = extractDescriptionFromHtml(contentHtml);
   const resolvedThumbnail = extractFirstImageFromHtml(contentHtml);
 
@@ -114,6 +119,7 @@ export async function PATCH(request: NextRequest) {
       description,
       thumbnail_url: resolvedThumbnail || null,
       content_html: contentHtml,
+      category,
     })
     .eq("id", id)
     .eq("author_id", user.id);

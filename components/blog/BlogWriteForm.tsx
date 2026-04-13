@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Bell, BellOff, LoaderCircle, MessageSquare, PenLine, Smartphone, Trash2, X } from "lucide-react";
 import { enableNativeNotifications, getNativeNotificationPermission, sendNativeNotification, supportsNativeNotifications } from "@/lib/notifications";
 import type { EditableBlogPost } from "@/lib/blog-shared";
+import { BLOG_CATEGORIES } from "@/lib/blog-shared";
 
 // 에디터는 클라이언트 전용 무거운 번들이므로 dynamic import로 분리
 // → 글 작성 페이지의 초기 로드 속도 향상
@@ -48,6 +49,7 @@ export default function BlogWriteForm({
   const router = useRouter();
   const isEditMode = Boolean(initialPost);
   const [title, setTitle] = useState(initialPost?.title ?? "");
+  const [category, setCategory] = useState<string>(initialPost?.category ?? "");
   const [content, setContent] = useState<EditorValue>({
     html: initialPost?.contentHtml ?? DEFAULT_HTML,
     json: null, // content_json은 저장하지 않음 (렌더링엔 html만 사용)
@@ -69,8 +71,9 @@ export default function BlogWriteForm({
     const normalize = (h: string) => h.replace(/<p><\/p>/g, "").trim();
     const titleChanged = title.trim() !== (initialPost?.title ?? "").trim();
     const contentChanged = normalize(content.html) !== normalize(initialPost?.contentHtml ?? "");
-    return titleChanged || contentChanged;
-  }, [title, content.html, initialPost]);
+    const categoryChanged = category !== (initialPost?.category ?? "");
+    return titleChanged || contentChanged || categoryChanged;
+  }, [title, content.html, category, initialPost]);
 
   // 이벤트 핸들러 내 클로저에서 최신 isDirty를 읽기 위한 ref
   const isDirtyRef = useRef(isDirty);
@@ -126,6 +129,7 @@ export default function BlogWriteForm({
           id: initialPost?.id,
           title,
           contentHtml: content.html,
+          category: category || null,
         }),
       });
 
@@ -300,6 +304,34 @@ export default function BlogWriteForm({
       </section>
 
       <aside className="flex flex-col gap-4">
+        {/* ── 카테고리 선택 ── */}
+        <div className="bento-card p-5 flex flex-col gap-3">
+          <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>카테고리</p>
+          <div className="flex flex-wrap gap-2">
+            {BLOG_CATEGORIES.map((cat) => {
+              const active = category === cat;
+              return (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setCategory(active ? "" : cat)}
+                  className="pressable px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors"
+                  style={{
+                    background: active ? "rgba(234,88,12,0.18)" : "var(--bg-input)",
+                    color: active ? "#EA580C" : "var(--text-muted)",
+                    border: active ? "1px solid rgba(234,88,12,0.4)" : "1px solid var(--border)",
+                  }}
+                >
+                  {cat}
+                </button>
+              );
+            })}
+          </div>
+          {!category && (
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>선택하지 않으면 기타로 저장됩니다.</p>
+          )}
+        </div>
+
         <div className="bento-card p-5 flex flex-col gap-3">
           <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>발행 체크</p>
           <button

@@ -13,6 +13,7 @@ function mapSummary(post: {
   created_at: string;
   view_count?: number | null;
   blog_comments?: { count: number }[] | null;
+  category?: string | null;
 }): BlogPostSummary {
   const fallbackThumbnail = extractFirstImageFromHtml(post.content_html ?? "");
 
@@ -26,6 +27,7 @@ function mapSummary(post: {
     publishedAt: post.published_at ?? post.created_at,
     viewCount: post.view_count ?? 0,
     commentCount: post.blog_comments?.[0]?.count ?? 0,
+    category: post.category ?? null,
   };
 }
 
@@ -54,12 +56,18 @@ function resolveSlugCandidates(slug: string) {
   return [...candidates].filter(Boolean);
 }
 
-export async function getPublishedBlogPosts(limit = 9) {
+export async function getPublishedBlogPosts(limit = 9, category?: string | null) {
   const supabase = createPublicClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from("blog_posts")
-    .select("id, slug, title, description, thumbnail_url, content_html, author_name, published_at, created_at, view_count, blog_comments(count)")
-    .eq("is_published", true)
+    .select("id, slug, title, description, thumbnail_url, content_html, author_name, published_at, created_at, view_count, category, blog_comments(count)")
+    .eq("is_published", true);
+
+  if (category) {
+    query = query.eq("category", category);
+  }
+
+  const { data, error } = await query
     .order("published_at", { ascending: false })
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -73,7 +81,7 @@ export async function getBlogPostBySlug(slug: string) {
   const candidates = resolveSlugCandidates(slug);
   const { data, error } = await supabase
     .from("blog_posts")
-    .select("id, slug, title, description, thumbnail_url, author_name, published_at, created_at, content_html, view_count, blog_comments(count)")
+    .select("id, slug, title, description, thumbnail_url, author_name, published_at, created_at, content_html, view_count, category, blog_comments(count)")
     .in("slug", candidates)
     .eq("is_published", true)
     .limit(2);
@@ -100,7 +108,7 @@ export async function getEditableBlogPostBySlug(slug: string) {
 
   const { data, error } = await supabase
     .from("blog_posts")
-    .select("id, slug, title, description, thumbnail_url, author_name, published_at, created_at, content_html, content_json")
+    .select("id, slug, title, description, thumbnail_url, author_name, published_at, created_at, content_html, content_json, category")
     .in("slug", candidates)
     .eq("author_id", user.id)
     .limit(2);
