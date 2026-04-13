@@ -41,6 +41,7 @@ export async function POST(request: NextRequest) {
     // 모든 래스터 이미지 (JPEG, PNG, GIF, HEIC, HEIF, AVIF, TIFF, BMP, WebP 등)를 WebP로 변환
     try {
       outputBuffer = await sharp(inputBuffer, { animated: true })
+        .rotate()
         .webp({ quality: 82 })
         .toBuffer();
       contentType = "image/webp";
