@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ArrowRight, BookOpenText, Eye, MessageCircle, PenLine, User } from "lucide-react";
+import { ArrowRight, BookOpenText, MessageCircle, PenLine, User } from "lucide-react";
 import type { BlogPostSummary } from "@/lib/blog-shared";
 import { formatBlogDate } from "@/lib/blog-shared";
 
@@ -113,10 +113,6 @@ export default function BlogWidget({ initialPosts }: BlogWidgetProps) {
                   <span className="flex items-center gap-1 text-xs" style={{ color: "var(--text-muted)" }}>
                     <User size={11} />
                     {post.authorName}
-                  </span>
-                  <span className="flex items-center gap-1 text-xs" style={{ color: "var(--text-muted)" }}>
-                    <Eye size={11} />
-                    {post.viewCount.toLocaleString()}
                   </span>
                   <span className="flex items-center gap-1 text-xs" style={{ color: "var(--text-muted)" }}>
                     <MessageCircle size={11} />

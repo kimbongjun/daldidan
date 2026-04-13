@@ -1,9 +1,31 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link2, Check } from "lucide-react";
 
 const ACCENT = "#EA580C";
+
+// ─── 카카오 SDK 타입 선언 ──────────────────────────────────────────────
+declare global {
+  interface Window {
+    Kakao?: {
+      isInitialized: () => boolean;
+      init: (key: string) => void;
+      Share: {
+        sendDefault: (options: {
+          objectType: string;
+          content: {
+            title: string;
+            description: string;
+            imageUrl: string;
+            link: { mobileWebUrl: string; webUrl: string };
+          };
+          buttons: Array<{ title: string; link: { mobileWebUrl: string; webUrl: string } }>;
+        }) => void;
+      };
+    };
+  }
+}
 
 interface Props {
   title: string;
@@ -33,6 +55,14 @@ function LinkedInIcon() {
   );
 }
 
+function KakaoIcon() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M12 3C6.477 3 2 6.477 2 10.8c0 2.7 1.713 5.076 4.32 6.52-.19.705-.693 2.56-.794 2.957-.12.49.18.483.378.352.156-.104 2.48-1.684 3.487-2.368.518.073 1.051.11 1.609.11 5.523 0 10-3.477 10-7.77C21.999 6.476 17.523 3 12 3z"/>
+    </svg>
+  );
+}
+
 function ThreadsIcon() {
   return (
     <svg width="17" height="17" viewBox="0 0 192 192" fill="currentColor" aria-hidden="true">
@@ -44,10 +74,58 @@ function ThreadsIcon() {
 export default function BlogShareBar({ title }: Props) {
   const [copied, setCopied] = useState(false);
   const [url, setUrl] = useState("");
+  const kakaoReady = useRef(false);
 
   useEffect(() => {
     setUrl(window.location.href);
   }, []);
+
+  // 카카오 SDK 동적 로드 및 초기화
+  useEffect(() => {
+    const kakaoKey = process.env.NEXT_PUBLIC_KAKAO_JS_KEY;
+    if (!kakaoKey) return;
+
+    if (window.Kakao?.isInitialized()) {
+      kakaoReady.current = true;
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = "https://t1.kakaocdn.net/kakao_js_sdk/2.7.2/kakao.min.js";
+    script.integrity = "sha384-TiCUE00h649CAMonG018J2ujOgDKW/kVWlChEuu4jK2vxfAAD0eZxzCKakxg55G4";
+    script.crossOrigin = "anonymous";
+    script.async = true;
+    script.onload = () => {
+      if (window.Kakao && !window.Kakao.isInitialized()) {
+        window.Kakao.init(kakaoKey);
+      }
+      kakaoReady.current = true;
+    };
+    document.head.appendChild(script);
+  }, []);
+
+  const handleKakaoShare = () => {
+    if (!url) return;
+    if (kakaoReady.current && window.Kakao?.Share) {
+      window.Kakao.Share.sendDefault({
+        objectType: "feed",
+        content: {
+          title,
+          description: url,
+          imageUrl: `${window.location.origin}/og-default.png`,
+          link: { mobileWebUrl: url, webUrl: url },
+        },
+        buttons: [{ title: "글 읽기", link: { mobileWebUrl: url, webUrl: url } }],
+      });
+    } else {
+      // SDK 미초기화 시 카카오톡 앱 스킴 fallback (모바일)
+      window.open(
+        `https://sharer.kakao.com/talk/friends/picker/link?app_key=${process.env.NEXT_PUBLIC_KAKAO_JS_KEY ?? ""}&url=${encodeURIComponent(url)}`,
+        "_blank",
+        "noopener,noreferrer",
+      );
+    }
+  };
 
   const handleCopy = async () => {
     if (!url) return;
@@ -70,21 +148,31 @@ export default function BlogShareBar({ title }: Props) {
       label: "X (Twitter)",
       href: `https://twitter.com/intent/tweet?text=${encodeURIComponent(title)}&url=${encodeURIComponent(url)}`,
       icon: <XIcon />,
+      onClick: undefined as (() => void) | undefined,
     },
     {
       label: "Facebook",
       href: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`,
       icon: <FacebookIcon />,
+      onClick: undefined as (() => void) | undefined,
     },
     {
       label: "LinkedIn",
       href: `https://www.linkedin.com/shareArticle?mini=true&url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}`,
       icon: <LinkedInIcon />,
+      onClick: undefined as (() => void) | undefined,
     },
     {
       label: "Threads",
       href: `https://www.threads.net/intent/post?text=${encodeURIComponent(title + "\n" + url)}`,
       icon: <ThreadsIcon />,
+      onClick: undefined as (() => void) | undefined,
+    },
+    {
+      label: "카카오톡",
+      href: undefined as string | undefined,
+      icon: <KakaoIcon />,
+      onClick: handleKakaoShare,
     },
   ];
 
@@ -117,24 +205,42 @@ export default function BlogShareBar({ title }: Props) {
         />
 
         {/* SNS 공유 버튼들 */}
-        {socialLinks.map((item) => (
-          <a
-            key={item.label}
-            href={item.href}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium hover:opacity-75 transition-opacity"
-            style={{
-              background: "rgba(255,255,255,0.05)",
-              color: "var(--text-primary)",
-              border: "1px solid rgba(255,255,255,0.08)",
-            }}
-            aria-label={`${item.label}에 공유`}
-          >
-            {item.icon}
-            <span>{item.label}</span>
-          </a>
-        ))}
+        {socialLinks.map((item) =>
+          item.onClick ? (
+            <button
+              key={item.label}
+              type="button"
+              onClick={item.onClick}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium hover:opacity-75 transition-opacity"
+              style={{
+                background: item.label === "카카오톡" ? "#FEE500" : "rgba(255,255,255,0.05)",
+                color: item.label === "카카오톡" ? "#3C1E1E" : "var(--text-primary)",
+                border: item.label === "카카오톡" ? "none" : "1px solid rgba(255,255,255,0.08)",
+              }}
+              aria-label={`${item.label}에 공유`}
+            >
+              {item.icon}
+              <span>{item.label}</span>
+            </button>
+          ) : (
+            <a
+              key={item.label}
+              href={item.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium hover:opacity-75 transition-opacity"
+              style={{
+                background: "rgba(255,255,255,0.05)",
+                color: "var(--text-primary)",
+                border: "1px solid rgba(255,255,255,0.08)",
+              }}
+              aria-label={`${item.label}에 공유`}
+            >
+              {item.icon}
+              <span>{item.label}</span>
+            </a>
+          )
+        )}
       </div>
     </div>
   );
