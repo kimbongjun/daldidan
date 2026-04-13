@@ -6,6 +6,8 @@ export interface BlogPostSummary {
   thumbnailUrl: string;
   authorName: string;
   publishedAt: string;
+  viewCount: number;
+  commentCount: number;
 }
 
 export interface BlogPostDetail extends BlogPostSummary {

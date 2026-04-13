@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import BlogComments from "@/components/blog/BlogComments";
+import BlogViewCounter from "@/components/blog/BlogViewCounter";
 import { canEditBlogPost, getBlogPostBySlug } from "@/lib/blog";
 import { formatBlogDate } from "@/lib/blog-shared";
 
@@ -21,6 +22,7 @@ export default async function BlogDetailPage({ params }: { params: Promise<{ slu
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg-base)" }}>
+      <BlogViewCounter postId={post.id} />
       <div className="max-w-[1100px] mx-auto px-4 sm:px-6 pb-12">
         <PageHeader title={post.title} subtitle={`${formatBlogDate(post.publishedAt)} · ${post.authorName}`} accentColor={ACCENT} />
 

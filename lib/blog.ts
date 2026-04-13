@@ -11,6 +11,8 @@ function mapSummary(post: {
   author_name: string | null;
   published_at: string | null;
   created_at: string;
+  view_count?: number | null;
+  blog_comments?: { count: number }[] | null;
 }): BlogPostSummary {
   const fallbackThumbnail = extractFirstImageFromHtml(post.content_html ?? "");
 
@@ -22,6 +24,8 @@ function mapSummary(post: {
     thumbnailUrl: post.thumbnail_url ?? fallbackThumbnail ?? "",
     authorName: post.author_name?.trim() || "달디단 에디터",
     publishedAt: post.published_at ?? post.created_at,
+    viewCount: post.view_count ?? 0,
+    commentCount: post.blog_comments?.[0]?.count ?? 0,
   };
 }
 
@@ -54,7 +58,7 @@ export async function getPublishedBlogPosts(limit = 9) {
   const supabase = createPublicClient();
   const { data, error } = await supabase
     .from("blog_posts")
-    .select("id, slug, title, description, thumbnail_url, content_html, author_name, published_at, created_at")
+    .select("id, slug, title, description, thumbnail_url, content_html, author_name, published_at, created_at, view_count, blog_comments(count)")
     .eq("is_published", true)
     .order("published_at", { ascending: false })
     .order("created_at", { ascending: false })
@@ -69,7 +73,7 @@ export async function getBlogPostBySlug(slug: string) {
   const candidates = resolveSlugCandidates(slug);
   const { data, error } = await supabase
     .from("blog_posts")
-    .select("id, slug, title, description, thumbnail_url, author_name, published_at, created_at, content_html")
+    .select("id, slug, title, description, thumbnail_url, author_name, published_at, created_at, content_html, view_count, blog_comments(count)")
     .in("slug", candidates)
     .eq("is_published", true)
     .limit(2);

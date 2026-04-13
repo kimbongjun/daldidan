@@ -24,6 +24,7 @@ export type Database = {
           published_at: string | null;
           created_at: string;
           updated_at: string;
+          view_count: number;
         };
         Insert: {
           id?: string;
@@ -54,6 +55,7 @@ export type Database = {
           published_at?: string | null;
           created_at?: string;
           updated_at?: string;
+          view_count?: number;
         };
       };
       transactions: {
