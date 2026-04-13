@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import BlogComments from "@/components/blog/BlogComments";
+import BlogShareBar from "@/components/blog/BlogShareBar";
 import BlogViewCounter from "@/components/blog/BlogViewCounter";
 import { canEditBlogPost, getBlogPostBySlug } from "@/lib/blog";
 import { formatBlogDate } from "@/lib/blog-shared";
@@ -34,6 +35,9 @@ export default async function BlogDetailPage({ params }: { params: Promise<{ slu
               </div>
             </section>
 
+            {/* 본문 하단 공유 */}
+            <BlogShareBar title={post.title} />
+
             {/* 댓글 */}
             <BlogComments postId={post.id} />
           </div>
@@ -44,6 +48,9 @@ export default async function BlogDetailPage({ params }: { params: Promise<{ slu
               <p className="text-sm" style={{ color: "var(--text-primary)" }}>작성자: {post.authorName}</p>
               <p className="text-sm" style={{ color: "var(--text-primary)" }}>발행일: {formatBlogDate(post.publishedAt)}</p>
             </div>
+
+            {/* 사이드바 공유 */}
+            <BlogShareBar title={post.title} />
 
             <div className="bento-card p-5 flex flex-col gap-3">
               {editable ? (

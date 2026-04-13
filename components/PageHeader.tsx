@@ -6,13 +6,14 @@ interface Props {
   title: string;
   subtitle?: string;
   accentColor: string;
+  backHref?: string;
 }
 
-export default function PageHeader({ title, subtitle, accentColor }: Props) {
+export default function PageHeader({ title, subtitle, accentColor, backHref = "/" }: Props) {
   return (
     <div className="flex items-center gap-4 py-6">
       <Link
-        href="/"
+        href={backHref}
         className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-opacity hover:opacity-70"
         style={{ background: "#16161F", border: "1px solid #2A2A3A" }}
       >
