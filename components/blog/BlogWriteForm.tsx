@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { Bell, BellOff, LoaderCircle, MessageSquare, PenLine, Smartphone, Trash2, X } from "lucide-react";
+import { Bell, BellOff, Calendar, LoaderCircle, MessageSquare, PenLine, Smartphone, Trash2, X } from "lucide-react";
 import { enableNativeNotifications, getNativeNotificationPermission, sendNativeNotification, supportsNativeNotifications } from "@/lib/notifications";
 import type { EditableBlogPost } from "@/lib/blog-shared";
 import { BLOG_CATEGORIES } from "@/lib/blog-shared";
@@ -50,6 +50,15 @@ export default function BlogWriteForm({
   const isEditMode = Boolean(initialPost);
   const [title, setTitle] = useState(initialPost?.title ?? "");
   const [category, setCategory] = useState<string>(initialPost?.category ?? "");
+  // 발행일: 기존 글이면 stored publishedAt, 신규 글이면 오늘 날짜 (YYYY-MM-DD)
+  const [publishedDate, setPublishedDate] = useState<string>(() => {
+    if (initialPost?.publishedAt) {
+      const d = new Date(initialPost.publishedAt);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    }
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  });
   const [content, setContent] = useState<EditorValue>({
     html: initialPost?.contentHtml ?? DEFAULT_HTML,
     json: null, // content_json은 저장하지 않음 (렌더링엔 html만 사용)
@@ -72,8 +81,12 @@ export default function BlogWriteForm({
     const titleChanged = title.trim() !== (initialPost?.title ?? "").trim();
     const contentChanged = normalize(content.html) !== normalize(initialPost?.contentHtml ?? "");
     const categoryChanged = category !== (initialPost?.category ?? "");
-    return titleChanged || contentChanged || categoryChanged;
-  }, [title, content.html, category, initialPost]);
+    const initialDate = initialPost?.publishedAt
+      ? (() => { const d = new Date(initialPost.publishedAt); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; })()
+      : (() => { const now = new Date(); return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`; })();
+    const dateChanged = publishedDate !== initialDate;
+    return titleChanged || contentChanged || categoryChanged || dateChanged;
+  }, [title, content.html, category, publishedDate, initialPost]);
 
   // 이벤트 핸들러 내 클로저에서 최신 isDirty를 읽기 위한 ref
   const isDirtyRef = useRef(isDirty);
@@ -130,6 +143,8 @@ export default function BlogWriteForm({
           title,
           contentHtml: content.html,
           category: category || null,
+          // "YYYY-MM-DD" → 한국 시간 기준 정오 (타임존 오프셋 명시)
+          publishedAt: `${publishedDate}T12:00:00+09:00`,
         }),
       });
 
@@ -330,6 +345,33 @@ export default function BlogWriteForm({
           {!category && (
             <p className="text-xs" style={{ color: "var(--text-muted)" }}>선택하지 않으면 기타로 저장됩니다.</p>
           )}
+        </div>
+
+        {/* ── 발행일 설정 ── */}
+        <div className="bento-card p-5 flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <Calendar size={14} style={{ color: "#EA580C" }} />
+            <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>발행일</p>
+          </div>
+          <input
+            type="date"
+            value={publishedDate}
+            onChange={(e) => setPublishedDate(e.target.value)}
+            style={{
+              background: "var(--bg-input)",
+              border: "1px solid var(--border)",
+              borderRadius: "0.75rem",
+              padding: "0.6rem 0.75rem",
+              fontSize: "0.875rem",
+              color: "var(--text-primary)",
+              outline: "none",
+              width: "100%",
+              colorScheme: "dark",
+            }}
+          />
+          <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+            지정하지 않으면 오늘 날짜로 발행됩니다.
+          </p>
         </div>
 
         <div className="bento-card p-5 flex flex-col gap-3">

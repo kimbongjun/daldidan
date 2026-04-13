@@ -23,6 +23,7 @@ export async function POST(request: NextRequest) {
     title?: string;
     contentHtml?: string;
     category?: string;
+    publishedAt?: string;
   };
 
   const title = body.title?.trim() ?? "";
@@ -44,7 +45,11 @@ export async function POST(request: NextRequest) {
     .maybeSingle();
 
   const authorName = profile?.display_name?.trim() || user.email?.split("@")[0] || "달디단 에디터";
-  const publishedAt = new Date().toISOString();
+  // 클라이언트에서 발행일을 지정하면 사용, 없으면 현재 시각
+  const candidateDate = body.publishedAt ? new Date(body.publishedAt) : null;
+  const publishedAt = (candidateDate && !isNaN(candidateDate.getTime()))
+    ? candidateDate.toISOString()
+    : new Date().toISOString();
 
   const { error } = await supabase
     .from("blog_posts")
@@ -85,12 +90,17 @@ export async function PATCH(request: NextRequest) {
     title?: string;
     contentHtml?: string;
     category?: string;
+    publishedAt?: string;
   };
 
   const id = body.id?.trim() ?? "";
   const title = body.title?.trim() ?? "";
   const contentHtml = body.contentHtml?.trim() ?? "";
   const category = body.category?.trim() || null;
+  const candidateDate = body.publishedAt ? new Date(body.publishedAt) : null;
+  const publishedAt = (candidateDate && !isNaN(candidateDate.getTime()))
+    ? candidateDate.toISOString()
+    : null;
   const description = extractDescriptionFromHtml(contentHtml);
   const resolvedThumbnail = extractFirstImageFromHtml(contentHtml);
 
@@ -120,6 +130,7 @@ export async function PATCH(request: NextRequest) {
       thumbnail_url: resolvedThumbnail || null,
       content_html: contentHtml,
       category,
+      ...(publishedAt ? { published_at: publishedAt } : {}),
     })
     .eq("id", id)
     .eq("author_id", user.id);
