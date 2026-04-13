@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import sharp from "sharp";
 import { createAdminClient } from "@/lib/supabase/server";
 
-// Next.js App Router: FormData는 별도 body parser를 쓰지 않으므로 크기 제한 없음
 export const runtime = "nodejs";
+
+// SVG는 벡터 보존을 위해 변환 없이 그대로 업로드
+const SVG_MIME = "image/svg+xml";
+const MAX_INPUT_BYTES = 30 * 1024 * 1024; // 30 MB
 
 export async function POST(request: NextRequest) {
   let formData: FormData;
@@ -17,14 +21,38 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "이미지 파일이 없습니다." }, { status: 400 });
   }
 
-  const buffer = Buffer.from(await file.arrayBuffer());
+  if (file.size > MAX_INPUT_BYTES) {
+    return NextResponse.json({ error: "파일 크기가 너무 큽니다. 30 MB 이하 이미지를 사용해 주세요." }, { status: 413 });
+  }
 
-  // 실제 MIME 타입으로 확장자와 contentType 결정 (Safari 등 WebP 미지원 시 JPEG 폴백 처리)
-  const mimeType = file.type || "image/webp";
-  const ext = mimeType === "image/jpeg" ? "jpg" : "webp";
-  const contentType = mimeType === "image/jpeg" ? "image/jpeg" : "image/webp";
+  const inputBuffer = Buffer.from(await file.arrayBuffer());
+  const isSvg = file.type === SVG_MIME;
 
-  // 업로드할 파일명: 타임스탬프 + 랜덤으로 충돌 방지
+  let outputBuffer: Buffer;
+  let contentType: string;
+  let ext: string;
+
+  if (isSvg) {
+    // SVG는 변환 없이 그대로 사용
+    outputBuffer = inputBuffer;
+    contentType = SVG_MIME;
+    ext = "svg";
+  } else {
+    // 모든 래스터 이미지 (JPEG, PNG, GIF, HEIC, HEIF, AVIF, TIFF, BMP, WebP 등)를 WebP로 변환
+    try {
+      outputBuffer = await sharp(inputBuffer, { animated: true })
+        .webp({ quality: 82 })
+        .toBuffer();
+      contentType = "image/webp";
+      ext = "webp";
+    } catch {
+      return NextResponse.json(
+        { error: "이미지 변환에 실패했습니다. 지원하지 않는 파일 형식입니다." },
+        { status: 400 },
+      );
+    }
+  }
+
   const filename = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
   const storagePath = `uploads/${filename}`;
 
@@ -32,7 +60,7 @@ export async function POST(request: NextRequest) {
 
   const { error: uploadError } = await supabase.storage
     .from("blog-images")
-    .upload(storagePath, buffer, {
+    .upload(storagePath, outputBuffer, {
       contentType,
       upsert: false,
     });

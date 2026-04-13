@@ -49,9 +49,6 @@ export default async function BlogDetailPage({ params }: { params: Promise<{ slu
               <p className="text-sm" style={{ color: "var(--text-primary)" }}>발행일: {formatBlogDate(post.publishedAt)}</p>
             </div>
 
-            {/* 사이드바 공유 */}
-            <BlogShareBar title={post.title} />
-
             <div className="bento-card p-5 flex flex-col gap-3">
               {editable ? (
                 <Link
