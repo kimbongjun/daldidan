@@ -367,6 +367,7 @@ export default function BlogWriteForm({
               outline: "none",
               width: "100%",
               colorScheme: "dark",
+              overflow: "hidden",
             }}
           />
           <p className="text-xs" style={{ color: "var(--text-muted)" }}>
