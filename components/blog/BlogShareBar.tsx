@@ -31,14 +31,6 @@ interface Props {
   title: string;
 }
 
-function XIcon() {
-  return (
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.75l7.73-8.835L1.254 2.25H8.08l4.26 5.632 5.9-5.632zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-    </svg>
-  );
-}
-
 function FacebookIcon() {
   return (
     <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -47,26 +39,10 @@ function FacebookIcon() {
   );
 }
 
-function LinkedInIcon() {
-  return (
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
-    </svg>
-  );
-}
-
 function KakaoIcon() {
   return (
     <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
       <path d="M12 3C6.477 3 2 6.477 2 10.8c0 2.7 1.713 5.076 4.32 6.52-.19.705-.693 2.56-.794 2.957-.12.49.18.483.378.352.156-.104 2.48-1.684 3.487-2.368.518.073 1.051.11 1.609.11 5.523 0 10-3.477 10-7.77C21.999 6.476 17.523 3 12 3z"/>
-    </svg>
-  );
-}
-
-function ThreadsIcon() {
-  return (
-    <svg width="17" height="17" viewBox="0 0 192 192" fill="currentColor" aria-hidden="true">
-      <path d="M141.537 88.988a66.667 66.667 0 0 0-2.518-1.143c-1.482-27.307-16.403-42.94-41.457-43.1h-.34c-14.986 0-27.449 6.396-35.12 18.05l13.74 9.418c5.73-8.695 14.724-10.548 21.386-10.548h.229c8.27.054 14.497 2.464 18.492 7.165 2.952 3.446 4.925 8.211 5.897 14.157-7.357-1.249-15.347-1.63-23.896-1.14-24.067 1.389-39.549 15.403-38.596 34.923.482 9.907 5.464 18.44 14.016 24.018 7.141 4.716 16.33 7.027 25.895 6.52 12.625-.678 22.523-5.506 29.415-14.348 5.258-6.71 8.589-15.394 10.068-26.317 6.04 3.644 10.52 8.509 13.027 14.472 4.515 10.806 4.782 28.597-9.353 42.733-12.473 12.473-27.481 17.848-50.176 18.017-25.148-.185-44.209-8.427-56.666-24.505-11.795-15.245-17.976-37.498-18.34-66.217.363-28.718 6.544-50.971 18.34-66.217C68.574 30.909 87.635 22.667 112.783 22.48c25.31.189 44.751 8.47 57.824 24.618 6.547 8.158 11.481 18.436 14.695 30.611l16.146-4.317c-3.81-14.028-9.837-26.22-17.997-36.321C166.708 17.73 143.271 7.247 112.8 7.016h-.034C82.338 7.247 58.993 17.73 42.389 37.092 27.619 54.395 20.171 78.734 19.686 108.609v.042c.485 29.875 7.933 54.214 22.703 71.517 16.604 19.363 40.05 29.847 70.47 30.077h.034c27.126-.2 46.231-7.286 61.916-22.971 20.671-20.671 20.07-46.696 13.246-62.79-4.969-11.902-14.374-21.537-26.518-27.496z M100.65 124.617c-10.528.6-21.467-4.133-21.98-14.283-.383-7.404 5.272-15.208 22.28-16.193 1.952-.113 3.869-.168 5.754-.168 6.405 0 12.404.62 17.886 1.817-2.037 25.386-13.434 28.279-23.94 28.827z" />
     </svg>
   );
 }
@@ -145,27 +121,9 @@ export default function BlogShareBar({ title }: Props) {
 
   const socialLinks = [
     {
-      label: "X (Twitter)",
-      href: `https://twitter.com/intent/tweet?text=${encodeURIComponent(title)}&url=${encodeURIComponent(url)}`,
-      icon: <XIcon />,
-      onClick: undefined as (() => void) | undefined,
-    },
-    {
       label: "Facebook",
       href: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`,
       icon: <FacebookIcon />,
-      onClick: undefined as (() => void) | undefined,
-    },
-    {
-      label: "LinkedIn",
-      href: `https://www.linkedin.com/shareArticle?mini=true&url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}`,
-      icon: <LinkedInIcon />,
-      onClick: undefined as (() => void) | undefined,
-    },
-    {
-      label: "Threads",
-      href: `https://www.threads.net/intent/post?text=${encodeURIComponent(title + "\n" + url)}`,
-      icon: <ThreadsIcon />,
       onClick: undefined as (() => void) | undefined,
     },
     {
