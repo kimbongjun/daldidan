@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { LoaderCircle, PenLine, Trash2 } from "lucide-react";
+import { LoaderCircle, PenLine, Trash2, X } from "lucide-react";
 import { sendNativeNotification } from "@/lib/notifications";
 import type { EditableBlogPost } from "@/lib/blog-shared";
 
@@ -277,6 +277,26 @@ export default function BlogWriteForm({
             ) : (
               isEditMode ? "수정 저장" : "게시하기"
             )}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (isDirty) {
+                setShowLeaveModal(true);
+              } else {
+                handleConfirmLeave();
+              }
+            }}
+            disabled={submitting || deleting}
+            className="pressable w-full py-3 rounded-2xl font-bold transition-opacity disabled:opacity-45 flex items-center justify-center gap-2"
+            style={{
+              background: "var(--bg-input)",
+              color: "var(--text-muted)",
+              border: "1px solid var(--border)",
+            }}
+          >
+            <X size={15} />
+            취소하기
           </button>
           {isEditMode && (
             <button
