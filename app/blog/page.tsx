@@ -3,8 +3,12 @@ import Link from "next/link";
 import { Suspense } from "react";
 import PageHeader from "@/components/PageHeader";
 import BlogCategoryFilter from "@/components/blog/BlogCategoryFilter";
+import BlogViewToggle from "@/components/blog/BlogViewToggle";
+import BlogWeeklyView from "@/components/blog/BlogWeeklyView";
+import BlogMonthlyView from "@/components/blog/BlogMonthlyView";
 import { getPublishedBlogPosts } from "@/lib/blog";
 import { formatBlogDate } from "@/lib/blog-shared";
+import type { BlogViewType } from "@/components/blog/BlogViewToggle";
 
 const ACCENT = "#EA580C";
 
@@ -19,14 +23,21 @@ const CATEGORY_COLORS: Record<string, { bg: string; color: string }> = {
   기타: { bg: "rgba(139,139,167,0.15)", color: "#8B8BA7" },
 };
 
+function isValidView(v: string | undefined): v is BlogViewType {
+  return v === "list" || v === "weekly" || v === "monthly";
+}
+
 export default async function BlogPage({
   searchParams,
 }: {
-  searchParams: Promise<{ category?: string }>;
+  searchParams: Promise<{ category?: string; view?: string }>;
 }) {
-  const { category } = await searchParams;
+  const { category, view: viewParam } = await searchParams;
   const activeCategory = category ?? "";
-  const posts = await getPublishedBlogPosts(9, activeCategory || undefined);
+  const activeView: BlogViewType = isValidView(viewParam) ? viewParam : "list";
+
+  const limit = activeView === "list" ? 9 : 200;
+  const posts = await getPublishedBlogPosts(limit, activeCategory || undefined);
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg-base)" }}>
@@ -42,9 +53,12 @@ export default async function BlogPage({
           </Link>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 mb-5">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
           <Suspense fallback={<div />}>
             <BlogCategoryFilter activeCategory={activeCategory} />
+          </Suspense>
+          <Suspense fallback={<div />}>
+            <BlogViewToggle activeView={activeView} />
           </Suspense>
         </div>
 
@@ -54,9 +68,13 @@ export default async function BlogPage({
               {activeCategory ? `'${activeCategory}' 카테고리 글이 없습니다.` : "아직 공개된 글이 없습니다."}
             </p>
             <p className="text-sm mt-2" style={{ color: "var(--text-muted)" }}>
-              {activeCategory ? "다른 카테고리를 선택하거나 전체 글을 확인해 보세요." : "첫 글을 발행하면 이 공간에 3x3 카드로 노출됩니다."}
+              {activeCategory ? "다른 카테고리를 선택하거나 전체 글을 확인해 보세요." : "첫 글을 발행하면 이 공간에 카드로 노출됩니다."}
             </p>
           </div>
+        ) : activeView === "weekly" ? (
+          <BlogWeeklyView posts={posts} />
+        ) : activeView === "monthly" ? (
+          <BlogMonthlyView posts={posts} />
         ) : (
           <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
             {posts.map((post) => {
