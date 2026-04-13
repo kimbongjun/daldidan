@@ -7,6 +7,14 @@ import { ArrowRight, BookOpenText, MessageCircle, PenLine, User } from "lucide-r
 import type { BlogPostSummary } from "@/lib/blog-shared";
 import { formatBlogDate } from "@/lib/blog-shared";
 
+const NEW_COMMENT_THRESHOLD_DAYS = 7;
+
+function isNewComment(latestCommentAt: string | null): boolean {
+  if (!latestCommentAt) return false;
+  const diff = Date.now() - new Date(latestCommentAt).getTime();
+  return diff < NEW_COMMENT_THRESHOLD_DAYS * 24 * 60 * 60 * 1000;
+}
+
 type BlogWidgetProps = {
   initialPosts?: BlogPostSummary[];
 };
@@ -114,9 +122,28 @@ export default function BlogWidget({ initialPosts }: BlogWidgetProps) {
                     <User size={11} />
                     {post.authorName}
                   </span>
-                  <span className="flex items-center gap-1 text-xs" style={{ color: "var(--text-muted)" }}>
-                    <MessageCircle size={11} />
+                  <span className="relative flex items-center gap-1 text-xs" style={{ color: "var(--text-muted)" }}>
+                    <span className="relative inline-flex items-center">
+                      <MessageCircle size={11} />
+                      {isNewComment(post.latestCommentAt) && (
+                        <>
+                          <span
+                            className="absolute -top-1 -right-1 w-1.5 h-1.5 rounded-full"
+                            style={{ background: "#EA580C", boxShadow: "0 0 5px rgba(234,88,12,0.9)" }}
+                          />
+                          <span
+                            className="absolute -top-1 -right-1 w-1.5 h-1.5 rounded-full animate-ping"
+                            style={{ background: "#EA580C", opacity: 0.6 }}
+                          />
+                        </>
+                      )}
+                    </span>
                     {post.commentCount.toLocaleString()}
+                    {isNewComment(post.latestCommentAt) && (
+                      <span className="px-1 py-px rounded text-xs font-bold" style={{ background: "rgba(234,88,12,0.18)", color: "#EA580C", fontSize: "0.6rem" }}>
+                        NEW
+                      </span>
+                    )}
                   </span>
                 </div>
               </div>

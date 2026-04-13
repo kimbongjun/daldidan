@@ -11,6 +11,7 @@ export interface BlogPostSummary {
   publishedAt: string;
   viewCount: number;
   commentCount: number;
+  latestCommentAt: string | null;
   category: string | null;
 }
 

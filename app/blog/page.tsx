@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { Suspense } from "react";
+import { MessageCircle } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import BlogCategoryFilter from "@/components/blog/BlogCategoryFilter";
 import BlogViewToggle from "@/components/blog/BlogViewToggle";
@@ -9,6 +10,14 @@ import BlogMonthlyView from "@/components/blog/BlogMonthlyView";
 import { getPublishedBlogPosts } from "@/lib/blog";
 import { formatBlogDate } from "@/lib/blog-shared";
 import type { BlogViewType } from "@/components/blog/BlogViewToggle";
+
+const NEW_COMMENT_THRESHOLD_DAYS = 7;
+
+function isNewComment(latestCommentAt: string | null): boolean {
+  if (!latestCommentAt) return false;
+  const diff = Date.now() - new Date(latestCommentAt).getTime();
+  return diff < NEW_COMMENT_THRESHOLD_DAYS * 24 * 60 * 60 * 1000;
+}
 
 const ACCENT = "#EA580C";
 
@@ -110,6 +119,23 @@ export default async function BlogPage({
                     </div>
                     <p className="text-lg font-black leading-snug" style={{ color: "var(--text-primary)" }}>{post.title}</p>
                     <p className="text-sm leading-relaxed" style={{ color: "var(--text-muted)" }}>{post.description}</p>
+                    <div className="flex items-center gap-1.5 text-xs" style={{ color: "var(--text-muted)" }}>
+                      <span className="relative flex items-center gap-1">
+                        <MessageCircle size={13} />
+                        {isNewComment(post.latestCommentAt) && (
+                          <span
+                            className="absolute -top-1 -right-1 w-2 h-2 rounded-full"
+                            style={{ background: "#EA580C", boxShadow: "0 0 6px rgba(234,88,12,0.8)" }}
+                          />
+                        )}
+                      </span>
+                      <span>{post.commentCount.toLocaleString()}</span>
+                      {isNewComment(post.latestCommentAt) && (
+                        <span className="px-1.5 py-0.5 rounded-md text-xs font-bold" style={{ background: "rgba(234,88,12,0.15)", color: "#EA580C" }}>
+                          NEW
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </Link>
               );

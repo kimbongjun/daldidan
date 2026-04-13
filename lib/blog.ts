@@ -12,10 +12,14 @@ function mapSummary(post: {
   published_at: string | null;
   created_at: string;
   view_count?: number | null;
-  blog_comments?: { count: number }[] | null;
+  blog_comments?: { created_at: string }[] | null;
   category?: string | null;
 }): BlogPostSummary {
   const fallbackThumbnail = extractFirstImageFromHtml(post.content_html ?? "");
+  const comments = post.blog_comments ?? [];
+  const latestCommentAt = comments.length > 0
+    ? comments.reduce((latest, c) => c.created_at > latest ? c.created_at : latest, comments[0].created_at)
+    : null;
 
   return {
     id: post.id,
@@ -26,7 +30,8 @@ function mapSummary(post: {
     authorName: post.author_name?.trim() || "달디단 에디터",
     publishedAt: post.published_at ?? post.created_at,
     viewCount: post.view_count ?? 0,
-    commentCount: post.blog_comments?.[0]?.count ?? 0,
+    commentCount: comments.length,
+    latestCommentAt,
     category: post.category ?? null,
   };
 }
@@ -60,7 +65,7 @@ export async function getPublishedBlogPosts(limit = 9, category?: string | null)
   const supabase = createPublicClient();
   let query = supabase
     .from("blog_posts")
-    .select("id, slug, title, description, thumbnail_url, content_html, author_name, published_at, created_at, view_count, category, blog_comments(count)")
+    .select("id, slug, title, description, thumbnail_url, content_html, author_name, published_at, created_at, view_count, category, blog_comments(created_at)")
     .eq("is_published", true);
 
   if (category) {
@@ -81,7 +86,7 @@ export async function getBlogPostBySlug(slug: string) {
   const candidates = resolveSlugCandidates(slug);
   const { data, error } = await supabase
     .from("blog_posts")
-    .select("id, slug, title, description, thumbnail_url, author_name, published_at, created_at, content_html, view_count, category, blog_comments(count)")
+    .select("id, slug, title, description, thumbnail_url, author_name, published_at, created_at, content_html, view_count, category, blog_comments(created_at)")
     .in("slug", candidates)
     .eq("is_published", true)
     .limit(2);
