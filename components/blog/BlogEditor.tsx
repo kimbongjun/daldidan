@@ -43,7 +43,7 @@ export default function BlogEditor({
 }) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [uploadingImages, setUploadingImages] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null);
   const [uploadError, setUploadError] = useState("");
 
   const editor = useEditor({
@@ -92,10 +92,12 @@ export default function BlogEditor({
 
   const insertFiles = async (files: FileList | File[]) => {
     if (!editor) return;
-    setUploadingImages(true);
+    setUploadProgress({ current: 0, total: Array.from(files).filter((f) => f.type.startsWith("image/")).length });
     setUploadError("");
     try {
-      const items = await uploadImagesToStorage(files);
+      const items = await uploadImagesToStorage(files, (current, total) => {
+        setUploadProgress({ current, total });
+      });
       if (items.length === 0) return;
       const chain = editor.chain().focus();
       items.forEach(({ url, name }) => {
@@ -106,7 +108,7 @@ export default function BlogEditor({
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : "이미지 업로드에 실패했습니다.");
     } finally {
-      setUploadingImages(false);
+      setUploadProgress(null);
     }
   };
 
@@ -284,13 +286,28 @@ export default function BlogEditor({
           이미지는 드래그/업로드, 유튜브와 지도는 툴바 버튼으로 바로 삽입하세요
         </div>
 
-        {uploadingImages ? (
+        {uploadProgress ? (
           <div
-            className="absolute inset-x-0 top-[53px] z-10 px-5 py-2 text-xs font-semibold flex items-center gap-2"
-            style={{ background: "rgba(234,88,12,0.12)", color: "#EA580C" }}
+            className="absolute inset-x-0 top-[53px] z-10 px-5 py-2 flex flex-col gap-1.5"
+            style={{ background: "rgba(234,88,12,0.12)" }}
           >
-            <LoaderCircle size={12} className="animate-spin" />
-            WebP 변환 후 업로드 중...
+            <div className="flex items-center gap-2 text-xs font-semibold" style={{ color: "#EA580C" }}>
+              <LoaderCircle size={12} className="animate-spin" />
+              {uploadProgress.total > 1
+                ? `이미지 업로드 중 (${uploadProgress.current}/${uploadProgress.total})`
+                : "이미지 변환 및 업로드 중..."}
+            </div>
+            <div className="h-1 rounded-full overflow-hidden" style={{ background: "rgba(234,88,12,0.2)" }}>
+              <div
+                className="h-full rounded-full transition-all duration-300"
+                style={{
+                  background: "#EA580C",
+                  width: uploadProgress.total > 0
+                    ? `${Math.round((uploadProgress.current / uploadProgress.total) * 100)}%`
+                    : "0%",
+                }}
+              />
+            </div>
           </div>
         ) : null}
 

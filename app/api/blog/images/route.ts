@@ -19,8 +19,13 @@ export async function POST(request: NextRequest) {
 
   const buffer = Buffer.from(await file.arrayBuffer());
 
+  // 실제 MIME 타입으로 확장자와 contentType 결정 (Safari 등 WebP 미지원 시 JPEG 폴백 처리)
+  const mimeType = file.type || "image/webp";
+  const ext = mimeType === "image/jpeg" ? "jpg" : "webp";
+  const contentType = mimeType === "image/jpeg" ? "image/jpeg" : "image/webp";
+
   // 업로드할 파일명: 타임스탬프 + 랜덤으로 충돌 방지
-  const filename = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.webp`;
+  const filename = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
   const storagePath = `uploads/${filename}`;
 
   const supabase = createAdminClient();
@@ -28,7 +33,7 @@ export async function POST(request: NextRequest) {
   const { error: uploadError } = await supabase.storage
     .from("blog-images")
     .upload(storagePath, buffer, {
-      contentType: "image/webp",
+      contentType,
       upsert: false,
     });
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { LoaderCircle, PenLine, Trash2 } from "lucide-react";
@@ -55,6 +55,45 @@ export default function BlogWriteForm({
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
+
+  // 초기값 대비 변경 여부 (에디터가 빈 상태를 <p></p> 로 반환하는 경우도 미변경으로 처리)
+  const isDirty = useMemo(() => {
+    const normalize = (h: string) => h.replace(/<p><\/p>/g, "").trim();
+    const titleChanged = title.trim() !== (initialPost?.title ?? "").trim();
+    const contentChanged = normalize(content.html) !== normalize(initialPost?.contentHtml ?? "");
+    return titleChanged || contentChanged;
+  }, [title, content.html, initialPost]);
+
+  // 이벤트 핸들러 내 클로저에서 최신 isDirty를 읽기 위한 ref
+  const isDirtyRef = useRef(isDirty);
+  useEffect(() => {
+    isDirtyRef.current = isDirty;
+  }, [isDirty]);
+
+  // 브라우저 새로고침/탭 닫기 방어
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (!isDirtyRef.current) return;
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, []);
+
+  // 브라우저 뒤로가기 방어: 더미 state를 push 해서 popstate 를 가로챔
+  useEffect(() => {
+    window.history.pushState(null, "", window.location.href);
+    const handlePop = () => {
+      if (isDirtyRef.current) {
+        window.history.pushState(null, "", window.location.href);
+        setShowLeaveModal(true);
+      }
+    };
+    window.addEventListener("popstate", handlePop);
+    return () => window.removeEventListener("popstate", handlePop);
+  }, []);
 
   const canSubmit = useMemo(() => {
     const plain = content.html.replace(/<[^>]+>/g, "").trim();
@@ -125,6 +164,11 @@ export default function BlogWriteForm({
     }
   };
 
+  const handleConfirmLeave = () => {
+    setShowLeaveModal(false);
+    router.push(isEditMode && initialPost?.slug ? `/blog/${initialPost.slug}` : "/blog");
+  };
+
   const inputStyle: React.CSSProperties = {
     background: "var(--bg-input)",
     border: "1px solid var(--border)",
@@ -137,6 +181,55 @@ export default function BlogWriteForm({
   };
 
   return (
+    <>
+    {showLeaveModal && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div
+          className="absolute inset-0"
+          style={{ background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)" }}
+          onClick={() => setShowLeaveModal(false)}
+        />
+        <div
+          className="relative bento-card p-6 flex flex-col gap-5 mx-4"
+          style={{ width: 320, zIndex: 1 }}
+        >
+          <div className="flex flex-col gap-1.5">
+            <p className="font-bold text-base" style={{ color: "var(--text-primary)" }}>
+              글쓰기를 그만두겠습니까?
+            </p>
+            <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+              작성 중인 내용이 저장되지 않습니다.
+            </p>
+          </div>
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => setShowLeaveModal(false)}
+              className="pressable flex-1 py-2.5 rounded-2xl font-semibold text-sm"
+              style={{
+                background: "var(--bg-input)",
+                color: "var(--text-primary)",
+                border: "1px solid var(--border)",
+              }}
+            >
+              계속 작성
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmLeave}
+              className="pressable flex-1 py-2.5 rounded-2xl font-bold text-sm"
+              style={{
+                background: "rgba(244,63,94,0.15)",
+                color: "#F43F5E",
+                border: "1px solid rgba(244,63,94,0.3)",
+              }}
+            >
+              나가기
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
     <div className="grid xl:grid-cols-[minmax(0,1fr)_320px] gap-6">
       <section className="bento-card p-5 sm:p-6 flex flex-col gap-5">
         <div className="flex items-start justify-between gap-4">
@@ -203,5 +296,6 @@ export default function BlogWriteForm({
         </div>
       </aside>
     </div>
+    </>
   );
 }
