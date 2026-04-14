@@ -56,21 +56,6 @@ export default function BangkokWidget() {
           <h2 className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>
             방콕 여행 정보
           </h2>
-          <div className="flex items-center gap-2 mt-0.5">
-            <span
-              className="flex items-center gap-1 text-xs"
-              style={{ color: ACCENT }}
-            >
-              <span
-                className="w-1.5 h-1.5 rounded-full inline-block animate-pulse"
-                style={{ background: ACCENT }}
-              />
-              {BANGKOK_ITEMS.length}개 장소
-            </span>
-            <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-              관광지·음식·쇼핑·마켓·술집·스파·호텔
-            </span>
-          </div>
         </div>
         <Link
           href="/bangkok"

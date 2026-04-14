@@ -4,6 +4,9 @@ import { useState } from "react";
 import Image from "next/image";
 import { Calendar, ExternalLink, MapPin } from "lucide-react";
 import { FestivalItem, FestivalStatus, REGION_GROUPS } from "@/lib/data/festival";
+import Pagination from "@/components/Pagination";
+
+const ITEMS_PER_PAGE = 9;
 
 const ACCENT = "#10B981";
 
@@ -25,6 +28,7 @@ export default function FestivalPageClient({
 }) {
   const [region, setRegion] = useState<string>("전체");
   const [period, setPeriod] = useState<PeriodFilter>("전체");
+  const [currentPage, setCurrentPage] = useState(1);
 
   const regionGroup = REGION_GROUPS.find((g) => g.label === region);
 
@@ -36,6 +40,19 @@ export default function FestivalPageClient({
     const periodOk = period === "전체" ? true : item.status === period;
     return regionOk && periodOk;
   });
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
+  const paged = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+
+  function handlePeriodChange(next: PeriodFilter) {
+    setPeriod(next);
+    setCurrentPage(1);
+  }
+
+  function handleRegionChange(next: string) {
+    setRegion(next);
+    setCurrentPage(1);
+  }
 
   return (
     <div>
@@ -53,7 +70,7 @@ export default function FestivalPageClient({
           return (
             <button
               key={tab}
-              onClick={() => setPeriod(tab)}
+              onClick={() => handlePeriodChange(tab)}
               className="px-4 py-1.5 rounded-full text-sm font-semibold transition-all"
               style={
                 active
@@ -74,7 +91,7 @@ export default function FestivalPageClient({
           return (
             <button
               key={g.label}
-              onClick={() => setRegion(g.label)}
+              onClick={() => handleRegionChange(g.label)}
               className="tag shrink-0 transition-all"
               style={
                 active
@@ -102,8 +119,9 @@ export default function FestivalPageClient({
           <p style={{ color: "var(--text-muted)" }}>해당 조건의 행사가 없습니다.</p>
         </div>
       ) : (
+        <>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map((item) => {
+          {paged.map((item) => {
             const st = STATUS_STYLE[item.status];
             return (
               <a
@@ -181,6 +199,13 @@ export default function FestivalPageClient({
             );
           })}
         </div>
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+          accentColor={ACCENT}
+        />
+        </>
       )}
     </div>
   );

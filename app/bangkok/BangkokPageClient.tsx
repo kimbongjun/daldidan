@@ -3,6 +3,9 @@
 import { useState } from "react";
 import { ExternalLink, MapPin } from "lucide-react";
 import type { BangkokCategory, BangkokFilter, BangkokItem } from "@/lib/data/bangkok";
+import Pagination from "@/components/Pagination";
+
+const ITEMS_PER_PAGE = 9;
 
 const ACCENT = "#F59E0B";
 
@@ -25,11 +28,20 @@ export default function BangkokPageClient({
   categories: BangkokCategory[];
 }) {
   const [activeCategory, setActiveCategory] = useState<BangkokFilter>("전체");
+  const [currentPage, setCurrentPage] = useState(1);
 
   const filtered =
     activeCategory === "전체"
       ? items
       : items.filter((i) => i.category === activeCategory);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
+  const paged = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+
+  function handleCategoryChange(cat: BangkokFilter) {
+    setActiveCategory(cat);
+    setCurrentPage(1);
+  }
 
   return (
     <div>
@@ -40,7 +52,7 @@ export default function BangkokPageClient({
           return (
             <button
               key={cat}
-              onClick={() => setActiveCategory(cat)}
+              onClick={() => handleCategoryChange(cat)}
               className="tag shrink-0 transition-all"
               style={
                 active
@@ -79,11 +91,19 @@ export default function BangkokPageClient({
           <p style={{ color: "var(--text-muted)" }}>해당 카테고리 장소가 없습니다.</p>
         </div>
       ) : (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map((item) => (
-            <BangkokGridCard key={item.id} item={item} />
-          ))}
-        </div>
+        <>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {paged.map((item) => (
+              <BangkokGridCard key={item.id} item={item} />
+            ))}
+          </div>
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            accentColor={ACCENT}
+          />
+        </>
       )}
     </div>
   );

@@ -61,7 +61,20 @@ function resolveSlugCandidates(slug: string) {
   return [...candidates].filter(Boolean);
 }
 
-export async function getPublishedBlogPosts(limit = 9, category?: string | null) {
+export async function getBlogPostCount(category?: string | null): Promise<number> {
+  const supabase = createPublicClient();
+  let query = supabase
+    .from("blog_posts")
+    .select("id", { count: "exact", head: true })
+    .eq("is_published", true);
+
+  if (category) query = query.eq("category", category);
+
+  const { count } = await query;
+  return count ?? 0;
+}
+
+export async function getPublishedBlogPosts(limit = 9, category?: string | null, offset = 0) {
   const supabase = createPublicClient();
   let query = supabase
     .from("blog_posts")
@@ -75,7 +88,7 @@ export async function getPublishedBlogPosts(limit = 9, category?: string | null)
   const { data, error } = await query
     .order("published_at", { ascending: false })
     .order("created_at", { ascending: false })
-    .limit(limit);
+    .range(offset, offset + limit - 1);
 
   if (error || !data) return [];
   return data.map(mapSummary);
