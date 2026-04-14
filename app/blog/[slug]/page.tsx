@@ -25,7 +25,22 @@ export default async function BlogDetailPage({ params }: { params: Promise<{ slu
     <div className="min-h-screen" style={{ background: "var(--bg-base)" }}>
       <BlogViewCounter postId={post.id} />
       <div className="max-w-[1100px] mx-auto px-4 sm:px-6 pb-12">
-        <PageHeader title={post.title} subtitle={`${formatBlogDate(post.publishedAt)} · ${post.authorName}`} accentColor={ACCENT} />
+        <PageHeader
+          title={post.title}
+          subtitle={`${formatBlogDate(post.publishedAt)} · ${post.authorName}`}
+          accentColor={ACCENT}
+          actions={
+            editable ? (
+              <Link
+                href={`/blog/${encodeURIComponent(post.slug)}/edit`}
+                className="px-4 py-2 rounded-xl text-sm font-semibold transition-opacity hover:opacity-80"
+                style={{ background: "rgba(234,88,12,0.12)", color: ACCENT }}
+              >
+                글 편집
+              </Link>
+            ) : undefined
+          }
+        />
 
         <article className="grid lg:grid-cols-[minmax(0,1fr)_280px] gap-6">
           <div className="flex flex-col gap-6">
@@ -61,19 +76,10 @@ export default async function BlogDetailPage({ params }: { params: Promise<{ slu
             </div>
 
             <div className="bento-card p-5 flex flex-col gap-3">
-              {editable ? (
-                <Link
-                  href={`/blog/${encodeURIComponent(post.slug)}/edit`}
-                  className="w-full py-3 rounded-xl text-center font-semibold"
-                  style={{ background: "rgba(234,88,12,0.12)", color: ACCENT }}
-                >
-                  글 편집
-                </Link>
-              ) : null}
               <Link
                 href="/blog"
                 className="w-full py-3 rounded-xl text-center font-semibold"
-                style={{ background: editable ? "rgba(255,255,255,0.05)" : "rgba(234,88,12,0.12)", color: editable ? "var(--text-primary)" : ACCENT }}
+                style={{ background: "rgba(234,88,12,0.12)", color: ACCENT }}
               >
                 목록으로 돌아가기
               </Link>
