@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ArrowRight, BookOpenText, MessageCircle, PenLine, User } from "lucide-react";
 import type { BlogPostSummary } from "@/lib/blog-shared";
-import { formatBlogDate } from "@/lib/blog-shared";
 
 const NEW_COMMENT_THRESHOLD_DAYS = 7;
 
@@ -80,7 +79,7 @@ export default function BlogWidget({ initialPosts }: BlogWidgetProps) {
       <div className="flex flex-col gap-3 flex-1 overflow-auto scrollbar-hide">
         {loading ? (
           <div className="flex-1 flex items-center justify-center">
-            <div style={{ width: 20, height: 20, borderRadius: "50%", border: "2px solid #EA580C", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }} />
+            <div style={{ width: 20, height: 20, borderRadius: "50%", border: "2px solid #EA580C", borderTopColor: "transparent" }} className="animate-spin" />
           </div>
         ) : posts.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center">
@@ -152,7 +151,6 @@ export default function BlogWidget({ initialPosts }: BlogWidgetProps) {
         )}
       </div>
 
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }

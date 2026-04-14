@@ -5,7 +5,13 @@ export type BangkokCategory =
   | "마켓"
   | "술집"
   | "마사지샵"
-  | "환율";
+  | "환율"
+  | "호텔";
+
+export interface BangkokHotelLink {
+  platform: "hotels.com" | "agoda";
+  url: string;
+}
 
 export type BangkokFilter = BangkokCategory | "전체";
 
@@ -20,6 +26,7 @@ export interface BangkokItem {
   emoji: string;
   accentColor: string;
   url?: string;
+  hotelLinks?: BangkokHotelLink[];
 }
 
 export interface BangkokFeatured {
@@ -46,6 +53,7 @@ export const BANGKOK_CATEGORIES: BangkokCategory[] = [
   "술집",
   "마사지샵",
   "환율",
+  "호텔",
 ];
 
 export const BANGKOK_FEATURED: BangkokFeatured[] = [
@@ -499,6 +507,97 @@ export const BANGKOK_ITEMS: BangkokItem[] = [
     emoji: "✨",
     accentColor: "rgba(245,158,11,0.10)",
     url: "https://www.mandarinoriental.com/en/bangkok/chao-phraya-river/experiences/the-oriental-spa",
+  },
+
+  // ── 호텔 ──────────────────────────────────────────────────────────────────
+  {
+    id: "ht1",
+    name: "만다린 오리엔탈",
+    category: "호텔",
+    description: "1876년 개장, 짜오프라야 강변 전설적 명소",
+    price: "฿15,000~",
+    hours: "체크인 15:00",
+    tips: "강 전망 룸 추천",
+    emoji: "🏨",
+    accentColor: "rgba(245,158,11,0.10)",
+    hotelLinks: [
+      { platform: "hotels.com", url: "https://www.hotels.com/ho113714/" },
+      { platform: "agoda", url: "https://www.agoda.com/mandarin-oriental-bangkok/hotel/bangkok-th.html" },
+    ],
+  },
+  {
+    id: "ht2",
+    name: "카펠라 방콕",
+    category: "호텔",
+    description: "짜오프라야 강변 럭셔리 리조트, 현대적 설계",
+    price: "฿20,000~",
+    hours: "체크인 15:00",
+    tips: "인피니티 풀 전망 최고",
+    emoji: "🌊",
+    accentColor: "rgba(6,182,212,0.10)",
+    hotelLinks: [
+      { platform: "hotels.com", url: "https://www.hotels.com/ho1560226541/" },
+      { platform: "agoda", url: "https://www.agoda.com/capella-bangkok/hotel/bangkok-th.html" },
+    ],
+  },
+  {
+    id: "ht3",
+    name: "씨암 켐핀스키",
+    category: "호텔",
+    description: "씨암 지구 중심 5성급, 쇼핑몰 직결",
+    price: "฿8,000~",
+    hours: "체크인 14:00",
+    tips: "씨암 파라곤 바로 연결",
+    emoji: "✨",
+    accentColor: "rgba(99,102,241,0.10)",
+    hotelLinks: [
+      { platform: "hotels.com", url: "https://www.hotels.com/ho230219/" },
+      { platform: "agoda", url: "https://www.agoda.com/kempinski-hotel-bangkok-siam/hotel/bangkok-th.html" },
+    ],
+  },
+  {
+    id: "ht4",
+    name: "방콕 메리어트 수쿰빗",
+    category: "호텔",
+    description: "BTS 아속역 인근, 루프탑 바 옥테이브",
+    price: "฿5,500~",
+    hours: "체크인 15:00",
+    tips: "45층 루프탑 바 내부",
+    emoji: "🏙️",
+    accentColor: "rgba(124,58,237,0.10)",
+    hotelLinks: [
+      { platform: "hotels.com", url: "https://www.hotels.com/ho491697/" },
+      { platform: "agoda", url: "https://www.agoda.com/bangkok-marriott-hotel-sukhumvit/hotel/bangkok-th.html" },
+    ],
+  },
+  {
+    id: "ht5",
+    name: "르 메르디앙 방콕",
+    category: "호텔",
+    description: "씰롬·수완나품 공항 셔틀 운영 5성급",
+    price: "฿4,500~",
+    hours: "체크인 15:00",
+    emoji: "🌸",
+    accentColor: "rgba(244,63,94,0.10)",
+    hotelLinks: [
+      { platform: "hotels.com", url: "https://www.hotels.com/ho272636/" },
+      { platform: "agoda", url: "https://www.agoda.com/le-meridien-bangkok/hotel/bangkok-th.html" },
+    ],
+  },
+  {
+    id: "ht6",
+    name: "호텔 무세 방콕",
+    category: "호텔",
+    description: "씰롬 아트 호텔, 개성 있는 인테리어",
+    price: "฿3,000~",
+    hours: "체크인 14:00",
+    tips: "가성비 5성급",
+    emoji: "🎨",
+    accentColor: "rgba(16,185,129,0.10)",
+    hotelLinks: [
+      { platform: "hotels.com", url: "https://www.hotels.com/ho1193688/" },
+      { platform: "agoda", url: "https://www.agoda.com/hotel-muse-bangkok/hotel/bangkok-th.html" },
+    ],
   },
 
   // ── 환율 ──────────────────────────────────────────────────────────────────

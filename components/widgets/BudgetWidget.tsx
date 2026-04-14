@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowRight, LogIn, TrendingDown, TrendingUp, Wallet } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import type { User } from "@supabase/supabase-js";
+import type { AuthUser as User } from "@supabase/supabase-js";
 
 interface Transaction {
   id: string;
@@ -57,16 +57,21 @@ export default function BudgetWidget() {
     };
   }, [user]);
 
-  const income = transactions.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0);
-  const expense = transactions.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0);
-  const balance = income - expense;
-  const savingRate = income > 0 ? Math.round(((income - expense) / income) * 100) : 0;
+  const { income, expense, balance, savingRate } = useMemo(() => {
+    const inc = transactions.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0);
+    const exp = transactions.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0);
+    return {
+      income: inc,
+      expense: exp,
+      balance: inc - exp,
+      savingRate: inc > 0 ? Math.round(((inc - exp) / inc) * 100) : 0,
+    };
+  }, [transactions]);
 
   if (user === undefined) {
     return (
       <div className="bento-card gradient-indigo h-full flex flex-col p-5 items-center justify-center gap-2">
         <div style={{ width: 28, height: 28, borderRadius: "50%", border: "3px solid #6366F1", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }} />
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     );
   }
@@ -159,8 +164,6 @@ export default function BudgetWidget() {
           <div style={{ width: 20, height: 20, borderRadius: "50%", border: "2px solid #6366F1", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }} />
         </div>
       )}
-
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }

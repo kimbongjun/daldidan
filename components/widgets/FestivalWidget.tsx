@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Calendar, MapPin } from "lucide-react";
@@ -79,21 +79,20 @@ export default function FestivalWidget() {
       .catch(() => null);
   }, []);
 
-  const allItems: FestivalItem[] = data?.items ?? [];
-
-  // 종료 제외
-  const activeItems = allItems.filter((i) => i.status !== "종료");
-
-  const ongoingCount = activeItems.filter((i) => i.status === "진행중").length;
-  const upcomingCount = activeItems.filter((i) => i.status === "예정").length;
-
-  const selectedGroup = REGION_GROUPS.find((g) => g.label === regionFilter);
-  const filtered =
-    !selectedGroup || selectedGroup.codes.length === 0
-      ? activeItems
-      : activeItems.filter((i) => selectedGroup.codes.includes(i.areaCode));
-
-  const visible = filtered.slice(0, 10);
+  const { ongoingCount, upcomingCount, visible } = useMemo(() => {
+    const allItems: FestivalItem[] = data?.items ?? [];
+    const active = allItems.filter((i) => i.status !== "종료");
+    const selectedGroup = REGION_GROUPS.find((g) => g.label === regionFilter);
+    const filtered =
+      !selectedGroup || selectedGroup.codes.length === 0
+        ? active
+        : active.filter((i) => selectedGroup.codes.includes(i.areaCode));
+    return {
+      ongoingCount: active.filter((i) => i.status === "진행중").length,
+      upcomingCount: active.filter((i) => i.status === "예정").length,
+      visible: filtered.slice(0, 10),
+    };
+  }, [data, regionFilter]);
 
   return (
     <div className="bento-card gradient-emerald h-full flex flex-col p-5 gap-3">

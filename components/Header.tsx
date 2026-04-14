@@ -14,7 +14,7 @@ import {
   supportsNativeNotifications,
 } from "@/lib/notifications";
 import { signOut } from "@/lib/supabase/actions/auth";
-import type { User as SupabaseUser } from "@supabase/supabase-js";
+import type { AuthUser as SupabaseUser } from "@supabase/supabase-js";
 import Link from "next/link";
 
 export default function Header() {

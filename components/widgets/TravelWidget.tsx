@@ -28,15 +28,29 @@ function PlatformBadge({ platform }: { platform: "klook" | "kkday" }) {
 export default function TravelWidget() {
   const [activities, setActivities] = useState<TravelActivity[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
-    fetch("/api/travel/activities")
+    let active = true;
+    const controller = new AbortController();
+
+    fetch("/api/travel/activities", { signal: controller.signal })
       .then((r) => r.json())
       .then((data: TravelActivity[]) => {
-        setActivities(data);
+        if (!active) return;
+        setActivities(Array.isArray(data) ? data : []);
         setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch(() => {
+        if (!active) return;
+        setError(true);
+        setLoading(false);
+      });
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
   }, []);
 
   return (
@@ -53,6 +67,12 @@ export default function TravelWidget() {
         {loading ? (
           <div className="flex items-center justify-center flex-1">
             <LoaderCircle size={18} className="animate-spin" style={{ color: EMERALD }} />
+          </div>
+        ) : error ? (
+          <div className="flex-1 flex items-center justify-center">
+            <p className="text-xs text-center" style={{ color: "var(--text-muted)" }}>
+              데이터를 불러오지 못했습니다.
+            </p>
           </div>
         ) : (
           activities.map((a) => (

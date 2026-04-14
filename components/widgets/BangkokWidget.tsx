@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { ChevronLeft, ChevronRight, ExternalLink } from "lucide-react";
 import {
   BANGKOK_FEATURED,
@@ -9,6 +9,7 @@ import {
   type BangkokItem,
   type BangkokFilter,
   type BangkokExchangeRate,
+  type BangkokHotelLink,
 } from "@/lib/data/bangkok";
 
 const ACCENT = "#F59E0B";
@@ -47,28 +48,30 @@ export default function BangkokWidget() {
       .catch(() => null);
   }, []);
 
-  const gridItems = getBangkokGrid(activeCategory);
   // 환율 카테고리 선택 시 실시간 데이터로 description 업데이트
-  const displayItems = gridItems.map((item) => {
-    if (!exchange || item.category !== "환율") return item;
-    if (item.id === "ex1") {
-      const thbPer100 = (exchange.krwThb * 100).toFixed(2);
-      return {
-        ...item,
-        description: `₩100 ≈ ฿${thbPer100} (${exchange.date} 기준)`,
-        price: `₩10,000 ≈ ฿${(exchange.krwThb * 10000).toFixed(0)}`,
-      };
-    }
-    if (item.id === "ex2") {
-      const usdPer1000 = (exchange.krwUsd * 1000).toFixed(4);
-      return {
-        ...item,
-        description: `₩1,000 ≈ $${usdPer1000} (${exchange.date} 기준)`,
-        price: `₩1,000,000 ≈ $${(exchange.krwUsd * 1000000).toFixed(2)}`,
-      };
-    }
-    return item;
-  });
+  const displayItems = useMemo(() => {
+    const gridItems = getBangkokGrid(activeCategory);
+    return gridItems.map((item) => {
+      if (!exchange || item.category !== "환율") return item;
+      if (item.id === "ex1") {
+        const thbPer100 = (exchange.krwThb * 100).toFixed(2);
+        return {
+          ...item,
+          description: `₩100 ≈ ฿${thbPer100} (${exchange.date} 기준)`,
+          price: `₩10,000 ≈ ฿${(exchange.krwThb * 10000).toFixed(0)}`,
+        };
+      }
+      if (item.id === "ex2") {
+        const usdPer1000 = (exchange.krwUsd * 1000).toFixed(4);
+        return {
+          ...item,
+          description: `₩1,000 ≈ $${usdPer1000} (${exchange.date} 기준)`,
+          price: `₩1,000,000 ≈ $${(exchange.krwUsd * 1000000).toFixed(2)}`,
+        };
+      }
+      return item;
+    });
+  }, [activeCategory, exchange]);
 
   const currentFeatured = BANGKOK_FEATURED[carouselIndex];
 
@@ -307,6 +310,28 @@ function BangkokCard({ item }: { item: BangkokItem }) {
         >
           {item.price}
         </p>
+      )}
+      {item.hotelLinks && item.hotelLinks.length > 0 && (
+        <div className="flex gap-1 mt-0.5">
+          {item.hotelLinks.map((link: BangkokHotelLink) => (
+            <a
+              key={link.platform}
+              href={link.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="flex items-center gap-0.5 rounded px-1.5 py-0.5 font-semibold transition-opacity hover:opacity-70"
+              style={{
+                fontSize: "0.58rem",
+                background: link.platform === "agoda" ? "rgba(239,68,68,0.18)" : "rgba(59,130,246,0.18)",
+                color: link.platform === "agoda" ? "#EF4444" : "#3B82F6",
+              }}
+            >
+              {link.platform === "agoda" ? "Agoda" : "Hotels"}
+              <ExternalLink size={7} />
+            </a>
+          ))}
+        </div>
       )}
     </div>
   );
