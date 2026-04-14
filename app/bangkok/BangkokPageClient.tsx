@@ -127,19 +127,17 @@ function BangkokGridCard({ item }: { item: BangkokItem }) {
         }}
       >
         {item.emoji}
-        {/* 카테고리 뱃지 */}
-        <div className="absolute top-2 left-2">
-          <span
-            className="tag text-xs"
-            style={{
-              background: "rgba(0,0,0,0.35)",
-              color: "#FDE68A",
-              backdropFilter: "blur(6px)",
-            }}
-          >
-            {item.category}
-          </span>
-        </div>
+        {/* 카테고리 뱃지 — 썸네일 상단 좌측 */}
+        <span
+          className="tag text-xs absolute top-2 left-2"
+          style={{
+            background: "rgba(0,0,0,0.45)",
+            color: "#FDE68A",
+            backdropFilter: "blur(8px)",
+          }}
+        >
+          {item.category}
+        </span>
         {item.url && (
           <div className="absolute top-2 right-2">
             <ExternalLink size={14} style={{ color: "rgba(255,255,255,0.7)" }} />
