@@ -161,12 +161,11 @@ export default async function BlogPage({
             <Pagination
               currentPage={pageNum}
               totalPages={totalPages}
-              getHref={(p) => {
-                const params = new URLSearchParams();
-                if (activeCategory) params.set("category", activeCategory);
-                params.set("page", String(p));
-                return `/blog?${params.toString()}`;
-              }}
+              hrefTemplate={
+                activeCategory
+                  ? `/blog?category=${encodeURIComponent(activeCategory)}&page={page}`
+                  : `/blog?page={page}`
+              }
               accentColor={ACCENT}
             />
           </>

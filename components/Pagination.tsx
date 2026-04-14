@@ -6,8 +6,12 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 interface PaginationProps {
   currentPage: number;
   totalPages: number;
-  /** URL 기반 이동 (블로그 등 서버 컴포넌트에서 사용) */
-  getHref?: (page: number) => string;
+  /**
+   * URL 템플릿 — Server Component에서 사용 (직렬화 가능).
+   * `{page}` 자리에 페이지 번호가 들어갑니다.
+   * 예: "/blog?category=여행&page={page}"
+   */
+  hrefTemplate?: string;
   /** 상태 기반 이동 (클라이언트 컴포넌트에서 사용) */
   onPageChange?: (page: number) => void;
   accentColor?: string;
@@ -23,10 +27,14 @@ function buildPageList(current: number, total: number): (number | "el1" | "el2")
 export default function Pagination({
   currentPage,
   totalPages,
-  getHref,
+  hrefTemplate,
   onPageChange,
   accentColor = "#EA580C",
 }: PaginationProps) {
+  function resolveHref(page: number): string | undefined {
+    if (hrefTemplate) return hrefTemplate.replace("{page}", String(page));
+    return undefined;
+  }
   if (totalPages <= 1) return null;
 
   const pages = buildPageList(currentPage, totalPages);
@@ -39,9 +47,10 @@ export default function Pagination({
     if (page === currentPage) {
       return <span key={page} className={base} style={activeStyle}>{page}</span>;
     }
-    if (getHref) {
+    const href = resolveHref(page);
+    if (href) {
       return (
-        <Link key={page} href={getHref(page)} className={`${base} hover:opacity-80`} style={idleStyle}>
+        <Link key={page} href={href} className={`${base} hover:opacity-80`} style={idleStyle}>
           {page}
         </Link>
       );
@@ -55,9 +64,10 @@ export default function Pagination({
 
   function renderNav(page: number, disabled: boolean, icon: React.ReactNode) {
     if (disabled) return <span className={base} style={disabledStyle}>{icon}</span>;
-    if (getHref) {
+    const href = resolveHref(page);
+    if (href) {
       return (
-        <Link href={getHref(page)} className={`${base} hover:opacity-80`} style={idleStyle}>
+        <Link href={href} className={`${base} hover:opacity-80`} style={idleStyle}>
           {icon}
         </Link>
       );
