@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { LoaderCircle, MessageCircle, Pencil, Trash2, X, Check } from "lucide-react";
+import { LoaderCircle, MessageCircle, Pencil, Trash2, X, Check, CornerDownRight } from "lucide-react";
 import { formatBlogDate } from "@/lib/blog-shared";
 import { createClient } from "@/lib/supabase/client";
 import type { AuthUser } from "@supabase/supabase-js";
@@ -13,6 +13,7 @@ interface Comment {
   content: string;
   created_at: string;
   updated_at: string;
+  parent_id: string | null;
 }
 
 const ACCENT = "#EA580C";
@@ -28,22 +29,114 @@ const inputStyle: React.CSSProperties = {
   width: "100%",
 };
 
+// ─────────────────────────────────────────────────────────────
+// 댓글 카드 (본댓글 + 대댓글 공통 사용)
+// ─────────────────────────────────────────────────────────────
+interface CommentCardProps {
+  comment: Comment;
+  isReply?: boolean;
+  canManage: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+  onReply?: () => void;
+  replyCount?: number;
+}
+
+function CommentCard({ comment, isReply, canManage, onEdit, onDelete, onReply, replyCount }: CommentCardProps) {
+  return (
+    <div
+      className="rounded-2xl p-4 flex flex-col gap-2"
+      style={{ background: "var(--bg-input)", border: "1px solid var(--border)" }}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          {isReply && (
+            <CornerDownRight size={13} style={{ color: ACCENT, flexShrink: 0 }} />
+          )}
+          <span
+            className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+            style={{ background: "rgba(234,88,12,0.14)", color: ACCENT }}
+          >
+            {comment.author_name.slice(0, 1)}
+          </span>
+          <span className="text-sm font-semibold truncate" style={{ color: "var(--text-primary)" }}>
+            {comment.author_name}
+          </span>
+          <span className="text-xs shrink-0" style={{ color: "var(--text-muted)" }}>
+            {formatBlogDate(comment.updated_at !== comment.created_at ? comment.updated_at : comment.created_at)}
+            {comment.updated_at !== comment.created_at ? " (수정됨)" : ""}
+          </span>
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          {!isReply && onReply && (
+            <button
+              onClick={onReply}
+              className="pressable px-2 py-1 rounded-lg text-xs font-semibold flex items-center gap-1"
+              style={{ color: ACCENT, background: "rgba(234,88,12,0.1)" }}
+            >
+              <CornerDownRight size={11} />
+              답글
+              {replyCount ? ` (${replyCount})` : ""}
+            </button>
+          )}
+          {canManage && (
+            <>
+              <button
+                onClick={onEdit}
+                className="pressable p-1.5 rounded-lg"
+                style={{ color: "var(--text-muted)" }}
+                title="수정"
+              >
+                <Pencil size={13} />
+              </button>
+              <button
+                onClick={onDelete}
+                className="pressable p-1.5 rounded-lg"
+                style={{ color: "var(--text-muted)" }}
+                title="삭제"
+              >
+                <Trash2 size={13} />
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+      <p
+        className="text-sm leading-relaxed whitespace-pre-wrap"
+        style={{ color: "var(--text-primary)", paddingLeft: "2.25rem" }}
+      >
+        {comment.content}
+      </p>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// 메인 컴포넌트
+// ─────────────────────────────────────────────────────────────
 export default function BlogComments({ postId }: { postId: string }) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // 현재 로그인 유저
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
 
-  // 작성 폼 (비로그인용 추가 필드)
+  // ─── 본댓글 작성 폼 ───
   const [authorName, setAuthorName] = useState("");
   const [password, setPassword] = useState("");
   const [content, setContent] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
 
-  // 수정/삭제 모달 상태
+  // ─── 대댓글 작성 폼 ───
+  const [replyingTo, setReplyingTo] = useState<string | null>(null);
+  const [replyAuthorName, setReplyAuthorName] = useState("");
+  const [replyPassword, setReplyPassword] = useState("");
+  const [replyContent, setReplyContent] = useState("");
+  const [replySubmitting, setReplySubmitting] = useState(false);
+  const [replyError, setReplyError] = useState("");
+
+  // ─── 수정/삭제 모달 ───
   const [actionTarget, setActionTarget] = useState<{
     id: string;
     type: "edit" | "delete";
@@ -54,7 +147,6 @@ export default function BlogComments({ postId }: { postId: string }) {
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState("");
 
-  // 로그인 상태 감지
   useEffect(() => {
     const supabase = createClient();
     supabase.auth.getUser().then(({ data }) => {
@@ -79,33 +171,23 @@ export default function BlogComments({ postId }: { postId: string }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [postId]);
 
-  // 이 댓글을 현재 유저가 수정/삭제할 수 있는지
   const canManage = (comment: Comment): boolean => {
-    if (comment.user_id && currentUser) {
-      return comment.user_id === currentUser.id;
-    }
-    // 익명 댓글은 비로그인 상태에서만 비밀번호로 관리 가능
-    if (!comment.user_id && !currentUser) {
-      return true;
-    }
+    if (comment.user_id && currentUser) return comment.user_id === currentUser.id;
+    if (!comment.user_id && !currentUser) return true;
     return false;
   };
 
+  // ─── 본댓글 제출 ───
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!content.trim()) return;
-
-    // 비로그인 유저는 이름/비밀번호 필수
     if (!currentUser && (!authorName.trim() || !password)) return;
 
     setSubmitting(true);
     setSubmitError("");
     try {
       const body: Record<string, string> = { post_id: postId, content };
-      if (!currentUser) {
-        body.author_name = authorName;
-        body.password = password;
-      }
+      if (!currentUser) { body.author_name = authorName; body.password = password; }
 
       const res = await fetch("/api/blog/comments", {
         method: "POST",
@@ -115,9 +197,7 @@ export default function BlogComments({ postId }: { postId: string }) {
       const data = await res.json() as Comment & { error?: string };
       if (!res.ok) throw new Error(data.error ?? "댓글 작성에 실패했습니다.");
       setComments((prev) => [...prev, data]);
-      setContent("");
-      setAuthorName("");
-      setPassword("");
+      setContent(""); setAuthorName(""); setPassword("");
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "댓글 작성에 실패했습니다.");
     } finally {
@@ -125,34 +205,53 @@ export default function BlogComments({ postId }: { postId: string }) {
     }
   };
 
+  // ─── 대댓글 제출 ───
+  const handleReplySubmit = async (parentId: string) => {
+    if (!replyContent.trim()) return;
+    if (!currentUser && (!replyAuthorName.trim() || !replyPassword)) return;
+
+    setReplySubmitting(true);
+    setReplyError("");
+    try {
+      const body: Record<string, string> = { post_id: postId, content: replyContent, parent_id: parentId };
+      if (!currentUser) { body.author_name = replyAuthorName; body.password = replyPassword; }
+
+      const res = await fetch("/api/blog/comments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json() as Comment & { error?: string };
+      if (!res.ok) throw new Error(data.error ?? "답글 작성에 실패했습니다.");
+      setComments((prev) => [...prev, data]);
+      setReplyingTo(null);
+      setReplyContent(""); setReplyAuthorName(""); setReplyPassword("");
+    } catch (err) {
+      setReplyError(err instanceof Error ? err.message : "답글 작성에 실패했습니다.");
+    } finally {
+      setReplySubmitting(false);
+    }
+  };
+
   const openEdit = (comment: Comment) => {
     setActionTarget({ id: comment.id, type: "edit", isLoginComment: !!comment.user_id });
     setEditContent(comment.content);
-    setActionPassword("");
-    setActionError("");
+    setActionPassword(""); setActionError("");
   };
-
   const openDelete = (comment: Comment) => {
     setActionTarget({ id: comment.id, type: "delete", isLoginComment: !!comment.user_id });
-    setActionPassword("");
-    setActionError("");
+    setActionPassword(""); setActionError("");
   };
-
   const closeAction = () => {
-    setActionTarget(null);
-    setActionPassword("");
-    setEditContent("");
-    setActionError("");
+    setActionTarget(null); setActionPassword(""); setEditContent(""); setActionError("");
   };
 
   const handleEdit = async () => {
     if (!actionTarget || actionLoading) return;
-    setActionLoading(true);
-    setActionError("");
+    setActionLoading(true); setActionError("");
     try {
       const body: Record<string, string> = { content: editContent };
       if (!actionTarget.isLoginComment) body.password = actionPassword;
-
       const res = await fetch(`/api/blog/comments/${actionTarget.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -171,12 +270,10 @@ export default function BlogComments({ postId }: { postId: string }) {
 
   const handleDelete = async () => {
     if (!actionTarget || actionLoading) return;
-    setActionLoading(true);
-    setActionError("");
+    setActionLoading(true); setActionError("");
     try {
       const body: Record<string, string> = {};
       if (!actionTarget.isLoginComment) body.password = actionPassword;
-
       const res = await fetch(`/api/blog/comments/${actionTarget.id}`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
@@ -184,7 +281,8 @@ export default function BlogComments({ postId }: { postId: string }) {
       });
       const data = await res.json() as { ok?: boolean; error?: string };
       if (!res.ok) throw new Error(data.error ?? "삭제에 실패했습니다.");
-      setComments((prev) => prev.filter((c) => c.id !== actionTarget.id));
+      // 본댓글 삭제 시 해당 대댓글도 함께 제거
+      setComments((prev) => prev.filter((c) => c.id !== actionTarget.id && c.parent_id !== actionTarget.id));
       closeAction();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "삭제에 실패했습니다.");
@@ -193,14 +291,24 @@ export default function BlogComments({ postId }: { postId: string }) {
     }
   };
 
-  // 수정/삭제 버튼 활성화 조건
   const actionButtonDisabled = () => {
     if (actionLoading) return true;
     if (actionTarget?.type === "edit" && !editContent.trim()) return true;
-    // 익명 댓글은 비밀번호 필수
     if (actionTarget && !actionTarget.isLoginComment && !actionPassword) return true;
     return false;
   };
+
+  // ─── 스레드 구조 계산 ───
+  const topLevel = comments.filter((c) => !c.parent_id);
+  const repliesMap = comments.reduce<Record<string, Comment[]>>((acc, c) => {
+    if (c.parent_id) {
+      if (!acc[c.parent_id]) acc[c.parent_id] = [];
+      acc[c.parent_id].push(c);
+    }
+    return acc;
+  }, {});
+
+  const totalCount = comments.length;
 
   return (
     <div className="flex flex-col gap-6">
@@ -208,7 +316,7 @@ export default function BlogComments({ postId }: { postId: string }) {
       <div className="flex items-center gap-2">
         <MessageCircle size={18} style={{ color: ACCENT }} />
         <h3 className="text-base font-bold" style={{ color: "var(--text-primary)" }}>
-          댓글 {comments.length > 0 ? `(${comments.length})` : ""}
+          댓글 {totalCount > 0 ? `(${totalCount})` : ""}
         </h3>
       </div>
 
@@ -217,60 +325,122 @@ export default function BlogComments({ postId }: { postId: string }) {
         <div className="flex items-center justify-center py-8">
           <LoaderCircle size={20} className="animate-spin" style={{ color: ACCENT }} />
         </div>
-      ) : comments.length === 0 ? (
+      ) : topLevel.length === 0 ? (
         <p className="text-sm py-4 text-center" style={{ color: "var(--text-muted)" }}>
           첫 댓글을 남겨보세요.
         </p>
       ) : (
-        <div className="flex flex-col gap-3">
-          {comments.map((comment) => (
-            <div
-              key={comment.id}
-              className="rounded-2xl p-4 flex flex-col gap-2"
-              style={{ background: "var(--bg-input)", border: "1px solid var(--border)" }}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <span
-                    className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
-                    style={{ background: "rgba(234,88,12,0.14)", color: ACCENT }}
-                  >
-                    {comment.author_name.slice(0, 1)}
-                  </span>
-                  <span className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                    {comment.author_name}
-                  </span>
-                  <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                    {formatBlogDate(comment.updated_at !== comment.created_at ? comment.updated_at : comment.created_at)}
-                    {comment.updated_at !== comment.created_at ? " (수정됨)" : ""}
-                  </span>
-                </div>
-                {canManage(comment) && (
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      onClick={() => openEdit(comment)}
-                      className="pressable p-1.5 rounded-lg"
-                      style={{ color: "var(--text-muted)" }}
-                      title="수정"
-                    >
-                      <Pencil size={13} />
-                    </button>
-                    <button
-                      onClick={() => openDelete(comment)}
-                      className="pressable p-1.5 rounded-lg"
-                      style={{ color: "var(--text-muted)" }}
-                      title="삭제"
-                    >
-                      <Trash2 size={13} />
-                    </button>
+        <div className="flex flex-col gap-4">
+          {topLevel.map((comment) => {
+            const replies = repliesMap[comment.id] ?? [];
+            const isReplying = replyingTo === comment.id;
+            return (
+              <div key={comment.id} className="flex flex-col gap-2">
+                {/* 본댓글 */}
+                <CommentCard
+                  comment={comment}
+                  canManage={canManage(comment)}
+                  onEdit={() => openEdit(comment)}
+                  onDelete={() => openDelete(comment)}
+                  onReply={() => {
+                    if (isReplying) {
+                      setReplyingTo(null);
+                    } else {
+                      setReplyingTo(comment.id);
+                      setReplyContent(""); setReplyAuthorName(""); setReplyPassword(""); setReplyError("");
+                    }
+                  }}
+                  replyCount={replies.length}
+                />
+
+                {/* 대댓글 목록 */}
+                {replies.length > 0 && (
+                  <div className="flex flex-col gap-2 ml-6 pl-3" style={{ borderLeft: `2px solid rgba(234,88,12,0.2)` }}>
+                    {replies.map((reply) => (
+                      <CommentCard
+                        key={reply.id}
+                        comment={reply}
+                        isReply
+                        canManage={canManage(reply)}
+                        onEdit={() => openEdit(reply)}
+                        onDelete={() => openDelete(reply)}
+                      />
+                    ))}
+                  </div>
+                )}
+
+                {/* 대댓글 작성 폼 */}
+                {authChecked && isReplying && (
+                  <div className="ml-6 pl-3" style={{ borderLeft: `2px solid rgba(234,88,12,0.2)` }}>
+                    <div className="bento-card p-4 flex flex-col gap-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-bold flex items-center gap-1.5" style={{ color: "var(--text-primary)" }}>
+                          <CornerDownRight size={14} style={{ color: ACCENT }} />
+                          <span style={{ color: ACCENT }}>{comment.author_name}</span>님에게 답글
+                        </p>
+                        <button
+                          onClick={() => setReplyingTo(null)}
+                          className="pressable p-1 rounded-lg"
+                          style={{ color: "var(--text-muted)" }}
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+
+                      {!currentUser && (
+                        <div className="grid grid-cols-2 gap-2">
+                          <input
+                            placeholder="이름"
+                            value={replyAuthorName}
+                            onChange={(e) => setReplyAuthorName(e.target.value)}
+                            maxLength={30}
+                            style={inputStyle}
+                          />
+                          <input
+                            type="password"
+                            placeholder="비밀번호 (4자 이상)"
+                            value={replyPassword}
+                            onChange={(e) => setReplyPassword(e.target.value)}
+                            style={inputStyle}
+                          />
+                        </div>
+                      )}
+
+                      <textarea
+                        placeholder="답글을 입력해주세요. (최대 1000자)"
+                        value={replyContent}
+                        onChange={(e) => setReplyContent(e.target.value)}
+                        rows={2}
+                        maxLength={1000}
+                        style={{ ...inputStyle, resize: "vertical" }}
+                      />
+
+                      {replyError && (
+                        <p className="text-sm" style={{ color: "#F43F5E" }}>{replyError}</p>
+                      )}
+
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-xs" style={{ color: "var(--text-muted)" }}>{replyContent.length} / 1000</p>
+                        <button
+                          onClick={() => handleReplySubmit(comment.id)}
+                          disabled={
+                            replySubmitting ||
+                            !replyContent.trim() ||
+                            (!currentUser && (!replyAuthorName.trim() || !replyPassword))
+                          }
+                          className="pressable px-4 py-2 rounded-xl text-sm font-bold text-white disabled:opacity-45 flex items-center gap-1.5"
+                          style={{ background: ACCENT }}
+                        >
+                          {replySubmitting ? <LoaderCircle size={13} className="animate-spin" /> : <CornerDownRight size={13} />}
+                          {replySubmitting ? "작성 중..." : "답글 등록"}
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
-              <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: "var(--text-primary)", paddingLeft: "2.25rem" }}>
-                {comment.content}
-              </p>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -307,7 +477,6 @@ export default function BlogComments({ postId }: { postId: string }) {
               />
             )}
 
-            {/* 익명 댓글만 비밀번호 입력 필요 */}
             {!actionTarget.isLoginComment && (
               <input
                 type="password"
@@ -316,7 +485,7 @@ export default function BlogComments({ postId }: { postId: string }) {
                 onChange={(e) => setActionPassword(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
-                    actionTarget.type === "edit" ? handleEdit() : handleDelete();
+                    if (actionTarget.type === "edit") { handleEdit(); } else { handleDelete(); }
                   }
                 }}
                 style={inputStyle}
@@ -358,18 +527,16 @@ export default function BlogComments({ postId }: { postId: string }) {
         </div>
       )}
 
-      {/* 댓글 작성 폼 */}
+      {/* 본댓글 작성 폼 */}
       {authChecked && (
         <form onSubmit={handleSubmit} className="bento-card p-5 flex flex-col gap-3">
           <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>댓글 작성</p>
 
           {currentUser ? (
-            /* 로그인 유저: 닉네임으로 바로 작성 */
             <p className="text-xs" style={{ color: "var(--text-muted)" }}>
               로그인 계정으로 댓글이 등록됩니다.
             </p>
           ) : (
-            /* 비로그인 유저: 이름 + 비밀번호 입력 */
             <div className="grid grid-cols-2 gap-2">
               <input
                 placeholder="이름"

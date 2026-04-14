@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
   const supabase = createPublicClient();
   const { data, error } = await supabase
     .from("blog_comments")
-    .select("id, user_id, author_name, content, created_at, updated_at")
+    .select("id, user_id, author_name, content, created_at, updated_at, parent_id")
     .eq("post_id", postId)
     .order("created_at", { ascending: true });
 
@@ -32,10 +32,12 @@ export async function POST(request: NextRequest) {
     author_name?: string;
     password?: string;
     content?: string;
+    parent_id?: string;
   };
 
   const postId = body.post_id?.trim() ?? "";
   const content = body.content?.trim() ?? "";
+  const parentId = body.parent_id?.trim() || null;
 
   if (!postId || !content) {
     return NextResponse.json({ error: "post_id와 내용을 입력해주세요." }, { status: 400 });
@@ -62,8 +64,8 @@ export async function POST(request: NextRequest) {
 
     const { data, error } = await admin
       .from("blog_comments")
-      .insert({ post_id: postId, user_id: user.id, author_name: authorName, content })
-      .select("id, user_id, author_name, content, created_at, updated_at")
+      .insert({ post_id: postId, user_id: user.id, author_name: authorName, content, parent_id: parentId })
+      .select("id, user_id, author_name, content, created_at, updated_at, parent_id")
       .single();
 
     if (error) {
@@ -89,8 +91,8 @@ export async function POST(request: NextRequest) {
 
   const { data, error } = await admin
     .from("blog_comments")
-    .insert({ post_id: postId, author_name: authorName, password_hash: passwordHash, content })
-    .select("id, user_id, author_name, content, created_at, updated_at")
+    .insert({ post_id: postId, author_name: authorName, password_hash: passwordHash, content, parent_id: parentId })
+    .select("id, user_id, author_name, content, created_at, updated_at, parent_id")
     .single();
 
   if (error) {
