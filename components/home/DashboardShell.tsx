@@ -4,6 +4,7 @@ import Footer from "@/components/Footer";
 import Header from "@/components/Header";
 import BudgetWidget from "@/components/widgets/BudgetWidget";
 import BlogWidget from "@/components/widgets/BlogWidget";
+import FestivalWidget from "@/components/widgets/FestivalWidget";
 import type { BlogPostSummary } from "@/lib/blog-shared";
 
 type DashboardShellProps = {
@@ -56,29 +57,32 @@ function BentoGrid({
             gap: 1rem;
             width: 100%;
             grid-template-columns: minmax(0,2fr) minmax(0,1fr);
-            
             grid-template-areas:
-              "blog budget";
+              "blog budget"
+              "festival festival";
           }
         }
       `}</style>
 
       {/* 데스크톱 */}
       <div className="bento-desktop">
-        <div style={{ gridArea: "blog",   minWidth: 0 }}>{blog}</div>
-        <div style={{ gridArea: "budget", minWidth: 0 }}><BudgetWidget /></div>
+        <div style={{ gridArea: "blog",     minWidth: 0 }}>{blog}</div>
+        <div style={{ gridArea: "budget",   minWidth: 0 }}><BudgetWidget /></div>
+        <div style={{ gridArea: "festival", minWidth: 0, height: 480 }}><FestivalWidget /></div>
       </div>
 
       {/* 태블릿 */}
       <div className="bento-tablet">
         <div style={{ minWidth: 0, height: 420 }}>{blog}</div>
         <div style={{ minWidth: 0, height: 420 }}><BudgetWidget /></div>
+        <div style={{ minWidth: 0, height: 480, gridColumn: "1 / -1" }}><FestivalWidget /></div>
       </div>
 
       {/* 모바일 */}
       <div className="bento-mobile">
         <div style={{ minWidth: 0, height: 360 }}>{blog}</div>
         <div style={{ minWidth: 0, height: 480 }}><BudgetWidget /></div>
+        <div style={{ minWidth: 0, height: 480 }}><FestivalWidget /></div>
       </div>
     </div>
   );
