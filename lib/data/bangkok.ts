@@ -19,6 +19,7 @@ export interface BangkokItem {
   tips?: string;
   emoji: string;
   accentColor: string;
+  url?: string;
 }
 
 export interface BangkokFeatured {
@@ -27,6 +28,14 @@ export interface BangkokFeatured {
   description: string;
   emoji: string;
   bg: string;
+  url?: string;
+}
+
+export interface BangkokExchangeRate {
+  krwThb: number;   // ₩1 당 ฿
+  krwUsd: number;   // ₩1 당 $
+  date: string;
+  source: "live" | "fallback";
 }
 
 export const BANGKOK_CATEGORIES: BangkokCategory[] = [
@@ -46,6 +55,7 @@ export const BANGKOK_FEATURED: BangkokFeatured[] = [
     description: "에메랄드 불상이 모셔진 태국의 심장, 왕실 사원",
     emoji: "⛩️",
     bg: "linear-gradient(135deg, rgba(212,160,23,0.72), rgba(139,90,43,0.72))",
+    url: "https://www.royalgrandpalace.th/",
   },
   {
     id: "feat2",
@@ -53,6 +63,7 @@ export const BANGKOK_FEATURED: BangkokFeatured[] = [
     description: "15,000개 상점의 세계 최대 야외 시장 — 토·일만 오픈",
     emoji: "🛒",
     bg: "linear-gradient(135deg, rgba(244,63,94,0.72), rgba(100,0,50,0.72))",
+    url: "https://www.google.com/maps/search/?api=1&query=Chatuchak+Weekend+Market+Bangkok",
   },
   {
     id: "feat3",
@@ -60,6 +71,7 @@ export const BANGKOK_FEATURED: BangkokFeatured[] = [
     description: "태국 대표 볶음 쌀국수, 한 접시 ฿50부터",
     emoji: "🍜",
     bg: "linear-gradient(135deg, rgba(245,158,11,0.72), rgba(180,83,9,0.72))",
+    url: "https://www.google.com/maps/search/?api=1&query=Pad+Thai+Bangkok",
   },
   {
     id: "feat4",
@@ -67,6 +79,7 @@ export const BANGKOK_FEATURED: BangkokFeatured[] = [
     description: "짜오프라야 강변 럭셔리 복합 쇼핑몰",
     emoji: "🏬",
     bg: "linear-gradient(135deg, rgba(99,102,241,0.72), rgba(49,46,129,0.72))",
+    url: "https://www.iconsiam.com/",
   },
   {
     id: "feat5",
@@ -74,6 +87,7 @@ export const BANGKOK_FEATURED: BangkokFeatured[] = [
     description: "배낭여행자의 성지, 방콕 최고의 나이트라이프",
     emoji: "🌃",
     bg: "linear-gradient(135deg, rgba(16,185,129,0.72), rgba(5,100,70,0.72))",
+    url: "https://www.google.com/maps/search/?api=1&query=Khao+San+Road+Bangkok",
   },
 ];
 
@@ -89,6 +103,7 @@ export const BANGKOK_ITEMS: BangkokItem[] = [
     tips: "복장 규정 엄격 (긴팔·긴바지)",
     emoji: "⛩️",
     accentColor: "rgba(212,160,23,0.10)",
+    url: "https://www.royalgrandpalace.th/",
   },
   {
     id: "at2",
@@ -99,6 +114,7 @@ export const BANGKOK_ITEMS: BangkokItem[] = [
     hours: "08:00–18:00",
     emoji: "🌅",
     accentColor: "rgba(244,63,94,0.10)",
+    url: "https://www.google.com/maps/search/?api=1&query=Wat+Arun+Bangkok",
   },
   {
     id: "at3",
@@ -109,6 +125,7 @@ export const BANGKOK_ITEMS: BangkokItem[] = [
     hours: "08:00–18:00",
     emoji: "🛕",
     accentColor: "rgba(16,185,129,0.10)",
+    url: "http://www.watpho.com/",
   },
   {
     id: "at4",
@@ -119,6 +136,7 @@ export const BANGKOK_ITEMS: BangkokItem[] = [
     hours: "17:00–24:00",
     emoji: "🎡",
     accentColor: "rgba(99,102,241,0.10)",
+    url: "https://www.asiatiquethailand.com/",
   },
   {
     id: "at5",
@@ -129,6 +147,7 @@ export const BANGKOK_ITEMS: BangkokItem[] = [
     hours: "04:30–21:00",
     emoji: "🌳",
     accentColor: "rgba(16,185,129,0.10)",
+    url: "https://www.google.com/maps/search/?api=1&query=Lumpini+Park+Bangkok",
   },
   {
     id: "at6",
@@ -139,6 +158,7 @@ export const BANGKOK_ITEMS: BangkokItem[] = [
     hours: "10:00–21:00",
     emoji: "🦈",
     accentColor: "rgba(6,182,212,0.10)",
+    url: "https://www.sealifebangkok.com/",
   },
 
   // ── 음식 ──────────────────────────────────────────────────────────────────
@@ -151,6 +171,7 @@ export const BANGKOK_ITEMS: BangkokItem[] = [
     tips: "딸랏 롯 파이 야시장 추천",
     emoji: "🍜",
     accentColor: "rgba(245,158,11,0.10)",
+    url: "https://www.google.com/maps/search/?api=1&query=Best+Pad+Thai+Bangkok",
   },
   {
     id: "fd2",
@@ -160,6 +181,7 @@ export const BANGKOK_ITEMS: BangkokItem[] = [
     price: "฿80–200",
     emoji: "🍲",
     accentColor: "rgba(244,63,94,0.10)",
+    url: "https://www.google.com/maps/search/?api=1&query=Tom+Yum+Kung+Bangkok",
   },
   {
     id: "fd3",
@@ -169,6 +191,7 @@ export const BANGKOK_ITEMS: BangkokItem[] = [
     price: "฿50–80",
     emoji: "🍚",
     accentColor: "rgba(16,185,129,0.10)",
+    url: "https://www.google.com/maps/search/?api=1&query=Khao+Man+Gai+Bangkok",
   },
   {
     id: "fd4",
@@ -178,6 +201,7 @@ export const BANGKOK_ITEMS: BangkokItem[] = [
     price: "฿40–80",
     emoji: "🥗",
     accentColor: "rgba(16,185,129,0.10)",
+    url: "https://www.google.com/maps/search/?api=1&query=Som+Tum+Bangkok",
   },
   {
     id: "fd5",
@@ -187,6 +211,7 @@ export const BANGKOK_ITEMS: BangkokItem[] = [
     price: "฿60–120",
     emoji: "🥭",
     accentColor: "rgba(245,158,11,0.10)",
+    url: "https://www.google.com/maps/search/?api=1&query=Mango+Sticky+Rice+Bangkok",
   },
   {
     id: "fd6",
@@ -197,6 +222,7 @@ export const BANGKOK_ITEMS: BangkokItem[] = [
     tips: "소어 야 구이 레스토랑 유명",
     emoji: "🦀",
     accentColor: "rgba(244,63,94,0.10)",
+    url: "https://www.sorndaeng.com/",
   },
 
   // ── 쇼핑 ──────────────────────────────────────────────────────────────────
@@ -209,6 +235,7 @@ export const BANGKOK_ITEMS: BangkokItem[] = [
     hours: "10:00–22:00",
     emoji: "🛍️",
     accentColor: "rgba(99,102,241,0.10)",
+    url: "https://www.siamparagon.co.th/",
   },
   {
     id: "sh2",
@@ -219,6 +246,7 @@ export const BANGKOK_ITEMS: BangkokItem[] = [
     hours: "10:00–22:00",
     emoji: "✈️",
     accentColor: "rgba(6,182,212,0.10)",
+    url: "https://www.terminal21.co.th/",
   },
   {
     id: "sh3",
@@ -229,6 +257,7 @@ export const BANGKOK_ITEMS: BangkokItem[] = [
     hours: "09:00–20:00",
     emoji: "👗",
     accentColor: "rgba(244,63,94,0.10)",
+    url: "https://www.google.com/maps/search/?api=1&query=Platinum+Fashion+Mall+Bangkok",
   },
   {
     id: "sh4",
@@ -239,6 +268,7 @@ export const BANGKOK_ITEMS: BangkokItem[] = [
     hours: "10:00–22:00",
     emoji: "🏙️",
     accentColor: "rgba(16,185,129,0.10)",
+    url: "https://www.emquartier.co.th/",
   },
   {
     id: "sh5",
@@ -249,6 +279,7 @@ export const BANGKOK_ITEMS: BangkokItem[] = [
     hours: "10:00–22:00",
     emoji: "🌊",
     accentColor: "rgba(6,182,212,0.10)",
+    url: "https://www.iconsiam.com/",
   },
   {
     id: "sh6",
@@ -259,6 +290,7 @@ export const BANGKOK_ITEMS: BangkokItem[] = [
     hours: "10:00–22:00",
     emoji: "🏢",
     accentColor: "rgba(245,158,11,0.10)",
+    url: "https://www.centralworld.co.th/",
   },
 
   // ── 마켓 ──────────────────────────────────────────────────────────────────
@@ -272,6 +304,7 @@ export const BANGKOK_ITEMS: BangkokItem[] = [
     tips: "오전 일찍 방문 권장",
     emoji: "🛒",
     accentColor: "rgba(244,63,94,0.10)",
+    url: "https://www.google.com/maps/search/?api=1&query=Chatuchak+Weekend+Market+Bangkok",
   },
   {
     id: "mk2",
@@ -282,6 +315,7 @@ export const BANGKOK_ITEMS: BangkokItem[] = [
     hours: "17:00–24:00",
     emoji: "🎡",
     accentColor: "rgba(99,102,241,0.10)",
+    url: "https://www.asiatiquethailand.com/",
   },
   {
     id: "mk3",
@@ -292,6 +326,7 @@ export const BANGKOK_ITEMS: BangkokItem[] = [
     hours: "목~일 17:00–01:00",
     emoji: "🚂",
     accentColor: "rgba(245,158,11,0.10)",
+    url: "https://www.google.com/maps/search/?api=1&query=Talad+Rot+Fai+Ratchada+Bangkok",
   },
   {
     id: "mk4",
@@ -302,6 +337,7 @@ export const BANGKOK_ITEMS: BangkokItem[] = [
     hours: "06:00–18:00",
     emoji: "🥝",
     accentColor: "rgba(16,185,129,0.10)",
+    url: "https://www.google.com/maps/search/?api=1&query=Or+Tor+Kor+Market+Bangkok",
   },
   {
     id: "mk5",
@@ -312,6 +348,7 @@ export const BANGKOK_ITEMS: BangkokItem[] = [
     hours: "금·토·일 12:00–20:00",
     emoji: "⛵",
     accentColor: "rgba(6,182,212,0.10)",
+    url: "https://www.google.com/maps/search/?api=1&query=Amphawa+Floating+Market",
   },
   {
     id: "mk6",
@@ -322,6 +359,7 @@ export const BANGKOK_ITEMS: BangkokItem[] = [
     hours: "10:00–21:00",
     emoji: "👒",
     accentColor: "rgba(244,63,94,0.10)",
+    url: "https://www.google.com/maps/search/?api=1&query=Pratunam+Market+Bangkok",
   },
 
   // ── 술집 ──────────────────────────────────────────────────────────────────
@@ -335,6 +373,7 @@ export const BANGKOK_ITEMS: BangkokItem[] = [
     tips: "드레스코드: 스마트 캐주얼",
     emoji: "🌆",
     accentColor: "rgba(99,102,241,0.10)",
+    url: "https://www.lebua.com/restaurants-bars/sirocco/",
   },
   {
     id: "br2",
@@ -345,6 +384,7 @@ export const BANGKOK_ITEMS: BangkokItem[] = [
     hours: "17:00–02:00",
     emoji: "🌃",
     accentColor: "rgba(124,58,237,0.10)",
+    url: "https://www.google.com/maps/search/?api=1&query=Octave+Rooftop+Lounge+Bar+Bangkok+Marriott",
   },
   {
     id: "br3",
@@ -355,6 +395,7 @@ export const BANGKOK_ITEMS: BangkokItem[] = [
     hours: "24시간",
     emoji: "🍺",
     accentColor: "rgba(244,63,94,0.10)",
+    url: "https://www.google.com/maps/search/?api=1&query=Khao+San+Road+Bangkok",
   },
   {
     id: "br4",
@@ -365,6 +406,7 @@ export const BANGKOK_ITEMS: BangkokItem[] = [
     hours: "21:00–04:00",
     emoji: "🎵",
     accentColor: "rgba(244,63,94,0.10)",
+    url: "https://www.google.com/maps/search/?api=1&query=RCA+Royal+City+Avenue+Bangkok",
   },
   {
     id: "br5",
@@ -375,6 +417,7 @@ export const BANGKOK_ITEMS: BangkokItem[] = [
     hours: "20:00–03:00",
     emoji: "🌈",
     accentColor: "rgba(16,185,129,0.10)",
+    url: "https://www.google.com/maps/search/?api=1&query=Silom+Soi+4+Bangkok",
   },
   {
     id: "br6",
@@ -385,6 +428,7 @@ export const BANGKOK_ITEMS: BangkokItem[] = [
     hours: "18:00–02:00",
     emoji: "🎷",
     accentColor: "rgba(245,158,11,0.10)",
+    url: "https://www.google.com/maps/search/?api=1&query=Saxophone+Pub+Bangkok",
   },
 
   // ── 마사지샵 ──────────────────────────────────────────────────────────────
@@ -398,6 +442,7 @@ export const BANGKOK_ITEMS: BangkokItem[] = [
     tips: "예약 필수, 정통 타이 마사지",
     emoji: "🧘",
     accentColor: "rgba(16,185,129,0.10)",
+    url: "https://www.watpomassage.com/",
   },
   {
     id: "ms2",
@@ -408,6 +453,7 @@ export const BANGKOK_ITEMS: BangkokItem[] = [
     hours: "09:00–23:00",
     emoji: "💆",
     accentColor: "rgba(6,182,212,0.10)",
+    url: "https://www.healthlandspa.com/",
   },
   {
     id: "ms3",
@@ -419,6 +465,7 @@ export const BANGKOK_ITEMS: BangkokItem[] = [
     tips: "앱 예약 시 할인",
     emoji: "🛁",
     accentColor: "rgba(99,102,241,0.10)",
+    url: "https://www.letsrelaxspa.com/",
   },
   {
     id: "ms4",
@@ -429,6 +476,7 @@ export const BANGKOK_ITEMS: BangkokItem[] = [
     hours: "11:00–23:00",
     emoji: "🌸",
     accentColor: "rgba(244,63,94,0.10)",
+    url: "https://www.divanaspa.com/",
   },
   {
     id: "ms5",
@@ -439,6 +487,7 @@ export const BANGKOK_ITEMS: BangkokItem[] = [
     hours: "09:00–24:00",
     emoji: "🌿",
     accentColor: "rgba(16,185,129,0.10)",
+    url: "https://www.google.com/maps/search/?api=1&query=Asia+Herb+Association+Bangkok",
   },
   {
     id: "ms6",
@@ -449,6 +498,7 @@ export const BANGKOK_ITEMS: BangkokItem[] = [
     hours: "10:00–22:00",
     emoji: "✨",
     accentColor: "rgba(245,158,11,0.10)",
+    url: "https://www.mandarinoriental.com/en/bangkok/chao-phraya-river/experiences/the-oriental-spa",
   },
 
   // ── 환율 ──────────────────────────────────────────────────────────────────
@@ -456,20 +506,22 @@ export const BANGKOK_ITEMS: BangkokItem[] = [
     id: "ex1",
     name: "KRW → THB",
     category: "환율",
-    description: "₩100 ≈ ฿2.60 (2026년 4월 기준)",
-    price: "₩10,000 ≈ ฿260",
+    description: "실시간 환율 로딩 중...",
+    price: "실시간 연동",
     tips: "슈퍼리치 환전소 이용 추천",
     emoji: "💱",
     accentColor: "rgba(245,158,11,0.10)",
+    url: "https://www.superrich1965.com/",
   },
   {
     id: "ex2",
     name: "USD → THB",
     category: "환율",
-    description: "$1 ≈ ฿34.5 (참고용)",
-    price: "$100 ≈ ฿3,450",
+    description: "실시간 환율 로딩 중...",
+    price: "실시간 연동",
     emoji: "💵",
     accentColor: "rgba(16,185,129,0.10)",
+    url: "https://www.xe.com/currencyconverter/convert/?Amount=1&From=USD&To=THB",
   },
   {
     id: "ex3",
@@ -479,6 +531,7 @@ export const BANGKOK_ITEMS: BangkokItem[] = [
     tips: "슈퍼리치·SuperRich Thailand 이용",
     emoji: "✈️",
     accentColor: "rgba(6,182,212,0.10)",
+    url: "https://www.superrichthailand.com/",
   },
   {
     id: "ex4",
@@ -488,6 +541,7 @@ export const BANGKOK_ITEMS: BangkokItem[] = [
     tips: "현금 환전 후 사용 권장",
     emoji: "🏧",
     accentColor: "rgba(244,63,94,0.10)",
+    url: "https://www.google.com/maps/search/?api=1&query=Currency+Exchange+Bangkok",
   },
   {
     id: "ex5",
@@ -497,6 +551,7 @@ export const BANGKOK_ITEMS: BangkokItem[] = [
     tips: "여권 지참 필수",
     emoji: "📍",
     accentColor: "rgba(99,102,241,0.10)",
+    url: "https://www.google.com/maps/search/?api=1&query=Super+Rich+Exchange+Bangkok",
   },
   {
     id: "ex6",
@@ -506,12 +561,12 @@ export const BANGKOK_ITEMS: BangkokItem[] = [
     tips: "해외 결제 수수료 확인 필수",
     emoji: "💳",
     accentColor: "rgba(124,58,237,0.10)",
+    url: "https://www.xe.com/currencyconverter/convert/?Amount=1&From=KRW&To=THB",
   },
 ];
 
 export function getBangkokGrid(category: BangkokFilter): BangkokItem[] {
   if (category === "전체") {
-    // 카테고리별 1개씩 + 관광지·음식 추가 1개
     const result: BangkokItem[] = [];
     for (const cat of BANGKOK_CATEGORIES) {
       const items = BANGKOK_ITEMS.filter((i) => i.category === cat);
