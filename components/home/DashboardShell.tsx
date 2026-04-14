@@ -5,6 +5,7 @@ import Header from "@/components/Header";
 import BudgetWidget from "@/components/widgets/BudgetWidget";
 import BlogWidget from "@/components/widgets/BlogWidget";
 import FestivalWidget from "@/components/widgets/FestivalWidget";
+import BangkokWidget from "@/components/widgets/BangkokWidget";
 import type { BlogPostSummary } from "@/lib/blog-shared";
 
 type DashboardShellProps = {
@@ -58,8 +59,9 @@ function BentoGrid({
             width: 100%;
             grid-template-columns: minmax(0,2fr) minmax(0,1fr);
             grid-template-areas:
-              "blog budget"
-              "festival festival";
+              "blog    budget"
+              "festival festival"
+              "bangkok  bangkok";
           }
         }
       `}</style>
@@ -69,6 +71,7 @@ function BentoGrid({
         <div style={{ gridArea: "blog",     minWidth: 0 }}>{blog}</div>
         <div style={{ gridArea: "budget",   minWidth: 0 }}><BudgetWidget /></div>
         <div style={{ gridArea: "festival", minWidth: 0, height: 480 }}><FestivalWidget /></div>
+        <div style={{ gridArea: "bangkok",  minWidth: 0, height: 600 }}><BangkokWidget /></div>
       </div>
 
       {/* 태블릿 */}
@@ -76,6 +79,7 @@ function BentoGrid({
         <div style={{ minWidth: 0, height: 420 }}>{blog}</div>
         <div style={{ minWidth: 0, height: 420 }}><BudgetWidget /></div>
         <div style={{ minWidth: 0, height: 480, gridColumn: "1 / -1" }}><FestivalWidget /></div>
+        <div style={{ minWidth: 0, height: 600, gridColumn: "1 / -1" }}><BangkokWidget /></div>
       </div>
 
       {/* 모바일 */}
@@ -83,6 +87,7 @@ function BentoGrid({
         <div style={{ minWidth: 0, height: 360 }}>{blog}</div>
         <div style={{ minWidth: 0, height: 480 }}><BudgetWidget /></div>
         <div style={{ minWidth: 0, height: 480 }}><FestivalWidget /></div>
+        <div style={{ minWidth: 0, height: 580 }}><BangkokWidget /></div>
       </div>
     </div>
   );
