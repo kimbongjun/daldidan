@@ -252,6 +252,91 @@ const FALLBACK: FestivalItem[] = [
   },
 ];
 
+// ── URL 검증 + Naver 검색 폴백 ──────────────────────────────
+// 우선순위: ① primary URL → ② Naver webkr 결과 (유효한 것) → ③ Naver 검색 페이지(항상 유효)
+
+const FETCH_UA =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+
+// 소프트 404 감지 패턴 (HTTP 200이어도 오류 페이지인 경우)
+const SOFT_404_PATTERNS = [
+  "error404", 'class="error"', "찾을 수 없", "페이지를 찾을 수 없",
+  "존재하지 않", "잘못된 경로", "안내 페이지", "페이지가 없", "오류가 발생",
+];
+
+// SNS·블로그 제외 (공식 사이트 우선)
+const SKIP_DOMAINS = [
+  "blog.naver.com", "cafe.naver.com", "kin.naver.com",
+  "tistory.com", "instagram.com", "youtube.com", "facebook.com", "twitter.com",
+];
+
+/** GET 요청 + 소프트 404 감지로 URL 유효성 검증 */
+async function isUrlValid(url: string): Promise<boolean> {
+  try {
+    const r = await fetch(url, {
+      redirect: "follow",
+      signal: AbortSignal.timeout(5000),
+      headers: { "User-Agent": FETCH_UA },
+    });
+    if (!r.ok) return false;
+    const text = await r.text();
+    // 너무 짧거나 오류 패턴 포함 시 soft 404로 처리
+    if (text.trim().length < 500) return false;
+    if (SOFT_404_PATTERNS.some((p) => text.substring(0, 6000).includes(p))) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** URL 검증 → Naver 검색 폴백 → Naver 검색 페이지(최종 보장) */
+async function resolveDetailUrl(
+  primaryUrl: string,
+  title: string,
+  region: string
+): Promise<string> {
+  // ① primary URL 검증 (GET + soft 404 감지)
+  if (await isUrlValid(primaryUrl)) return primaryUrl;
+
+  // ② Naver 웹 검색으로 실제 공식 URL 탐색
+  const nid = process.env.NAVER_CLIENT_ID;
+  const nsec = process.env.NAVER_CLIENT_SECRET;
+  if (nid && nsec) {
+    try {
+      const query = encodeURIComponent(`${title} ${region} 축제`);
+      const r = await fetch(
+        `https://openapi.naver.com/v1/search/webkr.json?query=${query}&display=5`,
+        {
+          headers: {
+            "X-Naver-Client-Id": nid,
+            "X-Naver-Client-Secret": nsec,
+          },
+          signal: AbortSignal.timeout(3000),
+        }
+      );
+      if (r.ok) {
+        const d = (await r.json()) as { items?: { link?: string }[] };
+        // SNS·블로그 제외한 후보 URL 목록
+        const candidates = (d.items ?? [])
+          .map((i) => i.link)
+          .filter((l): l is string => !!l && !SKIP_DOMAINS.some((s) => l.includes(s)));
+
+        // 후보 중 유효한 첫 번째 URL 반환
+        for (const candidate of candidates) {
+          if (await isUrlValid(candidate)) return candidate;
+        }
+        // 유효성 검사 없이 첫 후보라도 반환 (소프트 404 우려 있으나 최선)
+        if (candidates[0]) return candidates[0];
+      }
+    } catch {
+      // fall through
+    }
+  }
+
+  // ③ 최종 폴백: Naver 검색 페이지 (항상 유효)
+  return `https://search.naver.com/search.naver?query=${encodeURIComponent(`${title} ${region} 축제`)}`;
+}
+
 // ── 메인 fetch 함수 ──────────────────────────────────────────
 export async function getFestivalItems(): Promise<FestivalResponse> {
   const tourKey = process.env.TOUR_API_KEY;
@@ -314,7 +399,7 @@ export async function getFestivalItems(): Promise<FestivalResponse> {
             dateLabel: formatDateLabel(start, end),
             thumbnail: it.firstimage || it.firstimage2 || undefined,
             isFree: null,
-            detailUrl: `https://www.visitkorea.or.kr/attraction/activity-experience/detail/${it.contentid}`,
+            detailUrl: `https://korean.visitkorea.or.kr/kfes/detail/fstvlDetail.do?cmsCntntsId=${it.contentid}`,
             status,
             source: "tourapi",
           });
@@ -379,8 +464,16 @@ export async function getFestivalItems(): Promise<FestivalResponse> {
     };
   }
 
-  // 종료 행사 마지막 정렬, 시작일 오름차순
-  const sorted = items.sort((a, b) => {
+  // URL 검증 + 폴백 (전체 병렬 처리 — revalidate:3600 캐시로 시간당 1회만 실행)
+  const resolvedItems = await Promise.all(
+    items.map(async (item) => ({
+      ...item,
+      detailUrl: await resolveDetailUrl(item.detailUrl, item.title, item.region),
+    }))
+  );
+
+  // 진행중 → 예정 → 시작일 오름차순 정렬
+  const sorted = resolvedItems.sort((a, b) => {
     const statusOrder: Record<FestivalStatus, number> = {
       진행중: 0,
       예정: 1,
@@ -393,7 +486,7 @@ export async function getFestivalItems(): Promise<FestivalResponse> {
 
   return {
     items: sorted,
-    source: items[0]?.source === "fallback" ? "fallback" : "live",
+    source: resolvedItems[0]?.source === "fallback" ? "fallback" : "live",
     fetchedAt: new Date().toISOString(),
   };
 }
