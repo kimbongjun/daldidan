@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Bell, BellOff, LogOut, Sparkles, User, Moon, Sun } from "lucide-react";
+import { Bell, BellOff, LogOut, Sparkles, User, Moon, Sun, UserCircle } from "lucide-react";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 import { useThemeStore } from "@/store/useThemeStore";
@@ -233,6 +233,23 @@ export default function Header() {
                     {user.email}
                   </p>
                 </div>
+                <Link
+                  href="/mypage"
+                  onClick={() => setDropdownOpen(false)}
+                  style={{
+                    width: "100%",
+                    padding: "0.75rem 1rem",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                    fontSize: "0.85rem",
+                    color: "var(--text-primary)",
+                    borderBottom: "1px solid var(--border)",
+                  }}
+                >
+                  <UserCircle size={14} />
+                  마이페이지
+                </Link>
                 <form action={signOut}>
                   <button
                     type="submit"

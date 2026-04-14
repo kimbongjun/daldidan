@@ -291,7 +291,36 @@ create index if not exists idx_blog_posts_author
 
 
 -- ══════════════════════════════════════════════════════════════
--- 9. updated_at 자동 갱신 트리거
+-- 9. 블로그 댓글 (Blog Comments)
+-- ══════════════════════════════════════════════════════════════
+create table if not exists public.blog_comments (
+  id            uuid primary key default uuid_generate_v4(),
+  post_id       uuid not null references public.blog_posts(id) on delete cascade,
+  user_id       uuid references auth.users(id) on delete set null,  -- 로그인 유저: NULL이면 비로그인
+  author_name   text not null,
+  password_hash text,        -- 비로그인 댓글만 사용 (로그인 댓글은 NULL)
+  content       text not null,
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now()
+);
+
+-- 기존 테이블에 user_id 컬럼이 없으면 추가
+alter table public.blog_comments
+  add column if not exists user_id uuid references auth.users(id) on delete set null;
+
+create index if not exists idx_blog_comments_post
+  on public.blog_comments (post_id, created_at asc);
+
+create index if not exists idx_blog_comments_user
+  on public.blog_comments (user_id);
+
+create trigger set_updated_at_blog_comments
+  before update on public.blog_comments
+  for each row execute procedure public.set_updated_at();
+
+
+-- ══════════════════════════════════════════════════════════════
+-- 10. updated_at 자동 갱신 트리거
 -- ══════════════════════════════════════════════════════════════
 create or replace function public.set_updated_at()
 returns trigger language plpgsql as $$

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createAdminClient, createPublicClient } from "@/lib/supabase/server";
+import { createAdminClient, createClient, createPublicClient } from "@/lib/supabase/server";
 import { hashPassword } from "@/lib/password";
 
 export async function GET(request: NextRequest) {
@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
   const supabase = createPublicClient();
   const { data, error } = await supabase
     .from("blog_comments")
-    .select("id, author_name, content, created_at, updated_at")
+    .select("id, user_id, author_name, content, created_at, updated_at")
     .eq("post_id", postId)
     .order("created_at", { ascending: true });
 
@@ -23,6 +23,10 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  // 로그인 유저 확인
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
   const body = await request.json() as {
     post_id?: string;
     author_name?: string;
@@ -31,29 +35,62 @@ export async function POST(request: NextRequest) {
   };
 
   const postId = body.post_id?.trim() ?? "";
-  const authorName = body.author_name?.trim() ?? "";
-  const password = body.password ?? "";
   const content = body.content?.trim() ?? "";
 
-  if (!postId || !authorName || !password || !content) {
-    return NextResponse.json({ error: "모든 항목을 입력해주세요." }, { status: 400 });
-  }
-
-  if (password.length < 4) {
-    return NextResponse.json({ error: "비밀번호는 4자 이상이어야 합니다." }, { status: 400 });
+  if (!postId || !content) {
+    return NextResponse.json({ error: "post_id와 내용을 입력해주세요." }, { status: 400 });
   }
 
   if (content.length > 1000) {
     return NextResponse.json({ error: "댓글은 1000자 이하로 작성해주세요." }, { status: 400 });
   }
 
+  const admin = createAdminClient();
+
+  if (user) {
+    // 로그인 유저: 닉네임 사용, 비밀번호 불필요
+    const { data: profile } = await admin
+      .from("profiles")
+      .select("display_name")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    const authorName =
+      profile?.display_name?.trim() ||
+      user.email?.split("@")[0] ||
+      "달디단 유저";
+
+    const { data, error } = await admin
+      .from("blog_comments")
+      .insert({ post_id: postId, user_id: user.id, author_name: authorName, content })
+      .select("id, user_id, author_name, content, created_at, updated_at")
+      .single();
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json(data, { status: 201 });
+  }
+
+  // 비로그인 유저: 이름 + 비밀번호 필요
+  const authorName = body.author_name?.trim() ?? "";
+  const password = body.password ?? "";
+
+  if (!authorName || !password) {
+    return NextResponse.json({ error: "이름과 비밀번호를 입력해주세요." }, { status: 400 });
+  }
+
+  if (password.length < 4) {
+    return NextResponse.json({ error: "비밀번호는 4자 이상이어야 합니다." }, { status: 400 });
+  }
+
   const passwordHash = hashPassword(password);
 
-  const supabase = createAdminClient();
-  const { data, error } = await supabase
+  const { data, error } = await admin
     .from("blog_comments")
     .insert({ post_id: postId, author_name: authorName, password_hash: passwordHash, content })
-    .select("id, author_name, content, created_at, updated_at")
+    .select("id, user_id, author_name, content, created_at, updated_at")
     .single();
 
   if (error) {

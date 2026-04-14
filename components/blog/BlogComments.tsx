@@ -3,9 +3,12 @@
 import { useEffect, useState } from "react";
 import { LoaderCircle, MessageCircle, Pencil, Trash2, X, Check } from "lucide-react";
 import { formatBlogDate } from "@/lib/blog-shared";
+import { createClient } from "@/lib/supabase/client";
+import type { AuthUser } from "@supabase/supabase-js";
 
 interface Comment {
   id: string;
+  user_id: string | null;
   author_name: string;
   content: string;
   created_at: string;
@@ -29,7 +32,11 @@ export default function BlogComments({ postId }: { postId: string }) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // 작성 폼
+  // 현재 로그인 유저
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
+
+  // 작성 폼 (비로그인용 추가 필드)
   const [authorName, setAuthorName] = useState("");
   const [password, setPassword] = useState("");
   const [content, setContent] = useState("");
@@ -37,11 +44,28 @@ export default function BlogComments({ postId }: { postId: string }) {
   const [submitError, setSubmitError] = useState("");
 
   // 수정/삭제 모달 상태
-  const [actionTarget, setActionTarget] = useState<{ id: string; type: "edit" | "delete"; content?: string } | null>(null);
+  const [actionTarget, setActionTarget] = useState<{
+    id: string;
+    type: "edit" | "delete";
+    isLoginComment: boolean;
+  } | null>(null);
   const [actionPassword, setActionPassword] = useState("");
   const [editContent, setEditContent] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState("");
+
+  // 로그인 상태 감지
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => {
+      setCurrentUser(data.user ?? null);
+      setAuthChecked(true);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
+      setCurrentUser(session?.user ?? null);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
 
   const fetchComments = async () => {
     const res = await fetch(`/api/blog/comments?post_id=${encodeURIComponent(postId)}`);
@@ -55,23 +79,45 @@ export default function BlogComments({ postId }: { postId: string }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [postId]);
 
+  // 이 댓글을 현재 유저가 수정/삭제할 수 있는지
+  const canManage = (comment: Comment): boolean => {
+    if (comment.user_id && currentUser) {
+      return comment.user_id === currentUser.id;
+    }
+    // 익명 댓글은 비로그인 상태에서만 비밀번호로 관리 가능
+    if (!comment.user_id && !currentUser) {
+      return true;
+    }
+    return false;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!authorName.trim() || !password || !content.trim()) return;
+    if (!content.trim()) return;
+
+    // 비로그인 유저는 이름/비밀번호 필수
+    if (!currentUser && (!authorName.trim() || !password)) return;
+
     setSubmitting(true);
     setSubmitError("");
     try {
+      const body: Record<string, string> = { post_id: postId, content };
+      if (!currentUser) {
+        body.author_name = authorName;
+        body.password = password;
+      }
+
       const res = await fetch("/api/blog/comments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ post_id: postId, author_name: authorName, password, content }),
+        body: JSON.stringify(body),
       });
-      const data = await res.json();
+      const data = await res.json() as Comment & { error?: string };
       if (!res.ok) throw new Error(data.error ?? "댓글 작성에 실패했습니다.");
       setComments((prev) => [...prev, data]);
+      setContent("");
       setAuthorName("");
       setPassword("");
-      setContent("");
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "댓글 작성에 실패했습니다.");
     } finally {
@@ -80,14 +126,14 @@ export default function BlogComments({ postId }: { postId: string }) {
   };
 
   const openEdit = (comment: Comment) => {
-    setActionTarget({ id: comment.id, type: "edit", content: comment.content });
+    setActionTarget({ id: comment.id, type: "edit", isLoginComment: !!comment.user_id });
     setEditContent(comment.content);
     setActionPassword("");
     setActionError("");
   };
 
   const openDelete = (comment: Comment) => {
-    setActionTarget({ id: comment.id, type: "delete" });
+    setActionTarget({ id: comment.id, type: "delete", isLoginComment: !!comment.user_id });
     setActionPassword("");
     setActionError("");
   };
@@ -104,12 +150,15 @@ export default function BlogComments({ postId }: { postId: string }) {
     setActionLoading(true);
     setActionError("");
     try {
+      const body: Record<string, string> = { content: editContent };
+      if (!actionTarget.isLoginComment) body.password = actionPassword;
+
       const res = await fetch(`/api/blog/comments/${actionTarget.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password: actionPassword, content: editContent }),
+        body: JSON.stringify(body),
       });
-      const data = await res.json();
+      const data = await res.json() as Comment & { error?: string };
       if (!res.ok) throw new Error(data.error ?? "수정에 실패했습니다.");
       setComments((prev) => prev.map((c) => (c.id === actionTarget.id ? data : c)));
       closeAction();
@@ -125,12 +174,15 @@ export default function BlogComments({ postId }: { postId: string }) {
     setActionLoading(true);
     setActionError("");
     try {
+      const body: Record<string, string> = {};
+      if (!actionTarget.isLoginComment) body.password = actionPassword;
+
       const res = await fetch(`/api/blog/comments/${actionTarget.id}`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password: actionPassword }),
+        body: JSON.stringify(body),
       });
-      const data = await res.json();
+      const data = await res.json() as { ok?: boolean; error?: string };
       if (!res.ok) throw new Error(data.error ?? "삭제에 실패했습니다.");
       setComments((prev) => prev.filter((c) => c.id !== actionTarget.id));
       closeAction();
@@ -139,6 +191,15 @@ export default function BlogComments({ postId }: { postId: string }) {
     } finally {
       setActionLoading(false);
     }
+  };
+
+  // 수정/삭제 버튼 활성화 조건
+  const actionButtonDisabled = () => {
+    if (actionLoading) return true;
+    if (actionTarget?.type === "edit" && !editContent.trim()) return true;
+    // 익명 댓글은 비밀번호 필수
+    if (actionTarget && !actionTarget.isLoginComment && !actionPassword) return true;
+    return false;
   };
 
   return (
@@ -176,30 +237,34 @@ export default function BlogComments({ postId }: { postId: string }) {
                   >
                     {comment.author_name.slice(0, 1)}
                   </span>
-                  <span className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{comment.author_name}</span>
+                  <span className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                    {comment.author_name}
+                  </span>
                   <span className="text-xs" style={{ color: "var(--text-muted)" }}>
                     {formatBlogDate(comment.updated_at !== comment.created_at ? comment.updated_at : comment.created_at)}
                     {comment.updated_at !== comment.created_at ? " (수정됨)" : ""}
                   </span>
                 </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  <button
-                    onClick={() => openEdit(comment)}
-                    className="pressable p-1.5 rounded-lg"
-                    style={{ color: "var(--text-muted)" }}
-                    title="수정"
-                  >
-                    <Pencil size={13} />
-                  </button>
-                  <button
-                    onClick={() => openDelete(comment)}
-                    className="pressable p-1.5 rounded-lg"
-                    style={{ color: "var(--text-muted)" }}
-                    title="삭제"
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                </div>
+                {canManage(comment) && (
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={() => openEdit(comment)}
+                      className="pressable p-1.5 rounded-lg"
+                      style={{ color: "var(--text-muted)" }}
+                      title="수정"
+                    >
+                      <Pencil size={13} />
+                    </button>
+                    <button
+                      onClick={() => openDelete(comment)}
+                      className="pressable p-1.5 rounded-lg"
+                      style={{ color: "var(--text-muted)" }}
+                      title="삭제"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                )}
               </div>
               <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: "var(--text-primary)", paddingLeft: "2.25rem" }}>
                 {comment.content}
@@ -242,18 +307,21 @@ export default function BlogComments({ postId }: { postId: string }) {
               />
             )}
 
-            <input
-              type="password"
-              placeholder="작성 시 입력한 비밀번호"
-              value={actionPassword}
-              onChange={(e) => setActionPassword(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  actionTarget.type === "edit" ? handleEdit() : handleDelete();
-                }
-              }}
-              style={inputStyle}
-            />
+            {/* 익명 댓글만 비밀번호 입력 필요 */}
+            {!actionTarget.isLoginComment && (
+              <input
+                type="password"
+                placeholder="작성 시 입력한 비밀번호"
+                value={actionPassword}
+                onChange={(e) => setActionPassword(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    actionTarget.type === "edit" ? handleEdit() : handleDelete();
+                  }
+                }}
+                style={inputStyle}
+              />
+            )}
 
             {actionError && (
               <p className="text-sm" style={{ color: "#F43F5E" }}>{actionError}</p>
@@ -269,7 +337,7 @@ export default function BlogComments({ postId }: { postId: string }) {
               </button>
               <button
                 onClick={actionTarget.type === "edit" ? handleEdit : handleDelete}
-                disabled={actionLoading || !actionPassword || (actionTarget.type === "edit" && !editContent.trim())}
+                disabled={actionButtonDisabled()}
                 className="pressable flex-1 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-1.5 disabled:opacity-45"
                 style={
                   actionTarget.type === "delete"
@@ -291,57 +359,68 @@ export default function BlogComments({ postId }: { postId: string }) {
       )}
 
       {/* 댓글 작성 폼 */}
-      <form
-        onSubmit={handleSubmit}
-        className="bento-card p-5 flex flex-col gap-3"
-      >
-        <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>댓글 작성</p>
+      {authChecked && (
+        <form onSubmit={handleSubmit} className="bento-card p-5 flex flex-col gap-3">
+          <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>댓글 작성</p>
 
-        <div className="grid grid-cols-2 gap-2">
-          <input
-            placeholder="이름"
-            value={authorName}
-            onChange={(e) => setAuthorName(e.target.value)}
-            maxLength={30}
-            style={inputStyle}
+          {currentUser ? (
+            /* 로그인 유저: 닉네임으로 바로 작성 */
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+              로그인 계정으로 댓글이 등록됩니다.
+            </p>
+          ) : (
+            /* 비로그인 유저: 이름 + 비밀번호 입력 */
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                placeholder="이름"
+                value={authorName}
+                onChange={(e) => setAuthorName(e.target.value)}
+                maxLength={30}
+                style={inputStyle}
+              />
+              <input
+                type="password"
+                placeholder="비밀번호 (4자 이상)"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                style={inputStyle}
+              />
+            </div>
+          )}
+
+          <textarea
+            placeholder="댓글을 입력해주세요. (최대 1000자)"
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            rows={3}
+            maxLength={1000}
+            style={{ ...inputStyle, resize: "vertical" }}
           />
-          <input
-            type="password"
-            placeholder="비밀번호 (4자 이상)"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            style={inputStyle}
-          />
-        </div>
 
-        <textarea
-          placeholder="댓글을 입력해주세요. (최대 1000자)"
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          rows={3}
-          maxLength={1000}
-          style={{ ...inputStyle, resize: "vertical" }}
-        />
+          {submitError && (
+            <p className="text-sm" style={{ color: "#F43F5E" }}>{submitError}</p>
+          )}
 
-        {submitError && (
-          <p className="text-sm" style={{ color: "#F43F5E" }}>{submitError}</p>
-        )}
-
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-            {content.length} / 1000
-          </p>
-          <button
-            type="submit"
-            disabled={submitting || !authorName.trim() || !password || !content.trim()}
-            className="pressable px-5 py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-45 flex items-center gap-1.5"
-            style={{ background: ACCENT }}
-          >
-            {submitting ? <LoaderCircle size={14} className="animate-spin" /> : null}
-            {submitting ? "작성 중..." : "댓글 등록"}
-          </button>
-        </div>
-      </form>
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+              {content.length} / 1000
+            </p>
+            <button
+              type="submit"
+              disabled={
+                submitting ||
+                !content.trim() ||
+                (!currentUser && (!authorName.trim() || !password))
+              }
+              className="pressable px-5 py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-45 flex items-center gap-1.5"
+              style={{ background: ACCENT }}
+            >
+              {submitting ? <LoaderCircle size={14} className="animate-spin" /> : null}
+              {submitting ? "작성 중..." : "댓글 등록"}
+            </button>
+          </div>
+        </form>
+      )}
     </div>
   );
 }

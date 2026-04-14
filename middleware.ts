@@ -17,7 +17,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // 비로그인 유저가 보호된 작성/개인 페이지 접근 → 로그인으로
-  if (!session && (pathname.startsWith("/budget") || pathname.startsWith("/blog/write") || /^\/blog\/.+\/edit(?:\/.*)?$/.test(pathname))) {
+  if (!session && (pathname.startsWith("/budget") || pathname.startsWith("/blog/write") || pathname.startsWith("/mypage") || /^\/blog\/.+\/edit(?:\/.*)?$/.test(pathname))) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("next", pathname);
     return NextResponse.redirect(loginUrl);
@@ -27,5 +27,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/login", "/budget", "/budget/:path*", "/blog/write", "/blog/write/:path*", "/blog/:path*/edit", "/blog/:path*/edit/:path*"],
+  matcher: ["/login", "/budget", "/budget/:path*", "/mypage", "/mypage/:path*", "/blog/write", "/blog/write/:path*", "/blog/:path*/edit", "/blog/:path*/edit/:path*"],
 };
