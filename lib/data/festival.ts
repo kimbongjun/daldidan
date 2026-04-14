@@ -64,17 +64,39 @@ function formatDateLabel(start: string, end: string): string {
   return `${fmt(start)} ~ ${fmt(end)}`;
 }
 
-// ── TourAPI 타입 ─────────────────────────────────────────────
+// ── TourAPI 타입 (KorService2 기준) ──────────────────────────
 type TourItem = {
   contentid?: string;
   title?: string;
   addr1?: string;
   addr2?: string;
-  areacode?: string | number;
+  areacode?: string | number;       // KorService1 — 비어있을 수 있음
+  lDongRegnCd?: string;             // KorService2 행정동 시도코드
   eventstartdate?: string;
   eventenddate?: string;
   firstimage?: string;
   firstimage2?: string;
+};
+
+// lDongRegnCd → 기존 areaCode 변환 (REGION_GROUPS 필터 호환)
+const LDONG_TO_AREA_CODE: Record<string, number> = {
+  "11": 1,  // 서울
+  "26": 6,  // 부산
+  "27": 4,  // 대구
+  "28": 2,  // 인천
+  "29": 5,  // 광주
+  "30": 3,  // 대전
+  "31": 7,  // 울산
+  "36": 8,  // 세종
+  "41": 31, // 경기
+  "42": 32, // 강원
+  "43": 33, // 충북
+  "44": 34, // 충남
+  "45": 37, // 전북
+  "46": 38, // 전남
+  "47": 35, // 경북
+  "48": 36, // 경남
+  "50": 39, // 제주
 };
 
 type TourResponse = {
@@ -238,7 +260,7 @@ export async function getFestivalItems(): Promise<FestivalResponse> {
   const items: FestivalItem[] = [];
 
   try {
-    // 1) 한국관광공사 TourAPI
+    // 1) 한국관광공사 TourAPI (GW: KorService2)
     if (tourKey && tourKey !== "your_tour_api_key_here") {
       const today = new Date();
       // 1개월 전부터 조회해 진행 중인 행사도 포함
@@ -246,10 +268,10 @@ export async function getFestivalItems(): Promise<FestivalResponse> {
       const startYmd = today.toISOString().slice(0, 10).replace(/-/g, "");
 
       const url = new URL(
-        "https://apis.data.go.kr/B551011/KorService1/searchFestival1"
+        "https://apis.data.go.kr/B551011/KorService2/searchFestival2"
       );
       url.searchParams.set("serviceKey", tourKey);
-      url.searchParams.set("numOfRows", "20");
+      url.searchParams.set("numOfRows", "30");
       url.searchParams.set("pageNo", "1");
       url.searchParams.set("MobileOS", "ETC");
       url.searchParams.set("MobileApp", "daldidan");
@@ -268,11 +290,18 @@ export async function getFestivalItems(): Promise<FestivalResponse> {
           : [];
 
         for (const it of list) {
-          const code = parseInt(String(it.areacode ?? "0"), 10);
+          // KorService2는 areacode가 비어있고 lDongRegnCd로 대체됨
+          const ldong = String(it.lDongRegnCd ?? "");
+          const legacyCode = parseInt(String(it.areacode ?? "0"), 10);
+          const code = ldong ? (LDONG_TO_AREA_CODE[ldong] ?? legacyCode) : legacyCode;
           const region = AREA_CODE_MAP[code] ?? "기타";
           const start = it.eventstartdate ?? "";
           const end = it.eventenddate ?? start;
           if (!start || !it.title) continue;
+
+          const status = getStatus(start, end);
+          // 종료된 행사는 수집하지 않음
+          if (status === "종료") continue;
 
           items.push({
             id: `tour-${it.contentid}`,
@@ -286,7 +315,7 @@ export async function getFestivalItems(): Promise<FestivalResponse> {
             thumbnail: it.firstimage || it.firstimage2 || undefined,
             isFree: null,
             detailUrl: `https://www.visitkorea.or.kr/attraction/activity-experience/detail/${it.contentid}`,
-            status: getStatus(start, end),
+            status,
             source: "tourapi",
           });
         }
@@ -310,6 +339,10 @@ export async function getFestivalItems(): Promise<FestivalResponse> {
           // TourAPI에서 이미 동일 행사가 있으면 중복 추가 방지
           if (items.some((i) => i.title === ev.TITLE)) continue;
 
+          const seoulStatus = start ? getStatus(start, end || start) : "예정";
+          // 종료된 행사는 수집하지 않음
+          if (seoulStatus === "종료") continue;
+
           items.push({
             id: sid,
             title: ev.TITLE,
@@ -324,7 +357,7 @@ export async function getFestivalItems(): Promise<FestivalResponse> {
             thumbnail: ev.MAIN_IMG || undefined,
             isFree: ev.IS_FREE === "무료",
             detailUrl: ev.ORG_LINK ?? "https://www.visitseoul.net",
-            status: start ? getStatus(start, end || start) : "예정",
+            status: seoulStatus,
             source: "seoul",
           });
         }
