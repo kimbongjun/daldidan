@@ -3,6 +3,8 @@ import Script from "next/script";
 import "./globals.css";
 import ThemeProvider from "@/components/ThemeProvider";
 
+export const dynamic = "force-dynamic";
+
 async function fetchSiteSettings(): Promise<Record<string, string>> {
   try {
     // 서버 사이드에서 직접 Supabase에서 읽기

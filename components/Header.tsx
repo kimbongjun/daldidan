@@ -34,6 +34,7 @@ export default function Header() {
 
   // 인사말 편집
   const [customGreeting, setCustomGreeting] = useState<string>("");
+  const [logoUrl, setLogoUrl] = useState<string>("");
   const [editingGreeting, setEditingGreeting] = useState(false);
   const [greetingInput, setGreetingInput] = useState("");
 
@@ -51,12 +52,13 @@ export default function Header() {
     return () => clearInterval(id);
   }, []);
 
-  // 저장된 커스텀 인사말 로드 (site_settings API)
+  // 저장된 커스텀 인사말 + 로고 로드 (site_settings API)
   useEffect(() => {
     fetch("/api/site-settings")
       .then((r) => r.json())
       .then((d: Record<string, string>) => {
         if (d.custom_greeting) setCustomGreeting(d.custom_greeting);
+        if (d.logo_url) setLogoUrl(d.logo_url);
       })
       .catch(() => null);
   }, []);
@@ -144,12 +146,21 @@ export default function Header() {
     <header className="flex items-center justify-between py-6 px-1">
       {/* ── 로고 + 인사말 ── */}
       <div className="flex items-center gap-3">
-        <div
-          className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-          style={{ background: "linear-gradient(135deg, #7C3AED, #06B6D4)" }}
-        >
-          <Sparkles size={18} className="text-white" />
-        </div>
+        {logoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={logoUrl}
+            alt="로고"
+            className="w-10 h-10 rounded-xl object-cover shrink-0"
+          />
+        ) : (
+          <div
+            className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+            style={{ background: "linear-gradient(135deg, #7C3AED, #06B6D4)" }}
+          >
+            <Sparkles size={18} className="text-white" />
+          </div>
+        )}
         <div>
           <h1 className="text-xl font-black tracking-tight" style={{ color: "var(--text-primary)" }}>달디단</h1>
 
