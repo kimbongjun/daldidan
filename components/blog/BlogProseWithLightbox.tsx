@@ -27,6 +27,7 @@ export default function BlogProseWithLightbox({ contentHtml }: Props) {
     setSlides(images.map((img) => ({ src: img.src, alt: img.alt || undefined })));
 
     const handlers = images.map((img, index) => {
+      img.style.cursor = 'pointer'; // iOS Safari: cursor:pointer 없으면 touch→click 미발생
       const handler = () => setLightboxIndex(index);
       img.addEventListener('click', handler);
       return handler;

@@ -296,8 +296,15 @@ input[type="reset"]:not(:disabled):active,
 }
 
 .blog-prose img {
-  cursor: zoom-in;
+  cursor: pointer;
+  touch-action: manipulation;
   transition: opacity 0.15s ease;
+}
+
+@media (hover: hover) {
+  .blog-prose img {
+    cursor: zoom-in;
+  }
 }
 
 .blog-prose img:hover {
