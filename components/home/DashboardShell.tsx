@@ -17,10 +17,14 @@ type DashboardShellProps = {
 export default function DashboardShell({
   initialBlogPosts,
 }: DashboardShellProps) {
-  const [currentLocation, setCurrentLocation] = useState<string>("");
+  const [currentLocation, setCurrentLocation] = useState<string | null>(null);
+  const [locationLoading, setLocationLoading] = useState(true);
 
   useEffect(() => {
-    if (!navigator.geolocation) return;
+    if (!navigator.geolocation) {
+      setLocationLoading(false);
+      return;
+    }
     navigator.geolocation.getCurrentPosition(
       async ({ coords }) => {
         try {
@@ -31,9 +35,13 @@ export default function DashboardShell({
           if (data.location) setCurrentLocation(data.location);
         } catch {
           // 위치 표시 생략
+        } finally {
+          setLocationLoading(false);
         }
       },
-      () => { /* 권한 거부 시 표시 생략 */ },
+      () => {
+        setLocationLoading(false);
+      },
       { timeout: 8000 },
     );
   }, []);
@@ -42,14 +50,25 @@ export default function DashboardShell({
     <div style={{ background: "var(--bg-base)", minHeight: "100vh", width: "100%", overflowX: "hidden" }}>
       <div style={{ maxWidth: 1400, margin: "0 auto", padding: "0 1rem 3rem", width: "100%", boxSizing: "border-box" }}>
         <Header />
-        {currentLocation && (
+        {locationLoading ? (
+          <div className="flex items-center gap-1.5 px-1 mb-3">
+            <div
+              className="w-3 h-3 rounded-full animate-pulse shrink-0"
+              style={{ background: "var(--border)" }}
+            />
+            <div
+              className="h-3 w-32 rounded animate-pulse"
+              style={{ background: "var(--border)" }}
+            />
+          </div>
+        ) : currentLocation ? (
           <div className="flex items-center gap-1.5 px-1 mb-3">
             <MapPin size={12} style={{ color: "var(--text-muted)" }} />
             <p className="text-xs" style={{ color: "var(--text-muted)" }}>
               {currentLocation}
             </p>
           </div>
-        )}
+        ) : null}
         <BentoGrid
           blog={<BlogWidget initialPosts={initialBlogPosts} />}
         />

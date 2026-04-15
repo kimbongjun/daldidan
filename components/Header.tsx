@@ -35,6 +35,7 @@ export default function Header() {
   // 인사말 편집
   const [customGreeting, setCustomGreeting] = useState<string>("");
   const [logoUrl, setLogoUrl] = useState<string>("");
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [editingGreeting, setEditingGreeting] = useState(false);
   const [greetingInput, setGreetingInput] = useState("");
 
@@ -60,7 +61,8 @@ export default function Header() {
         if (d.custom_greeting) setCustomGreeting(d.custom_greeting);
         if (d.logo_url) setLogoUrl(d.logo_url);
       })
-      .catch(() => null);
+      .catch(() => null)
+      .finally(() => setSettingsLoaded(true));
   }, []);
 
   // 유저 세션 감지
@@ -146,7 +148,13 @@ export default function Header() {
     <header className="flex items-center justify-between py-6 px-1">
       {/* ── 로고 + 인사말 ── */}
       <div className="flex items-center gap-3">
-        {logoUrl ? (
+        {/* 로고: 설정 로드 전 skeleton */}
+        {!settingsLoaded ? (
+          <div
+            className="w-10 h-10 rounded-xl shrink-0 animate-pulse"
+            style={{ background: "var(--border)" }}
+          />
+        ) : logoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={logoUrl}
@@ -164,8 +172,13 @@ export default function Header() {
         <div>
           <h1 className="text-xl font-black tracking-tight" style={{ color: "var(--text-primary)" }}>달디단</h1>
 
-          {/* 인사말 — 편집 모드 */}
-          {editingGreeting ? (
+          {/* 인사말: 설정 로드 전 skeleton */}
+          {!settingsLoaded ? (
+            <div
+              className="h-3 w-28 rounded animate-pulse mt-1"
+              style={{ background: "var(--border)" }}
+            />
+          ) : editingGreeting ? (
             <div className="flex items-center gap-1 mt-0.5">
               <input
                 ref={greetingInputRef}
@@ -198,7 +211,6 @@ export default function Header() {
             </div>
           ) : (
             <div className="flex items-center gap-1">
-              {/* now가 없으면 공백 렌더로 hydration mismatch 방지 */}
               <p
                 className="text-xs"
                 style={{ color: "var(--text-muted)" }}
