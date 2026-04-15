@@ -341,3 +341,32 @@ create trigger set_updated_at_profiles
 create trigger set_updated_at_blog_posts
   before update on public.blog_posts
   for each row execute procedure public.set_updated_at();
+
+
+-- ══════════════════════════════════════════════════════════════
+-- 11. 사이트 설정 (Site Settings)
+-- ══════════════════════════════════════════════════════════════
+create table if not exists public.site_settings (
+  key         text primary key,
+  value       text not null default '',
+  updated_at  timestamptz not null default now()
+);
+
+-- 기본값 삽입 (없을 때만)
+insert into public.site_settings (key, value)
+values
+  ('meta_title',       '달디단 — 일상의 편리함'),
+  ('meta_description', '날씨, 쇼핑, 영화, 여행, 가계부를 한 곳에서'),
+  ('meta_og_image',    ''),
+  ('logo_url',         ''),
+  ('custom_greeting',  '')
+on conflict (key) do nothing;
+
+-- RLS: 누구나 읽기 가능, 로그인 유저만 수정
+alter table public.site_settings enable row level security;
+create policy "site_settings_read" on public.site_settings for select using (true);
+create policy "site_settings_write" on public.site_settings for all using (auth.role() = 'authenticated');
+
+create trigger set_updated_at_site_settings
+  before update on public.site_settings
+  for each row execute procedure public.set_updated_at();

@@ -72,6 +72,9 @@ export default async function BlogDetailPage({ params }: { params: Promise<{ slu
               )}
               <p className="text-sm" style={{ color: "var(--text-primary)" }}>작성자: {post.authorName}</p>
               <p className="text-sm" style={{ color: "var(--text-primary)" }}>발행일: {formatBlogDate(post.publishedAt)}</p>
+              {post.updatedAt && (
+                <p className="text-sm" style={{ color: "var(--text-muted)" }}>수정일: {formatBlogDate(post.updatedAt)}</p>
+              )}
             </div>
 
             <div className="bento-card p-5 flex flex-col gap-3">

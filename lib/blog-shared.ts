@@ -9,6 +9,7 @@ export interface BlogPostSummary {
   thumbnailUrl: string;
   authorName: string;
   publishedAt: string;
+  updatedAt: string | null;
   viewCount: number;
   commentCount: number;
   latestCommentAt: string | null;

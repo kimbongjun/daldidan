@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Bell, BellOff, LogOut, Sparkles, User, Moon, Sun, UserCircle } from "lucide-react";
+import { Bell, BellOff, Check, LogOut, Pencil, Sparkles, Trash2, User, Moon, Sun, UserCircle, X } from "lucide-react";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 import { useThemeStore } from "@/store/useThemeStore";
@@ -17,27 +17,54 @@ import { signOut } from "@/lib/supabase/actions/auth";
 import type { AuthUser as SupabaseUser } from "@supabase/supabase-js";
 import Link from "next/link";
 
+function getDefaultGreeting(hour: number): string {
+  if (hour < 6)  return "새벽이에요";
+  if (hour < 12) return "좋은 아침이에요";
+  if (hour < 18) return "좋은 오후예요";
+  return "좋은 저녁이에요";
+}
+
 export default function Header() {
-  const [now, setNow] = useState(new Date());
+  // now를 null로 초기화해 SSR hydration 불일치 방지
+  const [now, setNow] = useState<Date | null>(null);
   const [user, setUser] = useState<SupabaseUser | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [notificationMenuOpen, setNotificationMenuOpen] = useState(false);
   const [permission, setPermission] = useState<NotificationPermission | "unsupported">("unsupported");
+
+  // 인사말 편집
+  const [customGreeting, setCustomGreeting] = useState<string>("");
+  const [editingGreeting, setEditingGreeting] = useState(false);
+  const [greetingInput, setGreetingInput] = useState("");
+
   const dropdownRef = useRef<HTMLDivElement>(null);
   const notificationRef = useRef<HTMLDivElement>(null);
+  const greetingInputRef = useRef<HTMLInputElement>(null);
+
   const { theme, toggle } = useThemeStore();
   const notificationEnabled = useNotificationStore((state) => state.enabled);
 
-  // 시계
+  // 시계 — 클라이언트에서만 시작
   useEffect(() => {
+    setNow(new Date());
     const id = setInterval(() => setNow(new Date()), 60000);
     return () => clearInterval(id);
+  }, []);
+
+  // 저장된 커스텀 인사말 로드 (site_settings API)
+  useEffect(() => {
+    fetch("/api/site-settings")
+      .then((r) => r.json())
+      .then((d: Record<string, string>) => {
+        if (d.custom_greeting) setCustomGreeting(d.custom_greeting);
+      })
+      .catch(() => null);
   }, []);
 
   // 유저 세션 감지
   useEffect(() => {
     const supabase = createClient();
-    supabase.auth.getUser().then(({ data }) => setUser(data.user));
+    supabase.auth.getUser().then(({ data }) => setUser(data.user ?? null));
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
       setUser(session?.user ?? null);
     });
@@ -62,14 +89,13 @@ export default function Header() {
     setPermission(getNativeNotificationPermission());
   }, []);
 
-  const hour = now.getHours();
-  const greeting =
-    hour < 6  ? "새벽이에요" :
-    hour < 12 ? "좋은 아침이에요" :
-    hour < 18 ? "좋은 오후예요" : "좋은 저녁이에요";
+  // 편집 모드 진입 시 input 포커스
+  useEffect(() => {
+    if (editingGreeting) greetingInputRef.current?.focus();
+  }, [editingGreeting]);
 
+  const greeting = customGreeting || (now ? getDefaultGreeting(now.getHours()) : "");
   const isLight = theme === "light";
-
   const avatarLetter = user?.email?.[0]?.toUpperCase() ?? "U";
   const notificationSupported = supportsNativeNotifications();
 
@@ -79,19 +105,44 @@ export default function Header() {
       setPermission(getNativeNotificationPermission());
       return;
     }
-
     const result = await enableNativeNotifications();
     if (!result.ok) {
       setPermission(getNativeNotificationPermission());
       return;
     }
-
     setPermission(getNativeNotificationPermission());
+  };
+
+  const startEditGreeting = () => {
+    setGreetingInput(customGreeting || (now ? getDefaultGreeting(now.getHours()) : ""));
+    setEditingGreeting(true);
+  };
+
+  const saveGreeting = async () => {
+    const trimmed = greetingInput.trim();
+    if (!trimmed) return;
+    setCustomGreeting(trimmed);
+    setEditingGreeting(false);
+    await fetch("/api/site-settings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ custom_greeting: trimmed }),
+    }).catch(() => null);
+  };
+
+  const deleteGreeting = async () => {
+    setCustomGreeting("");
+    setEditingGreeting(false);
+    await fetch("/api/site-settings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ custom_greeting: "" }),
+    }).catch(() => null);
   };
 
   return (
     <header className="flex items-center justify-between py-6 px-1">
-      {/* ── 로고 ── */}
+      {/* ── 로고 + 인사말 ── */}
       <div className="flex items-center gap-3">
         <div
           className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
@@ -101,18 +152,75 @@ export default function Header() {
         </div>
         <div>
           <h1 className="text-xl font-black tracking-tight" style={{ color: "var(--text-primary)" }}>달디단</h1>
-          <p className="text-xs" style={{ color: "var(--text-muted)" }}>{greeting} ✨</p>
+
+          {/* 인사말 — 편집 모드 */}
+          {editingGreeting ? (
+            <div className="flex items-center gap-1 mt-0.5">
+              <input
+                ref={greetingInputRef}
+                value={greetingInput}
+                onChange={(e) => setGreetingInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") saveGreeting();
+                  if (e.key === "Escape") setEditingGreeting(false);
+                }}
+                maxLength={40}
+                className="text-xs rounded-md px-2 py-0.5 outline-none"
+                style={{
+                  background: "var(--bg-card)",
+                  border: "1px solid var(--border)",
+                  color: "var(--text-primary)",
+                  width: 160,
+                }}
+              />
+              <button onClick={saveGreeting} title="저장" className="hover:opacity-70">
+                <Check size={13} style={{ color: "#10B981" }} />
+              </button>
+              <button onClick={() => setEditingGreeting(false)} title="취소" className="hover:opacity-70">
+                <X size={13} style={{ color: "var(--text-muted)" }} />
+              </button>
+              {customGreeting && (
+                <button onClick={deleteGreeting} title="초기화" className="hover:opacity-70">
+                  <Trash2 size={12} style={{ color: "#F43F5E" }} />
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center gap-1 group">
+              {/* now가 없으면 공백 렌더로 hydration mismatch 방지 */}
+              <p
+                className="text-xs"
+                style={{ color: "var(--text-muted)" }}
+                suppressHydrationWarning
+              >
+                {greeting ? `${greeting} ✨` : ""}
+              </p>
+              {user && (
+                <button
+                  onClick={startEditGreeting}
+                  title="인사말 편집"
+                  className="opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity"
+                >
+                  <Pencil size={11} style={{ color: "var(--text-muted)" }} />
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
       {/* ── 우측 컨트롤 ── */}
       <div className="flex items-center gap-2">
-        {/* 날짜/시간 */}
-        <div className="text-right hidden sm:block mr-2">
-          <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-            {format(now, "M월 d일 (E)", { locale: ko })}
-          </p>
-          <p className="text-xs" style={{ color: "var(--text-muted)" }}>{format(now, "HH:mm")}</p>
+        {/* 날짜/시간 — hydration mismatch 방지 */}
+        <div className="text-right hidden sm:block mr-2" suppressHydrationWarning>
+          {now && (
+            <>
+              <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                {format(now, "M월 d일 (E)", { locale: ko })}
+              </p>
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>{format(now, "HH:mm")}</p>
+            </>
+          )}
         </div>
 
         {/* 다크/라이트 토글 */}
@@ -135,31 +243,23 @@ export default function Header() {
 
         <div ref={notificationRef} style={{ position: "relative" }}>
           <button
-            onClick={() => setNotificationMenuOpen((value) => !value)}
+            onClick={() => setNotificationMenuOpen((v) => !v)}
             className="w-9 h-9 rounded-xl flex items-center justify-center transition-colors hover:opacity-80"
             style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
             aria-label="알림 설정"
           >
-            {notificationEnabled ? (
-              <Bell size={16} style={{ color: "#F59E0B" }} />
-            ) : (
-              <BellOff size={16} style={{ color: "var(--text-muted)" }} />
-            )}
+            {notificationEnabled
+              ? <Bell size={16} style={{ color: "#F59E0B" }} />
+              : <BellOff size={16} style={{ color: "var(--text-muted)" }} />
+            }
           </button>
 
           {notificationMenuOpen && (
             <div
               style={{
-                position: "absolute",
-                top: "calc(100% + 0.5rem)",
-                right: 0,
-                width: 250,
-                background: "var(--bg-card)",
-                border: "1px solid var(--border)",
-                borderRadius: "0.875rem",
-                boxShadow: "var(--shadow-card)",
-                overflow: "hidden",
-                zIndex: 50,
+                position: "absolute", top: "calc(100% + 0.5rem)", right: 0,
+                width: 250, background: "var(--bg-card)", border: "1px solid var(--border)",
+                borderRadius: "0.875rem", boxShadow: "var(--shadow-card)", overflow: "hidden", zIndex: 50,
               }}
             >
               <div style={{ padding: "0.9rem 1rem", borderBottom: "1px solid var(--border)" }}>
@@ -215,16 +315,9 @@ export default function Header() {
             {dropdownOpen && (
               <div
                 style={{
-                  position: "absolute",
-                  top: "calc(100% + 0.5rem)",
-                  right: 0,
-                  minWidth: 200,
-                  background: "var(--bg-card)",
-                  border: "1px solid var(--border)",
-                  borderRadius: "0.875rem",
-                  boxShadow: "var(--shadow-card)",
-                  overflow: "hidden",
-                  zIndex: 50,
+                  position: "absolute", top: "calc(100% + 0.5rem)", right: 0,
+                  minWidth: 200, background: "var(--bg-card)", border: "1px solid var(--border)",
+                  borderRadius: "0.875rem", boxShadow: "var(--shadow-card)", overflow: "hidden", zIndex: 50,
                 }}
               >
                 <div style={{ padding: "0.75rem 1rem", borderBottom: "1px solid var(--border)" }}>
@@ -237,14 +330,8 @@ export default function Header() {
                   href="/mypage"
                   onClick={() => setDropdownOpen(false)}
                   style={{
-                    width: "100%",
-                    padding: "0.75rem 1rem",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.5rem",
-                    fontSize: "0.85rem",
-                    color: "var(--text-primary)",
-                    borderBottom: "1px solid var(--border)",
+                    width: "100%", padding: "0.75rem 1rem", display: "flex", alignItems: "center",
+                    gap: "0.5rem", fontSize: "0.85rem", color: "var(--text-primary)", borderBottom: "1px solid var(--border)",
                   }}
                 >
                   <UserCircle size={14} />
@@ -254,17 +341,9 @@ export default function Header() {
                   <button
                     type="submit"
                     style={{
-                      width: "100%",
-                      padding: "0.75rem 1rem",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "0.5rem",
-                      fontSize: "0.85rem",
-                      color: "#F43F5E",
-                      background: "transparent",
-                      border: "none",
-                      cursor: "pointer",
-                      textAlign: "left",
+                      width: "100%", padding: "0.75rem 1rem", display: "flex", alignItems: "center",
+                      gap: "0.5rem", fontSize: "0.85rem", color: "#F43F5E",
+                      background: "transparent", border: "none", cursor: "pointer", textAlign: "left",
                     }}
                   >
                     <LogOut size={14} />
