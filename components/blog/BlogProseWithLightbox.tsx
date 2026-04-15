@@ -26,17 +26,45 @@ export default function BlogProseWithLightbox({ contentHtml }: Props) {
     const images = Array.from(container.querySelectorAll<HTMLImageElement>('img'));
     setSlides(images.map((img) => ({ src: img.src, alt: img.alt || undefined })));
 
-    const handlers = images.map((img, index) => {
-      img.style.cursor = 'pointer'; // iOS Safari: cursor:pointer 없으면 touch→click 미발생
-      const handler = () => setLightboxIndex(index);
-      img.addEventListener('click', handler);
-      return handler;
+    images.forEach((img) => {
+      img.style.cursor = 'pointer';
     });
 
+    // touchmove 감지 — 스와이프(스크롤)와 탭을 구분
+    let touchMoved = false;
+    const onTouchStart = () => { touchMoved = false; };
+    const onTouchMove = () => { touchMoved = true; };
+
+    // iOS/Android: touchend로 즉각 처리 (300ms 클릭 딜레이 없음)
+    // <a> 래퍼가 있어도 preventDefault()로 앵커 이동 차단
+    const onTouchEnd = (e: TouchEvent) => {
+      if (touchMoved) return;
+      const target = e.target as HTMLElement;
+      if (target.tagName !== 'IMG') return;
+      e.preventDefault();
+      const index = images.indexOf(target as HTMLImageElement);
+      if (index !== -1) setLightboxIndex(index);
+    };
+
+    // 데스크톱 fallback
+    const onClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName !== 'IMG') return;
+      e.preventDefault();
+      const index = images.indexOf(target as HTMLImageElement);
+      if (index !== -1) setLightboxIndex(index);
+    };
+
+    container.addEventListener('touchstart', onTouchStart, { passive: true });
+    container.addEventListener('touchmove', onTouchMove, { passive: true });
+    container.addEventListener('touchend', onTouchEnd);
+    container.addEventListener('click', onClick);
+
     return () => {
-      images.forEach((img, index) => {
-        img.removeEventListener('click', handlers[index]);
-      });
+      container.removeEventListener('touchstart', onTouchStart);
+      container.removeEventListener('touchmove', onTouchMove);
+      container.removeEventListener('touchend', onTouchEnd);
+      container.removeEventListener('click', onClick);
     };
   }, [contentHtml]);
 
