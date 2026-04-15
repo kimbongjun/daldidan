@@ -131,3 +131,10 @@ npm run lint     # ESLint 검사
 - 모든 언어는 꺠지지 않게 `UTF-8` 언어셋을 지킨다.
 - `"use client"` 없이 Zustand 훅을 쓰면 SSR prerender 오류가 발생한다.
 - 업데이트가 완료되면 타입,lint 오류 검증 후 `npm run dev` 와 `git push`를 진행한다.
+
+## 업데이트 사항
+- 블로그 위젯 : 가계부 위젯과 같이 로그인을 해야 내용 확인 및 접근 가능 하도록 수정.
+- 블로그 수정일 추가 : 블로그 글 편집 시 편집한 일자에 대한 "수정일"을 발행일 하단에 표기.
+- 옵션 메뉴 생성: 마이페이지 하단에 옵션 메뉴 생성, 옵션 메뉴를 통해 logo(이미지 업로드 방식), meta tag (title, description, og:image) 등 편집 가능하게 하며 해당 기능은 사이트 전역에 적용되도록 연동.
+- 시간대별 인사말 수동 편집 기능 추가 : h1.tracking-tight 태그 하단 인사말 문구를 수동 편집 가능하게끔 edit 아이콘 메뉴를 우측에 배치하며 수동 편집 기능 적용하며, 해당 기능은 편집 이후 영구 적용되도록 할 것. 편집 내용 삭제 기능도 추가하여 기존 편집을 삭제하면 원래의 시간대별 인사말로 업데이트.
+- 콘솔 에러, 경고 등 해결 : api를 통한 썸네일 연동 시 이미지 mixed content 이슈 해결과 Uncaught Error: Minified React error #418; visit https://react.dev/errors/418?args[]=text&args[]= for the full message or use the non-minified dev environment for full errors and additional helpful warnings. 관련 에러 해결할 것
