@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { ensureUniqueBlogSlug, extractFirstImageFromHtml, getPublishedBlogPosts } from "@/lib/blog";
 import { extractDescriptionFromHtml } from "@/lib/blog-shared";
 import { createClient } from "@/lib/supabase/server";
+import { sendBlogPublishNotification } from "@/lib/resend";
 
 export async function GET(request: NextRequest) {
   const limitParam = Number(request.nextUrl.searchParams.get("limit") ?? "9");
@@ -73,6 +74,17 @@ export async function POST(request: NextRequest) {
   revalidatePath("/");
   revalidatePath("/blog");
   revalidatePath(`/blog/${slug}`);
+
+  // 가입 유저 전체에게 이메일 알림 발송 (비동기 — 응답 지연 없음)
+  sendBlogPublishNotification({
+    title,
+    description,
+    slug,
+    authorName,
+    thumbnailUrl: resolvedThumbnail,
+  }).catch(() => {
+    // 이메일 발송 실패는 글 발행 결과에 영향을 주지 않음
+  });
 
   return NextResponse.json({ slug }, { status: 201 });
 }
