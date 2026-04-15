@@ -197,7 +197,7 @@ export default function Header() {
               )}
             </div>
           ) : (
-            <div className="flex items-center gap-1 group">
+            <div className="flex items-center gap-1">
               {/* now가 없으면 공백 렌더로 hydration mismatch 방지 */}
               <p
                 className="text-xs"
@@ -210,7 +210,7 @@ export default function Header() {
                 <button
                   onClick={startEditGreeting}
                   title="인사말 편집"
-                  className="opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity"
+                  className="opacity-40 hover:opacity-80 active:opacity-100 transition-opacity"
                 >
                   <Pencil size={11} style={{ color: "var(--text-muted)" }} />
                 </button>
