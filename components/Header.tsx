@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Bell, BellOff, Check, LogOut, Pencil, Sparkles, Trash2, User, Moon, Sun, UserCircle, X } from "lucide-react";
+import { Bell, BellOff, Check, LogOut, MapPin, Pencil, Sparkles, Trash2, User, Moon, Sun, UserCircle, X } from "lucide-react";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 import { useThemeStore } from "@/store/useThemeStore";
@@ -32,6 +32,9 @@ export default function Header() {
   const [notificationMenuOpen, setNotificationMenuOpen] = useState(false);
   const [permission, setPermission] = useState<NotificationPermission | "unsupported">("unsupported");
 
+  // 현재 위치
+  const [currentLocation, setCurrentLocation] = useState<string>("");
+
   // 인사말 편집
   const [customGreeting, setCustomGreeting] = useState<string>("");
   const [logoUrl, setLogoUrl] = useState<string>("");
@@ -50,6 +53,26 @@ export default function Header() {
     setNow(new Date());
     const id = setInterval(() => setNow(new Date()), 60000);
     return () => clearInterval(id);
+  }, []);
+
+  // 현재 위치 — Geolocation API + 역지오코딩
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      async ({ coords }) => {
+        try {
+          const res = await fetch(
+            `/api/geocode/reverse?lat=${coords.latitude}&lng=${coords.longitude}`,
+          );
+          const data = await res.json() as { location?: string };
+          if (data.location) setCurrentLocation(data.location);
+        } catch {
+          // 위치 표시 생략
+        }
+      },
+      () => { /* 권한 거부 시 표시 생략 */ },
+      { timeout: 8000 },
+    );
   }, []);
 
   // 저장된 커스텀 인사말 + 로고 로드 (site_settings API)
@@ -163,6 +186,16 @@ export default function Header() {
         )}
         <div>
           <h1 className="text-xl font-black tracking-tight" style={{ color: "var(--text-primary)" }}>달디단</h1>
+
+          {/* 현재 위치 */}
+          {currentLocation && (
+            <div className="flex items-center gap-1 mt-0.5">
+              <MapPin size={10} style={{ color: "var(--text-muted)" }} />
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                {currentLocation}
+              </p>
+            </div>
+          )}
 
           {/* 인사말 — 편집 모드 */}
           {editingGreeting ? (
