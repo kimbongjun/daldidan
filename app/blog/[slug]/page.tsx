@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
@@ -8,6 +9,49 @@ import { canEditBlogPost, getBlogPostBySlug } from "@/lib/blog";
 import { formatBlogDate } from "@/lib/blog-shared";
 
 const ACCENT = "#EA580C";
+
+async function fetchDefaultOgImage(): Promise<string | undefined> {
+  try {
+    const { createAdminClient } = await import("@/lib/supabase/server");
+    const admin = createAdminClient();
+    const { data } = await admin
+      .from("site_settings")
+      .select("value")
+      .eq("key", "meta_og_image")
+      .maybeSingle();
+    return data?.value || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params;
+  const post = await getBlogPostBySlug(slug);
+
+  if (!post) return {};
+
+  const title = post.title;
+  const description = post.description;
+  // thumbnailUrl은 lib/blog.ts mapSummary에서 본문 첫 이미지를 fallback으로 자동 설정함
+  const ogImage = post.thumbnailUrl || (await fetchDefaultOgImage());
+
+  return {
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      ...(ogImage ? { images: [{ url: ogImage }] } : {}),
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      ...(ogImage ? { images: [ogImage] } : {}),
+    },
+  };
+}
 
 export default async function BlogDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
