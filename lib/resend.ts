@@ -6,6 +6,38 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 const FROM_EMAIL =
   process.env.RESEND_FROM_EMAIL ?? "달디단 <noreply@daldidan.com>";
 
+/**
+ * Resend가 거부하는 도메인 목록.
+ * example.com 등 RFC 2606 예약 도메인과 일반적인 테스트 도메인을 포함합니다.
+ * 배치 내 하나라도 포함되면 배치 전체가 실패하므로 사전 필터링이 필수입니다.
+ */
+const BLOCKED_DOMAINS = new Set([
+  "example.com",
+  "example.net",
+  "example.org",
+  "test.com",
+  "test.net",
+  "test.org",
+  "localhost",
+  "invalid",
+  "mailinator.com",
+  "guerrillamail.com",
+  "tempmail.com",
+  "throwaway.email",
+  "sharklasers.com",
+  "guerrillamailblock.com",
+  "trashmail.com",
+  "yopmail.com",
+]);
+
+function isDeliverableEmail(email: string): boolean {
+  const atIdx = email.lastIndexOf("@");
+  if (atIdx < 1) return false;
+  const domain = email.slice(atIdx + 1).toLowerCase().trim();
+  if (!domain || domain.indexOf(".") === -1) return false;
+  return !BLOCKED_DOMAINS.has(domain);
+}
+
 /** 가입 유저 이메일 목록을 Supabase Admin API로 조회합니다. */
 async function getRegisteredEmails(): Promise<string[]> {
   const admin = createAdminClient();
@@ -23,7 +55,9 @@ async function getRegisteredEmails(): Promise<string[]> {
     if (error || !data) break;
 
     for (const u of data.users) {
-      if (u.email) emails.push(u.email);
+      if (u.email && isDeliverableEmail(u.email)) {
+        emails.push(u.email);
+      }
     }
 
     if (data.users.length < perPage) break;
@@ -40,28 +74,30 @@ export async function sendBlogPublishNotification(params: {
   slug: string;
   authorName: string;
   thumbnailUrl?: string | null;
-}): Promise<{ sent: number; failed: number }> {
+}): Promise<{ sent: number; failed: number; skipped: number }> {
   if (!process.env.RESEND_API_KEY) {
-    return { sent: 0, failed: 0 };
+    return { sent: 0, failed: 0, skipped: 0 };
   }
 
   const { title, description, slug, authorName, thumbnailUrl } = params;
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ?? "";
   const postUrl = `${siteUrl}/blog/${encodeURIComponent(slug)}`;
 
-  const emails = await getRegisteredEmails();
-  if (emails.length === 0) return { sent: 0, failed: 0 };
+  const allEmails = await getRegisteredEmails();
+  if (allEmails.length === 0) return { sent: 0, failed: 0, skipped: 0 };
 
   const html = buildEmailHtml({ title, description, postUrl, authorName, thumbnailUrl });
   const text = buildEmailText({ title, description, postUrl, authorName });
 
   let sent = 0;
   let failed = 0;
+  // getRegisteredEmails에서 이미 필터링하므로 skipped는 0 (향후 확장 여지)
+  const skipped = 0;
 
-  // Resend 무료 티어 배치 한도: 최대 100개/요청 — 100개씩 묶어 발송
+  // Resend 배치 한도: 최대 100개/요청 — 100개씩 묶어 발송
   const BATCH_SIZE = 100;
-  for (let i = 0; i < emails.length; i += BATCH_SIZE) {
-    const batch = emails.slice(i, i + BATCH_SIZE);
+  for (let i = 0; i < allEmails.length; i += BATCH_SIZE) {
+    const batch = allEmails.slice(i, i + BATCH_SIZE);
     const messages = batch.map((to) => ({
       from: FROM_EMAIL,
       to,
@@ -70,15 +106,35 @@ export async function sendBlogPublishNotification(params: {
       text,
     }));
 
-    const { error } = await resend.batch.send(messages);
-    if (error) {
+    try {
+      const { data, error } = await resend.batch.send(messages);
+
+      if (error) {
+        console.error("[resend] 배치 발송 오류:", error);
+        failed += batch.length;
+        continue;
+      }
+
+      // 개별 메시지 결과 확인 (data.data 배열 — id 없으면 해당 주소 발송 실패)
+      if (data?.data) {
+        for (const result of data.data) {
+          if (result?.id) {
+            sent++;
+          } else {
+            failed++;
+          }
+        }
+      } else {
+        // data가 없으면 전체 실패로 처리
+        failed += batch.length;
+      }
+    } catch (err) {
+      console.error("[resend] 배치 발송 예외:", err);
       failed += batch.length;
-    } else {
-      sent += batch.length;
     }
   }
 
-  return { sent, failed };
+  return { sent, failed, skipped };
 }
 
 function buildEmailHtml(params: {
