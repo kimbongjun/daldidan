@@ -5,7 +5,6 @@ import PageHeader from "@/components/PageHeader";
 import BlogComments from "@/components/blog/BlogComments";
 import BlogShareBar from "@/components/blog/BlogShareBar";
 import BlogViewCounter from "@/components/blog/BlogViewCounter";
-import BlogProseWithLightbox from "@/components/blog/BlogProseWithLightbox";
 import { canEditBlogPost, getBlogPostBySlug } from "@/lib/blog";
 import { formatBlogDate } from "@/lib/blog-shared";
 
@@ -90,7 +89,7 @@ export default async function BlogDetailPage({ params }: { params: Promise<{ slu
           <div className="flex flex-col gap-6">
             <section className="bento-card overflow-hidden">              
               <div className="p-6 sm:p-8">
-                <BlogProseWithLightbox contentHtml={post.contentHtml} />
+                <div className="blog-prose" dangerouslySetInnerHTML={{ __html: post.contentHtml }} />
               </div>
             </section>
 
