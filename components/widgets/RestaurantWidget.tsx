@@ -59,7 +59,7 @@ function SkeletonCard() {
   return (
     <div
       className="shrink-0 rounded-xl overflow-hidden animate-pulse"
-      style={{ width: 160, minWidth: 160, background: "rgba(255,255,255,0.06)" }}
+      style={{ width:  300, minWidth: 300, background: "rgba(255,255,255,0.06)" }}
     />
   );
 }
@@ -221,7 +221,7 @@ function RestaurantCard({ restaurant }: { restaurant: NearbyRestaurant }) {
       onClick={handleClick}
       onKeyDown={(e) => e.key === "Enter" && handleClick()}
       className="relative shrink-0 rounded-xl overflow-hidden cursor-pointer group"
-      style={{ width: 160, minWidth: 160, height: "100%" }}
+      style={{ width:  300, minWidth: 300, height: "100%" }}
     >
       {/* 배경: 실제 사진 or 그라디언트 + 이모지 */}
       <div
@@ -233,7 +233,7 @@ function RestaurantCard({ restaurant }: { restaurant: NearbyRestaurant }) {
             src={`/api/places/photo?name=${encodeURIComponent(restaurant.photoRef)}`}
             alt={restaurant.name}
             fill
-            sizes="160px"
+            sizes="300px"
             unoptimized
             className="object-cover transition-transform duration-300 group-hover:scale-105"
             onError={() => setImgError(true)}
