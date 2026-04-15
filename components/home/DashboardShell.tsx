@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { MapPin } from "lucide-react";
 import Footer from "@/components/Footer";
 import Header from "@/components/Header";
 import BudgetWidget from "@/components/widgets/BudgetWidget";
@@ -15,10 +17,39 @@ type DashboardShellProps = {
 export default function DashboardShell({
   initialBlogPosts,
 }: DashboardShellProps) {
+  const [currentLocation, setCurrentLocation] = useState<string>("");
+
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      async ({ coords }) => {
+        try {
+          const res = await fetch(
+            `/api/geocode/reverse?lat=${coords.latitude}&lng=${coords.longitude}`,
+          );
+          const data = await res.json() as { location?: string };
+          if (data.location) setCurrentLocation(data.location);
+        } catch {
+          // 위치 표시 생략
+        }
+      },
+      () => { /* 권한 거부 시 표시 생략 */ },
+      { timeout: 8000 },
+    );
+  }, []);
+
   return (
     <div style={{ background: "var(--bg-base)", minHeight: "100vh", width: "100%", overflowX: "hidden" }}>
       <div style={{ maxWidth: 1400, margin: "0 auto", padding: "0 1rem 3rem", width: "100%", boxSizing: "border-box" }}>
         <Header />
+        {currentLocation && (
+          <div className="flex items-center gap-1.5 px-1 mb-3">
+            <MapPin size={12} style={{ color: "var(--text-muted)" }} />
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+              {currentLocation}
+            </p>
+          </div>
+        )}
         <BentoGrid
           blog={<BlogWidget initialPosts={initialBlogPosts} />}
         />
