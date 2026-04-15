@@ -295,6 +295,15 @@ input[type="reset"]:not(:disabled):active,
   margin: 1rem 0;
 }
 
+.blog-prose img {
+  cursor: zoom-in;
+  transition: opacity 0.15s ease;
+}
+
+.blog-prose img:hover {
+  opacity: 0.88;
+}
+
 .blog-embed-block {
   position: relative;
   overflow: hidden;
