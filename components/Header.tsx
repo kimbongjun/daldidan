@@ -1,21 +1,36 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Bell, BellOff, Check, LogOut, Pencil, Settings, Sparkles, Trash2, User, Moon, Sun, UserCircle, X } from "lucide-react";
+import { Bell, BellOff, Check, LoaderCircle, LogOut, Pencil, Settings, Share, Sparkles, Trash2, User, Moon, Sun, UserCircle, X } from "lucide-react";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 import { useThemeStore } from "@/store/useThemeStore";
-import { useNotificationStore } from "@/store/useNotificationStore";
 import { createClient } from "@/lib/supabase/client";
-import {
-  disableNativeNotifications,
-  enableNativeNotifications,
-  getNativeNotificationPermission,
-  supportsNativeNotifications,
-} from "@/lib/notifications";
+import { getFirebaseMessaging } from "@/lib/firebase-client";
+import { getToken, deleteToken } from "firebase/messaging";
 import { signOut } from "@/lib/supabase/actions/auth";
 import type { AuthUser as SupabaseUser } from "@supabase/supabase-js";
 import Link from "next/link";
+
+// ── 디바이스 유틸 ──────────────────────────────────────────────
+function isIOS(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return /iPad|iPhone|iPod/.test(navigator.userAgent);
+}
+function isStandalone(): boolean {
+  if (typeof window === "undefined") return false;
+  return (
+    window.matchMedia("(display-mode: standalone)").matches ||
+    (window.navigator as { standalone?: boolean }).standalone === true
+  );
+}
+function detectDevice(): "ios" | "android" | "web" {
+  if (isIOS()) return "ios";
+  if (typeof navigator !== "undefined" && /Android/.test(navigator.userAgent)) return "android";
+  return "web";
+}
+
+const PUSH_STORAGE_KEY = "daldidan-push";
 
 function getDefaultGreeting(hour: number): string {
   if (hour < 6)  return "새벽이에요";
@@ -30,7 +45,12 @@ export default function Header() {
   const [user, setUser] = useState<SupabaseUser | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [notificationMenuOpen, setNotificationMenuOpen] = useState(false);
-  const [permission, setPermission] = useState<NotificationPermission | "unsupported">("unsupported");
+
+  // FCM 구독 상태
+  type PushStatus = "idle" | "loading" | "subscribed" | "error";
+  const [pushStatus, setPushStatus] = useState<PushStatus>("idle");
+  const [pushToken, setPushToken] = useState<string | null>(null);
+  const [pushErrorMsg, setPushErrorMsg] = useState("");
 
   // 인사말 편집
   const [customGreeting, setCustomGreeting] = useState<string>("");
@@ -44,7 +64,6 @@ export default function Header() {
   const greetingInputRef = useRef<HTMLInputElement>(null);
 
   const { theme, toggle } = useThemeStore();
-  const notificationEnabled = useNotificationStore((state) => state.enabled);
 
   // 시계 — 클라이언트에서만 시작
   useEffect(() => {
@@ -89,8 +108,26 @@ export default function Header() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  // localStorage에서 FCM 구독 상태 복원
   useEffect(() => {
-    setPermission(getNativeNotificationPermission());
+    try {
+      const raw = localStorage.getItem(PUSH_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as { status?: string; token?: string };
+      if (parsed.status === "subscribed" && parsed.token) {
+        setPushStatus("subscribed");
+        setPushToken(parsed.token);
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  // SW 사전 등록 — 구독 버튼 클릭 전에 SW를 활성화해 iOS APNS 연결 지연 최소화
+  useEffect(() => {
+    if (!process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID) return;
+    if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
+    navigator.serviceWorker
+      .register("/firebase-messaging-sw.js", { scope: "/" })
+      .catch(() => { /* 사전 등록 실패는 무시 */ });
   }, []);
 
   // 편집 모드 진입 시 input 포커스
@@ -101,20 +138,84 @@ export default function Header() {
   const greeting = customGreeting || (now ? getDefaultGreeting(now.getHours()) : "");
   const isLight = theme === "light";
   const avatarLetter = user?.email?.[0]?.toUpperCase() ?? "U";
-  const notificationSupported = supportsNativeNotifications();
+  const firebaseConfigured = Boolean(process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID);
+  const pushSupported = firebaseConfigured && typeof window !== "undefined" && "Notification" in window && "serviceWorker" in navigator;
+  // iOS Safari + 브라우저 모드에서는 PWA 홈 화면 추가 후에만 구독 가능
+  const iosNotStandalone = isIOS() && !isStandalone();
 
-  const handleNotificationToggle = async () => {
-    if (notificationEnabled) {
-      disableNativeNotifications();
-      setPermission(getNativeNotificationPermission());
-      return;
+  const handlePushSubscribe = async () => {
+    setPushStatus("loading");
+    setPushErrorMsg("");
+    try {
+      const messaging = await getFirebaseMessaging();
+      if (!messaging || !process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY) {
+        setPushErrorMsg("Firebase가 설정되지 않았습니다.");
+        setPushStatus("error");
+        return;
+      }
+
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        setPushStatus("idle");
+        return;
+      }
+
+      // SW 등록 후 반드시 .ready로 activated 대기 (iOS 포함 모든 환경)
+      await navigator.serviceWorker.register("/firebase-messaging-sw.js", { scope: "/" });
+      const swReg = await navigator.serviceWorker.ready;
+
+      // iOS에서 APNS 연결이 느릴 수 있어 15초 타임아웃 적용
+      const token = await Promise.race<string | null>([
+        getToken(messaging, {
+          vapidKey: process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY,
+          serviceWorkerRegistration: swReg,
+        }),
+        new Promise<null>((_, rej) => setTimeout(() => rej(new Error("timeout")), 15000)),
+      ]);
+
+      if (!token) {
+        setPushErrorMsg("토큰을 가져오지 못했습니다. 잠시 후 다시 시도해주세요.");
+        setPushStatus("error");
+        return;
+      }
+
+      const res = await fetch("/api/push/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, deviceType: detectDevice() }),
+      });
+      if (!res.ok) {
+        setPushErrorMsg("구독 정보 저장에 실패했습니다.");
+        setPushStatus("error");
+        return;
+      }
+
+      localStorage.setItem(PUSH_STORAGE_KEY, JSON.stringify({ status: "subscribed", token }));
+      setPushToken(token);
+      setPushStatus("subscribed");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      setPushErrorMsg(msg === "timeout" ? "시간 초과. 잠시 후 다시 시도해주세요." : "알림 설정 중 오류가 발생했습니다.");
+      setPushStatus("error");
+      console.error("[push] subscribe error:", err);
     }
-    const result = await enableNativeNotifications();
-    if (!result.ok) {
-      setPermission(getNativeNotificationPermission());
-      return;
+  };
+
+  const handlePushUnsubscribe = async () => {
+    try {
+      const messaging = await getFirebaseMessaging();
+      if (messaging) await deleteToken(messaging).catch(() => {});
+    } catch { /* ignore */ }
+    if (pushToken) {
+      fetch("/api/push/subscribe", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: pushToken }),
+      }).catch(() => {});
     }
-    setPermission(getNativeNotificationPermission());
+    localStorage.removeItem(PUSH_STORAGE_KEY);
+    setPushToken(null);
+    setPushStatus("idle");
   };
 
   const startEditGreeting = () => {
@@ -264,64 +365,102 @@ export default function Header() {
           }
         </button>
 
-        <div ref={notificationRef} style={{ position: "relative" }}>
-          <button
-            onClick={() => setNotificationMenuOpen((v) => !v)}
-            className="w-9 h-9 rounded-xl flex items-center justify-center transition-colors hover:opacity-80"
-            style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
-            aria-label="알림 설정"
-          >
-            {notificationEnabled
-              ? <Bell size={16} style={{ color: "#F59E0B" }} />
-              : <BellOff size={16} style={{ color: "var(--text-muted)" }} />
-            }
-          </button>
-
-          {notificationMenuOpen && (
-            <div
-              style={{
-                position: "absolute", top: "calc(100% + 0.5rem)", right: 0,
-                width: 250, background: "var(--bg-card)", border: "1px solid var(--border)",
-                borderRadius: "0.875rem", boxShadow: "var(--shadow-card)", overflow: "hidden", zIndex: 50,
-              }}
+        {firebaseConfigured && (
+          <div ref={notificationRef} style={{ position: "relative" }}>
+            <button
+              onClick={() => setNotificationMenuOpen((v) => !v)}
+              className="w-9 h-9 rounded-xl flex items-center justify-center transition-colors hover:opacity-80"
+              style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+              aria-label="푸시 알림 설정"
             >
-              <div style={{ padding: "0.9rem 1rem", borderBottom: "1px solid var(--border)" }}>
-                <p style={{ fontSize: "0.8rem", fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>콘텐츠 생성 알림</p>
-                <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: "0.35rem 0 0" }}>
-                  가계부와 블로그를 작성하면 브라우저 네이티브 알림을 보냅니다.
-                </p>
-              </div>
-              <div style={{ padding: "0.9rem 1rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem" }}>
-                  <div>
-                    <p style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--text-primary)", margin: 0 }}>
-                      {notificationEnabled ? "알림 허용됨" : "알림 비허용"}
+              {pushStatus === "loading"
+                ? <LoaderCircle size={16} style={{ color: "#F59E0B", animation: "spin 0.8s linear infinite" }} />
+                : pushStatus === "subscribed"
+                  ? <Bell size={16} style={{ color: "#F59E0B" }} />
+                  : <BellOff size={16} style={{ color: "var(--text-muted)" }} />
+              }
+              <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+            </button>
+
+            {notificationMenuOpen && (
+              <div
+                style={{
+                  position: "absolute", top: "calc(100% + 0.5rem)", right: 0,
+                  width: 260, background: "var(--bg-card)", border: "1px solid var(--border)",
+                  borderRadius: "0.875rem", boxShadow: "var(--shadow-card)", overflow: "hidden", zIndex: 50,
+                }}
+              >
+                <div style={{ padding: "0.9rem 1rem", borderBottom: "1px solid var(--border)" }}>
+                  <p style={{ fontSize: "0.8rem", fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>새 글 알림</p>
+                  <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: "0.35rem 0 0" }}>
+                    블로그 새 글 발행 시 푸시 알림을 받습니다.
+                  </p>
+                </div>
+
+                <div style={{ padding: "0.9rem 1rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                  {/* iOS + 브라우저 모드 안내 */}
+                  {iosNotStandalone ? (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+                      <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", margin: 0, lineHeight: 1.5 }}>
+                        iPhone에서는 홈 화면에 추가한 뒤 이용할 수 있습니다.
+                      </p>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem" }}>
+                        {[
+                          { icon: <Share size={13} color="#6366F1" />, text: "Safari 하단 공유(□↑) 탭" },
+                          { icon: <span style={{ fontSize: 13, color: "#6366F1" }}>+</span>, text: "홈 화면에 추가 선택" },
+                          { icon: <Bell size={13} color="#6366F1" />, text: "앱 아이콘으로 열어 알림 허용" },
+                        ].map(({ icon, text }, i) => (
+                          <div key={i} style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                            <div style={{ width: 24, height: 24, borderRadius: "50%", background: "rgba(99,102,241,0.12)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                              {icon}
+                            </div>
+                            <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: 0 }}>{text}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : !pushSupported ? (
+                    <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", margin: 0 }}>
+                      현재 브라우저는 푸시 알림을 지원하지 않습니다.
                     </p>
-                    <p style={{ fontSize: "0.72rem", color: "var(--text-muted)", margin: "0.25rem 0 0" }}>
-                      {!notificationSupported
-                        ? "현재 브라우저는 알림을 지원하지 않습니다."
-                        : permission === "denied"
-                          ? "브라우저에서 차단되어 있어 브라우저 설정에서 허용이 필요합니다."
-                          : "필요할 때 언제든 on/off 할 수 있습니다."}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleNotificationToggle}
-                    disabled={!notificationSupported || permission === "denied"}
-                    className="px-3 py-2 rounded-lg text-xs font-semibold transition-opacity disabled:opacity-40"
-                    style={{
-                      background: notificationEnabled ? "rgba(244,63,94,0.12)" : "rgba(245,158,11,0.16)",
-                      color: notificationEnabled ? "#F43F5E" : "#F59E0B",
-                    }}
-                  >
-                    {notificationEnabled ? "끄기" : "켜기"}
-                  </button>
+                  ) : (
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem" }}>
+                      <div>
+                        <p style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--text-primary)", margin: 0 }}>
+                          {pushStatus === "subscribed" ? "구독 중" : pushStatus === "loading" ? "처리 중…" : "구독 안 됨"}
+                        </p>
+                        {pushStatus === "error" && (
+                          <p style={{ fontSize: "0.72rem", color: "#F43F5E", margin: "0.25rem 0 0" }}>{pushErrorMsg}</p>
+                        )}
+                        {pushStatus === "idle" && (
+                          <p style={{ fontSize: "0.72rem", color: "var(--text-muted)", margin: "0.25rem 0 0" }}>
+                            {typeof window !== "undefined" && Notification.permission === "denied"
+                              ? "브라우저에서 차단됨 — 브라우저 설정에서 허용하세요."
+                              : "구독하면 새 글 발행 시 바로 알림을 받습니다."}
+                          </p>
+                        )}
+                      </div>
+                      {pushStatus !== "loading" && (
+                        <button
+                          type="button"
+                          onClick={pushStatus === "subscribed" ? handlePushUnsubscribe : handlePushSubscribe}
+                          disabled={typeof window !== "undefined" && Notification.permission === "denied" && pushStatus !== "subscribed"}
+                          className="px-3 py-2 rounded-lg text-xs font-semibold transition-opacity disabled:opacity-40 shrink-0"
+                          style={{
+                            background: pushStatus === "subscribed" ? "rgba(244,63,94,0.12)" : "rgba(245,158,11,0.16)",
+                            color: pushStatus === "subscribed" ? "#F43F5E" : "#F59E0B",
+                          }}
+                        >
+                          {pushStatus === "subscribed" ? "해지" : "구독"}
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
 
         {/* 유저 아이콘 */}
         {user ? (

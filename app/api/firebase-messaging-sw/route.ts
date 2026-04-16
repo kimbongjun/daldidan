@@ -19,6 +19,16 @@ export async function GET() {
 importScripts('https://www.gstatic.com/firebasejs/10.14.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.14.0/firebase-messaging-compat.js');
 
+// SW 수명 주기: 새 버전이 있으면 waiting 없이 즉시 활성화
+// iOS에서 SW가 "waiting" 상태에 걸려 토큰 수집이 안 되는 문제 해결
+self.addEventListener('install', function(event) {
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', function(event) {
+  event.waitUntil(clients.claim());
+});
+
 firebase.initializeApp(${config});
 
 const messaging = firebase.messaging();
@@ -42,16 +52,20 @@ messaging.onBackgroundMessage(function(payload) {
 // 알림 클릭 → 해당 URL로 이동
 self.addEventListener('notificationclick', function(event) {
   event.notification.close();
-  const url = event.notification.data?.url ?? '/blog';
+  const targetUrl = event.notification.data?.url ?? '/blog';
 
   event.waitUntil(
     clients
       .matchAll({ type: 'window', includeUncontrolled: true })
       .then(function(clientList) {
+        // 이미 해당 URL을 보고 있는 창이 있으면 포커스
         for (const client of clientList) {
-          if ('focus' in client) return client.focus();
+          if (client.url.endsWith(targetUrl) && 'focus' in client) {
+            return client.focus();
+          }
         }
-        if (clients.openWindow) return clients.openWindow(url);
+        // 없으면 새 창/탭으로 열기
+        if (clients.openWindow) return clients.openWindow(targetUrl);
       })
   );
 });

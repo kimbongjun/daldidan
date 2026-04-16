@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 import "./globals.css";
 import ThemeProvider from "@/components/ThemeProvider";
-import PushSubscriptionModal from "@/components/PushSubscriptionModal";
 
 export const dynamic = "force-dynamic";
 
@@ -71,7 +70,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </Script>
         <ThemeProvider>
           {children}
-          <PushSubscriptionModal />
         </ThemeProvider>
       </body>
     </html>

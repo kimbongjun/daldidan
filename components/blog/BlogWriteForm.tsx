@@ -3,8 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { Bell, BellOff, Calendar, LoaderCircle, MessageSquare, PenLine, Smartphone, Trash2, X } from "lucide-react";
-import { enableNativeNotifications, getNativeNotificationPermission, sendNativeNotification, supportsNativeNotifications } from "@/lib/notifications";
+import { Calendar, LoaderCircle, PenLine, Trash2, X } from "lucide-react";
 import type { EditableBlogPost } from "@/lib/blog-shared";
 import { BLOG_CATEGORIES } from "@/lib/blog-shared";
 
@@ -68,13 +67,6 @@ export default function BlogWriteForm({
   const [error, setError] = useState("");
   const [showLeaveModal, setShowLeaveModal] = useState(false);
 
-  // 발행 알림 옵션
-  const [alarmNativePush, setAlarmNativePush] = useState(false);
-  const [alarmKakao, setAlarmKakao] = useState(false);
-  const [kakaoPhone, setKakaoPhone] = useState("");
-  const [nativePermission, setNativePermission] = useState<string>("default");
-  const [requestingPermission, setRequestingPermission] = useState(false);
-
   // 초기값 대비 변경 여부 (에디터가 빈 상태를 <p></p> 로 반환하는 경우도 미변경으로 처리)
   const isDirty = useMemo(() => {
     const normalize = (h: string) => h.replace(/<p><\/p>/g, "").trim();
@@ -93,11 +85,6 @@ export default function BlogWriteForm({
   useEffect(() => {
     isDirtyRef.current = isDirty;
   }, [isDirty]);
-
-  // 초기 알림 권한 상태 읽기
-  useEffect(() => {
-    setNativePermission(getNativeNotificationPermission());
-  }, []);
 
   // 브라우저 새로고침/탭 닫기 방어
   useEffect(() => {
@@ -153,32 +140,6 @@ export default function BlogWriteForm({
         throw new Error(payload.error ?? "글을 저장하지 못했습니다.");
       }
 
-      // 네이티브 push 알림 (작성자 본인)
-      if (alarmNativePush) {
-        sendNativeNotification(
-          isEditMode ? "블로그 글이 수정되었어요" : "블로그 글이 발행되었어요",
-          isEditMode
-            ? `${title.trim()} 글 수정이 완료되었습니다.`
-            : `${title.trim()} 글이 성공적으로 공개되었습니다.`,
-        );
-      }
-
-      // 카카오 알림톡
-      if (alarmKakao && kakaoPhone.trim()) {
-        await fetch("/api/blog/alarm", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            phone: kakaoPhone.trim(),
-            title: title.trim(),
-            slug: payload.slug,
-            type: isEditMode ? "update" : "publish",
-          }),
-        }).catch(() => {
-          // 알림톡 실패는 글 발행에 영향 없이 조용히 처리
-        });
-      }
-
       router.push(`/blog/${encodeURIComponent(payload.slug)}`);
       router.refresh();
     } catch (submitError) {
@@ -186,14 +147,6 @@ export default function BlogWriteForm({
     } finally {
       setSubmitting(false);
     }
-  };
-
-  const handleRequestPushPermission = async () => {
-    setRequestingPermission(true);
-    const result = await enableNativeNotifications();
-    setNativePermission(getNativeNotificationPermission());
-    if (result.ok) setAlarmNativePush(true);
-    setRequestingPermission(false);
   };
 
   const handleDelete = async () => {
@@ -430,107 +383,6 @@ export default function BlogWriteForm({
           )}
         </div>
 
-        {/* ── 발행 알림 설정 ── */}
-        <div className="bento-card p-5 flex flex-col gap-4">
-          <div className="flex items-center gap-2">
-            <Bell size={14} style={{ color: "#EA580C" }} />
-            <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>발행 알림</p>
-          </div>
-
-          {/* 네이티브 Push */}
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <Smartphone size={13} style={{ color: "var(--text-muted)" }} />
-                <span className="text-xs font-medium" style={{ color: "var(--text-primary)" }}>네이티브 Push</span>
-              </div>
-              {!supportsNativeNotifications() ? (
-                <span className="text-xs" style={{ color: "var(--text-muted)" }}>미지원</span>
-              ) : nativePermission === "granted" ? (
-                <button
-                  type="button"
-                  onClick={() => setAlarmNativePush((v) => !v)}
-                  className="relative w-10 h-5 rounded-full transition-colors"
-                  style={{ background: alarmNativePush ? "#EA580C" : "var(--border)" }}
-                  aria-label="네이티브 Push 알림 토글"
-                >
-                  <span
-                    className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform"
-                    style={{ transform: alarmNativePush ? "translateX(20px)" : "translateX(0)" }}
-                  />
-                </button>
-              ) : nativePermission === "denied" ? (
-                <span className="text-xs" style={{ color: "#F43F5E" }}>차단됨</span>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleRequestPushPermission}
-                  disabled={requestingPermission}
-                  className="text-xs font-semibold px-2.5 py-1 rounded-lg disabled:opacity-50"
-                  style={{ background: "rgba(234,88,12,0.14)", color: "#EA580C" }}
-                >
-                  {requestingPermission ? "요청 중…" : "권한 허용"}
-                </button>
-              )}
-            </div>
-            {alarmNativePush && nativePermission === "granted" && (
-              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                발행 후 브라우저 알림으로 알려드립니다.
-              </p>
-            )}
-          </div>
-
-          {/* 카카오 알림톡 */}
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <MessageSquare size={13} style={{ color: "var(--text-muted)" }} />
-                <span className="text-xs font-medium" style={{ color: "var(--text-primary)" }}>카카오 알림톡</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setAlarmKakao((v) => !v)}
-                className="relative w-10 h-5 rounded-full transition-colors"
-                style={{ background: alarmKakao ? "#FEE500" : "var(--border)" }}
-                aria-label="카카오 알림톡 토글"
-              >
-                <span
-                  className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform"
-                  style={{ transform: alarmKakao ? "translateX(20px)" : "translateX(0)" }}
-                />
-              </button>
-            </div>
-            {alarmKakao && (
-              <input
-                type="tel"
-                placeholder="수신 번호 (01012345678)"
-                value={kakaoPhone}
-                onChange={(e) => setKakaoPhone(e.target.value)}
-                className="w-full text-xs"
-                style={{
-                  background: "var(--bg-input)",
-                  border: "1px solid var(--border)",
-                  borderRadius: "0.75rem",
-                  padding: "0.55rem 0.75rem",
-                  color: "var(--text-primary)",
-                  outline: "none",
-                }}
-              />
-            )}
-            {alarmKakao && (
-              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                발행 후 카카오 알림톡으로 알려드립니다. (서버 API 키 설정 필요)
-              </p>
-            )}
-          </div>
-
-          {!alarmNativePush && !alarmKakao && (
-            <div className="flex items-center gap-1.5 text-xs" style={{ color: "var(--text-muted)" }}>
-              <BellOff size={12} />
-              <span>알림 없이 발행됩니다.</span>
-            </div>
-          )}
-        </div>
       </aside>
     </div>
     </>
