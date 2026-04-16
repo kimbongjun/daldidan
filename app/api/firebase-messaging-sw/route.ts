@@ -35,6 +35,10 @@ const messaging = firebase.messaging();
 
 // 앱이 백그라운드이거나 닫혀 있을 때 수신
 messaging.onBackgroundMessage(function(payload) {
+  if (payload.notification) {
+    return;
+  }
+
   const title = payload.data?.title ?? payload.notification?.title ?? '달디단';
   const body  = payload.data?.body ?? payload.notification?.body ?? '새 글이 등록되었습니다';
   const icon  = payload.data?.icon ?? payload.notification?.icon ?? '/favicon.ico';

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 import { getAdminMessaging } from "@/lib/firebase-admin";
+import { sendPushDebugToLatestSubscribers } from "@/lib/push-notification";
 
 export const runtime = "nodejs";
 
@@ -56,4 +57,30 @@ export async function GET() {
       })),
     },
   });
+}
+
+export async function POST(request: Request) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
+  }
+
+  const body = await request.json().catch(() => ({})) as {
+    title?: string;
+    body?: string;
+    url?: string;
+    limit?: number;
+  };
+
+  const result = await sendPushDebugToLatestSubscribers({
+    title: body.title?.trim() || "달디단 테스트 알림",
+    body: body.body?.trim() || "프로덕션 푸시 디버그 전송입니다.",
+    url: body.url?.trim() || "/blog",
+    origin: new URL(request.url).origin,
+    limit: body.limit,
+  });
+
+  return NextResponse.json(result);
 }
