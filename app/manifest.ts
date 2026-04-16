@@ -1,5 +1,7 @@
 import type { MetadataRoute } from "next";
 
+export const revalidate = 0;
+
 async function fetchPwaIconUrl(): Promise<string> {
   try {
     const { createAdminClient } = await import("@/lib/supabase/server");

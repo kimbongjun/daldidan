@@ -34,12 +34,24 @@ export async function generateMetadata(): Promise<Metadata> {
   const ogImage = s.meta_og_image || undefined;
   const splashUrl = s.pwa_splash_url || undefined;
   const faviconUrl = s.favicon_url || "/favicon.ico";
+  const pwaIconUrl = s.pwa_icon_url || undefined;
 
   return {
     title,
     description,
     icons: {
       icon: [{ url: faviconUrl, type: "image/x-icon" }],
+      shortcut: [{ url: faviconUrl }],
+      // iOS Safari는 manifest icons를 무시하고 apple-touch-icon만 사용함
+      ...(pwaIconUrl
+        ? {
+            apple: [
+              { url: pwaIconUrl, sizes: "180x180", type: "image/png" },
+              { url: pwaIconUrl, sizes: "192x192", type: "image/png" },
+              { url: pwaIconUrl, sizes: "512x512", type: "image/png" },
+            ],
+          }
+        : {}),
     },
     openGraph: {
       title,

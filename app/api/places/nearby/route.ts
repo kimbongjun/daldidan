@@ -2,6 +2,55 @@ import { NextRequest, NextResponse } from "next/server";
 
 type RestaurantCategory = "한식" | "중식" | "양식" | "아시안" | "분식" | "주점" | "카페" | "퓨전";
 
+interface GooglePlacesTextSearchResponse {
+  places?: Array<{
+    currentOpeningHours?: { openNow?: boolean };
+    regularOpeningHours?: { openNow?: boolean };
+    rating?: number;
+    userRatingCount?: number;
+    photos?: Array<{ name?: string }>;
+  }>;
+}
+
+async function enrichWithGooglePlaces(
+  name: string,
+  address: string,
+  apiKey: string,
+): Promise<{ isOpen: boolean | null; rating: number; reviewCount: number; photoRef: string | null }> {
+  try {
+    const response = await fetch("https://places.googleapis.com/v1/places:searchText", {
+      method: "POST",
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": apiKey,
+        "X-Goog-FieldMask":
+          "places.currentOpeningHours.openNow,places.regularOpeningHours.openNow,places.rating,places.userRatingCount,places.photos",
+      },
+      body: JSON.stringify({
+        textQuery: `${name} ${address}`,
+        languageCode: "ko",
+        maxResultCount: 1,
+      }),
+    });
+
+    if (!response.ok) return { isOpen: null, rating: 0, reviewCount: 0, photoRef: null };
+
+    const data = (await response.json()) as GooglePlacesTextSearchResponse;
+    const place = data.places?.[0];
+    if (!place) return { isOpen: null, rating: 0, reviewCount: 0, photoRef: null };
+
+    return {
+      isOpen: place.currentOpeningHours?.openNow ?? place.regularOpeningHours?.openNow ?? null,
+      rating: place.rating ?? 0,
+      reviewCount: place.userRatingCount ?? 0,
+      photoRef: place.photos?.[0]?.name ?? null,
+    };
+  } catch {
+    return { isOpen: null, rating: 0, reviewCount: 0, photoRef: null };
+  }
+}
+
 function calcDistance(lat1: number, lng1: number, lat2: number, lng2: number): string {
   const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -191,6 +240,7 @@ export async function GET(request: NextRequest) {
 
   const clientId = process.env.NAVER_CLIENT_ID?.trim();
   const clientSecret = process.env.NAVER_CLIENT_SECRET?.trim();
+  const googleApiKey = process.env.GOOGLE_MAPS_API_KEY?.trim();
 
   if (!clientId || !clientSecret) {
     return NextResponse.json({ error: "NAVER_CLIENT_ID / NAVER_CLIENT_SECRET가 설정되지 않았습니다." }, { status: 500 });
@@ -266,5 +316,22 @@ export async function GET(request: NextRequest) {
     })
     .slice(0, 30);
 
-  return NextResponse.json({ restaurants });
+  // Google Places로 실시간 영업 상태·평점·사진 enrichment
+  const enrichResults = await Promise.allSettled(
+    restaurants.map((r) =>
+      googleApiKey
+        ? enrichWithGooglePlaces(r.name, r.address, googleApiKey)
+        : Promise.resolve({ isOpen: null as boolean | null, rating: 0, reviewCount: 0, photoRef: null as string | null }),
+    ),
+  );
+
+  const enriched = restaurants.map((r, i) => {
+    const result = enrichResults[i];
+    if (result.status === "fulfilled") {
+      return { ...r, ...result.value };
+    }
+    return r;
+  });
+
+  return NextResponse.json({ restaurants: enriched });
 }
