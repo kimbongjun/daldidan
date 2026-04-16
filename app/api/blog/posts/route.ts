@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { ensureUniqueBlogSlug, extractFirstImageFromHtml, getPublishedBlogPosts } from "@/lib/blog";
 import { extractDescriptionFromHtml } from "@/lib/blog-shared";
@@ -79,39 +79,35 @@ export async function POST(request: NextRequest) {
   revalidatePath(`/blog/${slug}`);
 
   const postPath = `/blog/${encodeURIComponent(slug)}`;
+  const requestOrigin = request.nextUrl.origin;
 
-  // Vercel 서버리스 환경에서도 실제 발송이 완료될 때까지 대기한다.
-  const [emailResult, pushResult] = await Promise.allSettled([
-    sendBlogPublishNotification({
-      title,
-      description,
-      slug,
-      authorName,
-      thumbnailUrl: resolvedThumbnail,
-    }),
-    sendPushToAllSubscribers({
-      title: "달디단 — 새 글이 등록되었습니다",
-      body: title,
-      url: postPath,
-      icon: resolvedThumbnail ?? undefined,
-      origin: request.nextUrl.origin,
-    }),
-  ]);
+  after(async () => {
+    const [emailResult, pushResult] = await Promise.allSettled([
+      sendBlogPublishNotification({
+        title,
+        description,
+        slug,
+        authorName,
+        thumbnailUrl: resolvedThumbnail,
+      }),
+      sendPushToAllSubscribers({
+        title: "달디단 — 새 글이 등록되었습니다",
+        body: title,
+        url: postPath,
+        icon: resolvedThumbnail ?? undefined,
+        origin: requestOrigin,
+      }),
+    ]);
 
-  if (emailResult.status === "rejected") {
-    console.error("[blog/posts] email notification failed:", emailResult.reason);
-  }
-  if (pushResult.status === "rejected") {
-    console.error("[blog/posts] push notification failed:", pushResult.reason);
-  }
+    if (emailResult.status === "rejected") {
+      console.error("[blog/posts] email notification failed:", emailResult.reason);
+    }
+    if (pushResult.status === "rejected") {
+      console.error("[blog/posts] push notification failed:", pushResult.reason);
+    }
+  });
 
-  return NextResponse.json({
-    slug,
-    notifications: {
-      email: emailResult.status === "fulfilled" ? emailResult.value : null,
-      push: pushResult.status === "fulfilled" ? pushResult.value : null,
-    },
-  }, { status: 201 });
+  return NextResponse.json({ slug }, { status: 201 });
 }
 
 export async function PATCH(request: NextRequest) {

@@ -28,7 +28,7 @@ export default function BlogNotifyButton({ slug }: Props) {
         throw new Error(payload.error ?? "알림 발송에 실패했습니다.");
       }
 
-      setMessage(`알림 발송 완료 · 성공 ${payload.result?.sent ?? 0}건`);
+      setMessage(payload.message ?? "알림 발송을 시작했습니다.");
       setMessageTone("success");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "알림 발송에 실패했습니다.");
