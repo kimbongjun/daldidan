@@ -6,6 +6,8 @@ import { createClient } from "@/lib/supabase/server";
 import { sendBlogPublishNotification } from "@/lib/resend";
 import { sendPushToAllSubscribers } from "@/lib/push-notification";
 
+export const runtime = "nodejs";
+
 export async function GET(request: NextRequest) {
   const limitParam = Number(request.nextUrl.searchParams.get("limit") ?? "9");
   const limit = Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 1), 20) : 9;
@@ -103,7 +105,13 @@ export async function POST(request: NextRequest) {
     console.error("[blog/posts] push notification failed:", pushResult.reason);
   }
 
-  return NextResponse.json({ slug }, { status: 201 });
+  return NextResponse.json({
+    slug,
+    notifications: {
+      email: emailResult.status === "fulfilled" ? emailResult.value : null,
+      push: pushResult.status === "fulfilled" ? pushResult.value : null,
+    },
+  }, { status: 201 });
 }
 
 export async function PATCH(request: NextRequest) {

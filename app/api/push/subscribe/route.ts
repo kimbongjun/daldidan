@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 
+export const runtime = "nodejs";
+
 /** POST /api/push/subscribe — FCM 토큰 등록 */
 export async function POST(request: NextRequest) {
   const body = await request.json() as { token?: string; deviceType?: string };
