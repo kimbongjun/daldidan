@@ -93,6 +93,7 @@ export async function POST(request: NextRequest) {
     body: title,
     url: `/blog/${encodeURIComponent(slug)}`,
     icon: resolvedThumbnail ?? undefined,
+    origin: request.nextUrl.origin,
   }).catch(() => {
     // 푸시 발송 실패는 글 발행 결과에 영향을 주지 않음
   });

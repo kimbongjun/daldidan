@@ -38,7 +38,7 @@ messaging.onBackgroundMessage(function(payload) {
   const title = payload.notification?.title ?? '달디단';
   const body  = payload.notification?.body  ?? '새 글이 등록되었습니다';
   const icon  = payload.notification?.icon  ?? '/favicon.ico';
-  const url   = payload.data?.url           ?? '/blog';
+  const url   = payload.data?.url ?? payload.fcmOptions?.link ?? '/blog';
 
   return self.registration.showNotification(title, {
     body,

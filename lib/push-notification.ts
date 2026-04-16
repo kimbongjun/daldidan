@@ -1,6 +1,23 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { getAdminMessaging } from "@/lib/firebase-admin";
 
+function trimTrailingSlash(value: string) {
+  return value.replace(/\/$/, "");
+}
+
+function getBaseSiteUrl() {
+  const candidate = process.env.NEXT_PUBLIC_SITE_URL?.trim() ?? "";
+  return candidate ? trimTrailingSlash(candidate) : "";
+}
+
+function toAbsoluteUrl(pathOrUrl: string | undefined, baseUrl: string) {
+  if (!pathOrUrl) return undefined;
+  if (/^https?:\/\//i.test(pathOrUrl)) return pathOrUrl;
+  if (!baseUrl) return undefined;
+  const normalizedPath = pathOrUrl.startsWith("/") ? pathOrUrl : `/${pathOrUrl}`;
+  return `${baseUrl}${normalizedPath}`;
+}
+
 /**
  * Supabase push_subscriptions 테이블에 저장된 모든 FCM 토큰에 푸시 알림 발송.
  * 만료된 토큰은 자동으로 DB에서 제거한다.
@@ -10,6 +27,7 @@ export async function sendPushToAllSubscribers(params: {
   body: string;
   url?: string;
   icon?: string;
+  origin?: string;
 }): Promise<{ sent: number; failed: number }> {
   if (!process.env.FIREBASE_ADMIN_PROJECT_ID) {
     return { sent: 0, failed: 0 };
@@ -26,7 +44,11 @@ export async function sendPushToAllSubscribers(params: {
 
   const tokens = subscriptions.map((s) => s.fcm_token);
   const messaging = getAdminMessaging();
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ?? "";
+  const siteUrl = params.origin ? trimTrailingSlash(params.origin) : getBaseSiteUrl();
+  const targetUrl = toAbsoluteUrl(params.url ?? "/blog", siteUrl);
+  const fallbackPath = params.url?.startsWith("/") ? params.url : "/blog";
+  const iconUrl = toAbsoluteUrl(params.icon ?? "/favicon.ico", siteUrl) ?? "/favicon.ico";
+  const badgeUrl = toAbsoluteUrl("/favicon.ico", siteUrl) ?? "/favicon.ico";
 
   // FCM 멀티캐스트는 최대 500개/요청
   const BATCH_SIZE = 500;
@@ -43,12 +65,13 @@ export async function sendPushToAllSubscribers(params: {
           notification: {
             title: params.title,
             body: params.body,
-            icon: params.icon ?? `${siteUrl}/favicon.ico`,
-            badge: `${siteUrl}/favicon.ico`,
+            icon: iconUrl,
+            badge: badgeUrl,
           },
-          fcmOptions: {
-            link: params.url ? `${siteUrl}${params.url}` : `${siteUrl}/blog`,
+          data: {
+            url: targetUrl ?? fallbackPath,
           },
+          ...(targetUrl ? { fcmOptions: { link: targetUrl } } : {}),
         },
         // iOS (APNs) 설정
         apns: {
