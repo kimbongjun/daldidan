@@ -12,8 +12,12 @@ export interface InboxNotification {
 
 interface NotificationState {
   enabled: boolean;
+  notifyNewPost: boolean;
+  notifyComment: boolean;
   inbox: InboxNotification[];
   setEnabled: (enabled: boolean) => void;
+  setNotifyNewPost: (v: boolean) => void;
+  setNotifyComment: (v: boolean) => void;
   addInboxNotification: (notification: Omit<InboxNotification, "read">) => void;
   markAllInboxRead: () => void;
   markInboxRead: (id: string) => void;
@@ -23,8 +27,12 @@ export const useNotificationStore = create<NotificationState>()(
   persist(
     (set) => ({
       enabled: false,
+      notifyNewPost: true,
+      notifyComment: true,
       inbox: [],
       setEnabled: (enabled) => set({ enabled }),
+      setNotifyNewPost: (notifyNewPost) => set({ notifyNewPost }),
+      setNotifyComment: (notifyComment) => set({ notifyComment }),
       addInboxNotification: (notification) => set((state) => {
         const duplicate = state.inbox.find((item) =>
           item.id === notification.id ||

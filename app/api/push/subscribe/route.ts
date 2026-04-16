@@ -66,6 +66,36 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({ ok: true }, { status: 200 });
 }
 
+/** PATCH /api/push/subscribe — 알림 유형별 수신 설정 변경 (로그인 필수) */
+export async function PATCH(request: NextRequest) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
+  }
+
+  const body = await request.json() as { notifyNewPost?: boolean; notifyComment?: boolean };
+  const patch: Record<string, boolean> = {};
+  if (body.notifyNewPost !== undefined) patch.notify_new_post = body.notifyNewPost;
+  if (body.notifyComment !== undefined) patch.notify_comment = body.notifyComment;
+
+  if (Object.keys(patch).length === 0) {
+    return NextResponse.json({ error: "변경할 설정이 없습니다." }, { status: 400 });
+  }
+
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("push_subscriptions")
+    .update({ ...patch, updated_at: new Date().toISOString() })
+    .eq("user_id", user.id);
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true });
+}
+
 /** DELETE /api/push/subscribe — FCM 토큰 삭제 (구독 해지) */
 export async function DELETE(request: NextRequest) {
   const body = await request.json() as { token?: string };

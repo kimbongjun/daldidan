@@ -101,6 +101,10 @@ export default function Header() {
 
   const { theme, toggle } = useThemeStore();
   const inbox = useNotificationStore((state) => state.inbox);
+  const notifyNewPost = useNotificationStore((state) => state.notifyNewPost);
+  const notifyComment = useNotificationStore((state) => state.notifyComment);
+  const setNotifyNewPost = useNotificationStore((state) => state.setNotifyNewPost);
+  const setNotifyComment = useNotificationStore((state) => state.setNotifyComment);
   const addInboxNotification = useNotificationStore((state) => state.addInboxNotification);
   const markAllInboxRead = useNotificationStore((state) => state.markAllInboxRead);
   const markInboxRead = useNotificationStore((state) => state.markInboxRead);
@@ -306,6 +310,20 @@ export default function Header() {
     localStorage.removeItem(PUSH_STORAGE_KEY);
     setPushToken(null);
     setPushStatus("idle");
+  };
+
+  const handleNotifyToggle = async (type: "newPost" | "comment", value: boolean) => {
+    if (type === "newPost") setNotifyNewPost(value);
+    else setNotifyComment(value);
+
+    if (!user) return;
+    fetch("/api/push/subscribe", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(
+        type === "newPost" ? { notifyNewPost: value } : { notifyComment: value },
+      ),
+    }).catch(() => {});
   };
 
   const handleRefresh = () => {
@@ -606,6 +624,41 @@ export default function Header() {
                           {pushStatus === "subscribed" ? "해지" : "구독"}
                         </button>
                       )}
+                    </div>
+                  )}
+
+                  {/* 알림 유형 설정 토글 (구독 중일 때만 표시) */}
+                  {pushStatus === "subscribed" && (
+                    <div style={{ borderTop: "1px solid var(--border)", paddingTop: "0.75rem", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                      <p style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>알림 설정</p>
+                      {[
+                        { label: "새 글 알림", desc: "새 블로그 글 발행 시 알림", value: notifyNewPost, type: "newPost" as const },
+                        { label: "댓글 알림", desc: "내 글·댓글에 새 댓글 달릴 때 알림", value: notifyComment, type: "comment" as const },
+                      ].map((item) => (
+                        <div key={item.type} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem" }}>
+                          <div>
+                            <p style={{ fontSize: "0.78rem", fontWeight: 600, color: "var(--text-primary)", margin: 0 }}>{item.label}</p>
+                            <p style={{ fontSize: "0.68rem", color: "var(--text-muted)", margin: "0.1rem 0 0" }}>{item.desc}</p>
+                          </div>
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={item.value}
+                            onClick={() => handleNotifyToggle(item.type, !item.value)}
+                            style={{
+                              width: 36, height: 20, borderRadius: 999, border: "none", cursor: "pointer",
+                              flexShrink: 0, position: "relative", transition: "background 0.2s",
+                              background: item.value ? "#F59E0B" : "var(--border)",
+                            }}
+                          >
+                            <span style={{
+                              position: "absolute", top: 3, width: 14, height: 14, borderRadius: "50%",
+                              background: "#fff", transition: "left 0.2s",
+                              left: item.value ? 19 : 3,
+                            }} />
+                          </button>
+                        </div>
+                      ))}
                     </div>
                   )}
 

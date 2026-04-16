@@ -223,7 +223,8 @@ async function getAllSubscriptions(): Promise<PushSubscriptionRow[]> {
   const supabase = createAdminClient();
   const { data: subscriptions, error } = await supabase
     .from("push_subscriptions")
-    .select("fcm_token, device_type, user_id, user_agent, updated_at");
+    .select("fcm_token, device_type, user_id, user_agent, updated_at")
+    .or("notify_new_post.eq.true,notify_new_post.is.null");
 
   if (error || !subscriptions) return [];
   return subscriptions;
@@ -238,6 +239,34 @@ export async function sendPushToAllSubscribers(
 
   const subscriptions = await getAllSubscriptions();
   const result = await dispatchPushToSubscriptions(subscriptions, params);
+  return { sent: result.sent, failed: result.failed };
+}
+
+/**
+ * 특정 유저들에게만 타겟 푸시 발송 (댓글 알림 등)
+ * type: "comment" → notify_comment 필터, "new_post" → notify_new_post 필터
+ */
+export async function sendPushToUserIds(
+  userIds: string[],
+  params: PushDispatchParams,
+  type: "comment" | "new_post" = "comment",
+): Promise<{ sent: number; failed: number }> {
+  if (!process.env.FIREBASE_ADMIN_PROJECT_ID || userIds.length === 0) {
+    return { sent: 0, failed: 0 };
+  }
+
+  const supabase = createAdminClient();
+  const prefColumn = type === "comment" ? "notify_comment" : "notify_new_post";
+
+  const { data, error } = await supabase
+    .from("push_subscriptions")
+    .select("fcm_token, device_type, user_id, user_agent, updated_at")
+    .in("user_id", userIds)
+    .or(`${prefColumn}.eq.true,${prefColumn}.is.null`);
+
+  if (error || !data) return { sent: 0, failed: 0 };
+
+  const result = await dispatchPushToSubscriptions(data, params);
   return { sent: result.sent, failed: result.failed };
 }
 

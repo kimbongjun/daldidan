@@ -37,7 +37,6 @@ export async function PATCH(
     .from("transactions")
     .update(patch)
     .eq("id", id)
-    .eq("user_id", user.id)
     .select("id, type, category, buyer, merchant_name, location, receipt_image_url, amount, note, date")
     .single();
 
@@ -59,8 +58,7 @@ export async function DELETE(
   const { error } = await supabase
     .from("transactions")
     .delete()
-    .eq("id", id)
-    .eq("user_id", user.id);
+    .eq("id", id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return new NextResponse(null, { status: 204 });

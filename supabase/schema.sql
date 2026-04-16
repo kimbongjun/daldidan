@@ -386,14 +386,20 @@ create trigger set_updated_at_site_settings
 -- FCM 토큰 저장 — 비로그인 구독도 허용 (user_id nullable)
 -- ══════════════════════════════════════════════════════════════
 create table if not exists public.push_subscriptions (
-  id          uuid primary key default uuid_generate_v4(),
-  user_id     uuid references public.profiles(id) on delete set null,
-  fcm_token   text not null unique,
-  device_type text not null default 'web' check (device_type in ('web', 'ios', 'android')),
-  user_agent  text,
-  created_at  timestamptz not null default now(),
-  updated_at  timestamptz not null default now()
+  id              uuid primary key default uuid_generate_v4(),
+  user_id         uuid references public.profiles(id) on delete set null,
+  fcm_token       text not null unique,
+  device_type     text not null default 'web' check (device_type in ('web', 'ios', 'android')),
+  user_agent      text,
+  notify_new_post boolean not null default true,
+  notify_comment  boolean not null default true,
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now()
 );
+
+-- 기존 테이블에 알림 설정 컬럼 추가 (idempotent)
+alter table public.push_subscriptions add column if not exists notify_new_post boolean not null default true;
+alter table public.push_subscriptions add column if not exists notify_comment  boolean not null default true;
 
 create index if not exists idx_push_subscriptions_user
   on public.push_subscriptions (user_id);
