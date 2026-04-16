@@ -1,5 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 
+interface NaverReverseGeocodeResponse {
+  results?: Array<{
+    region?: {
+      area0?: { name?: string };
+      area1?: { name?: string };
+      area2?: { name?: string };
+      area3?: { name?: string };
+      area4?: { name?: string };
+    };
+  }>;
+}
+
 interface AddressComponent {
   long_name: string;
   short_name: string;
@@ -20,6 +32,46 @@ export async function GET(request: NextRequest) {
 
   if (!lat || !lng) {
     return NextResponse.json({ error: "lat, lng 파라미터가 필요합니다." }, { status: 400 });
+  }
+
+  const naverClientId = process.env.NAVER_CLIENT_ID?.trim();
+  const naverClientSecret = process.env.NAVER_CLIENT_SECRET?.trim();
+
+  if (naverClientId && naverClientSecret) {
+    try {
+      const url = new URL("https://naveropenapi.apigw-pub.fin-ntruss.com/map-reversegeocode/v2/gc");
+      url.searchParams.set("coords", `${lng},${lat}`);
+      url.searchParams.set("sourcecrs", "epsg:4326");
+      url.searchParams.set("orders", "legalcode,admcode");
+      url.searchParams.set("output", "json");
+
+      const response = await fetch(url, {
+        cache: "no-store",
+        headers: {
+          "X-NCP-APIGW-API-KEY-ID": naverClientId,
+          "X-NCP-APIGW-API-KEY": naverClientSecret,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json() as NaverReverseGeocodeResponse;
+        const region = data.results?.[0]?.region;
+        const countryCode = region?.area0?.name?.toUpperCase() ?? "";
+        const city = region?.area1?.name ?? "";
+        const district = region?.area2?.name ?? "";
+        const town = region?.area3?.name ?? region?.area4?.name ?? "";
+
+        if (countryCode === "KR") {
+          const location = [city, district, town].filter(Boolean).join(" ");
+          if (location) return NextResponse.json({ location, countryCode });
+        } else {
+          const location = [countryCode, city, district].filter(Boolean).join(", ");
+          if (location) return NextResponse.json({ location, countryCode });
+        }
+      }
+    } catch {
+      // Naver API 실패 시 하위 폴백 사용
+    }
   }
 
   const apiKey = process.env.GOOGLE_MAPS_API_KEY?.trim();

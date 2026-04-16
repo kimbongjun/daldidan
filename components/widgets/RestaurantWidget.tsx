@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Image from "next/image";
 import { ArrowRight, Star } from "lucide-react";
 import { RESTAURANT_CATEGORIES, type RestaurantCategory } from "@/lib/data/restaurant";
 
@@ -70,10 +69,10 @@ interface NearbyRestaurant {
   reviewCount: number;
   isOpen: boolean | null;
   photoRef: string | null;
-  googleMapsUri: string;
-  types: string[];
+  mapUrl: string;
   category: RestaurantCategory;
   distance: string;
+  sourceCategory?: string;
 }
 
 type CategoryFilter = "전체" | RestaurantCategory;
@@ -93,6 +92,7 @@ export default function RestaurantWidget() {
   const [error, setError] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState<CategoryFilter>("전체");
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [locationLabel, setLocationLabel] = useState("");
 
   const fetchRestaurants = useCallback(async (lat: number, lng: number) => {
     setLoading(true);
@@ -136,7 +136,7 @@ export default function RestaurantWidget() {
   }, [fetchRestaurants]);
 
   const openRestaurants = useMemo(
-    () => restaurants.filter((restaurant) => restaurant.isOpen === true),
+    () => restaurants.filter((restaurant) => restaurant.isOpen !== false),
     [restaurants],
   );
 
@@ -161,9 +161,23 @@ export default function RestaurantWidget() {
     }
   }, [activeCategory, availableFilters]);
 
+  useEffect(() => {
+    if (!userCoords) return;
+    const controller = new AbortController();
+
+    fetch(`/api/geocode/reverse?lat=${userCoords.lat}&lng=${userCoords.lng}`, { signal: controller.signal })
+      .then((response) => response.json() as Promise<{ location?: string }>)
+      .then((data) => {
+        if (data.location) setLocationLabel(data.location);
+      })
+      .catch(() => null);
+
+    return () => controller.abort();
+  }, [userCoords]);
+
   const mapsSearchUrl = userCoords
-    ? `https://www.google.com/maps/search/음식점/@${userCoords.lat},${userCoords.lng},15z`
-    : "https://www.google.com/maps/search/음식점/";
+    ? `https://map.naver.com/p/search/${encodeURIComponent(`${locationLabel || "현재 위치"} 맛집`)}`
+    : "https://map.naver.com/p/search/%EB%A7%9B%EC%A7%91";
 
   return (
     <div className="bento-card gradient-orange h-full flex flex-col p-5 gap-3">
@@ -248,11 +262,10 @@ export default function RestaurantWidget() {
 }
 
 function RestaurantCard({ restaurant }: { restaurant: NearbyRestaurant }) {
-  const [imgError, setImgError] = useState(false);
   const catStyle = CATEGORY_STYLE[restaurant.category];
 
   const handleClick = () => {
-    window.open(restaurant.googleMapsUri, "_blank", "noopener,noreferrer");
+    window.open(restaurant.mapUrl, "_blank", "noopener,noreferrer");
   };
 
   return (
@@ -269,25 +282,13 @@ function RestaurantCard({ restaurant }: { restaurant: NearbyRestaurant }) {
         className="absolute inset-0 flex items-center justify-center"
         style={{ background: catStyle.gradient }}
       >
-        {restaurant.photoRef && !imgError ? (
-          <Image
-            src={`/api/places/photo?name=${encodeURIComponent(restaurant.photoRef)}`}
-            alt={restaurant.name}
-            fill
-            sizes="300px"
-            unoptimized
-            className="object-cover transition-transform duration-300 group-hover:scale-105"
-            onError={() => setImgError(true)}
-          />
-        ) : (
-          <span
-            className="text-6xl select-none transition-transform duration-300 group-hover:scale-110"
-            role="img"
-            aria-label={restaurant.category}
-          >
-            {CATEGORY_EMOJI[restaurant.category]}
-          </span>
-        )}
+        <span
+          className="text-6xl select-none transition-transform duration-300 group-hover:scale-110"
+          role="img"
+          aria-label={restaurant.category}
+        >
+          {CATEGORY_EMOJI[restaurant.category]}
+        </span>
       </div>
 
       {/* 하단 그라디언트 오버레이 */}
@@ -332,6 +333,12 @@ function RestaurantCard({ restaurant }: { restaurant: NearbyRestaurant }) {
         <p className="text-sm font-bold leading-snug line-clamp-2" style={{ color: "#fff" }}>
           {restaurant.name}
         </p>
+
+        {restaurant.sourceCategory ? (
+          <p className="text-xs truncate" style={{ color: "rgba(255,255,255,0.72)" }}>
+            {restaurant.sourceCategory}
+          </p>
+        ) : null}
 
         {/* 평점 + 거리 */}
         <div className="flex items-center gap-2">
