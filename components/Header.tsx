@@ -164,7 +164,11 @@ export default function Header() {
       await navigator.serviceWorker.register("/firebase-messaging-sw.js", { scope: "/" });
       const swReg = await navigator.serviceWorker.ready;
 
-      // iOS에서 APNS 연결이 느릴 수 있어 15초 타임아웃 적용
+      // stale 구독 제거 — Android Chrome에서 이전 구독과 FCM 기록이 불일치하면
+      // getToken이 무한 hang 하는 원인이 됨. 항상 먼저 정리하고 새 토큰 발급.
+      try { await deleteToken(messaging); } catch { /* 기존 토큰 없으면 무시 */ }
+
+      // 타임아웃: iOS APNS 연결 지연 대비 (Android는 보통 2~3초 내 완료)
       const token = await Promise.race<string | null>([
         getToken(messaging, {
           vapidKey: process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY,
