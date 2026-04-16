@@ -474,8 +474,8 @@ export default function BudgetPage() {
               </div>
 
               {/* 금액 + 날짜 */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1.5 min-w-0">
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>금액 (원)</label>
                   <input
                     type="number"
@@ -485,7 +485,7 @@ export default function BudgetPage() {
                     style={inputStyle}
                   />
                 </div>
-                <div className="flex flex-col gap-1.5 min-w-0">
+                <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>날짜</label>
                   <input type="date" value={form.date}
                     onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
