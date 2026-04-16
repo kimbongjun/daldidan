@@ -236,7 +236,7 @@ export default function BudgetPage() {
       const processedFile = await preprocessReceiptImage(file);
 
       const [uploadResult, ocrResult] = await Promise.allSettled([
-        uploadImagesToStorage([file]),          // 원본을 스토리지에 저장
+        uploadImagesToStorage([file], undefined, "/api/transactions/images"),  // receipt-images 버킷에 저장
         analyzeReceiptImage(processedFile),     // 전처리본으로 OCR
       ]);
       const receiptImageUrl = uploadResult.status === "fulfilled"
@@ -630,6 +630,18 @@ function TransactionRow({
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const handleDeleteClick = () => {
+    if (confirmDelete) {
+      onDelete();
+    } else {
+      setConfirmDelete(true);
+      // 3초 후 확인 상태 자동 해제
+      setTimeout(() => setConfirmDelete(false), 3000);
+    }
+  };
+
   return (
     <div
       className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 transition-colors"
@@ -668,11 +680,18 @@ function TransactionRow({
         {tx.type === "income" ? "+" : "-"}{tx.amount.toLocaleString()}원
       </span>
       <button
-        onClick={onDelete}
-        aria-label="거래 삭제"
-        className="opacity-40 hover:opacity-80 transition-opacity shrink-0"
+        onClick={handleDeleteClick}
+        aria-label={confirmDelete ? "삭제 확인" : "거래 삭제"}
+        className="transition-all shrink-0 rounded-md"
+        style={{
+          padding: confirmDelete ? "2px 6px" : "2px",
+          background: confirmDelete ? "rgba(244,63,94,0.15)" : "transparent",
+          border: confirmDelete ? "1px solid rgba(244,63,94,0.3)" : "1px solid transparent",
+        }}
       >
-        <Trash2 size={12} style={{ color: "var(--text-muted)" }} />
+        {confirmDelete
+          ? <span className="text-[10px] font-bold" style={{ color: "#F43F5E" }}>삭제?</span>
+          : <Trash2 size={12} className="opacity-40 hover:opacity-80 transition-opacity" style={{ color: "var(--text-muted)" }} />}
       </button>
     </div>
   );

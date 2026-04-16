@@ -36,6 +36,17 @@ export async function POST(request: NextRequest) {
     date?: string;
   };
 
+  // 입력값 검증
+  if (!body.amount || body.amount <= 0) {
+    return NextResponse.json({ error: "금액은 0보다 커야 합니다." }, { status: 400 });
+  }
+  if (!["income", "expense"].includes(body.type)) {
+    return NextResponse.json({ error: "거래 유형이 올바르지 않습니다." }, { status: 400 });
+  }
+  if (body.date && isNaN(new Date(body.date).getTime())) {
+    return NextResponse.json({ error: "날짜 형식이 올바르지 않습니다." }, { status: 400 });
+  }
+
   const { data, error } = await supabase
     .from("transactions")
     .insert({

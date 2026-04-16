@@ -9,6 +9,7 @@
 export async function uploadImagesToStorage(
   files: FileList | File[],
   onProgress?: (current: number, total: number) => void,
+  endpoint = "/api/blog/images",
 ): Promise<{ url: string; name: string }[]> {
   const imageFiles = Array.from(files).filter((f) => f.type.startsWith("image/"));
   if (imageFiles.length === 0) return [];
@@ -22,7 +23,7 @@ export async function uploadImagesToStorage(
     const form = new FormData();
     form.append("image", file, file.name);
 
-    const res = await fetch("/api/blog/images", {
+    const res = await fetch(endpoint, {
       method: "POST",
       body: form,
     });

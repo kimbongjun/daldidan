@@ -11,7 +11,16 @@ export async function PATCH(
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
-  const body = await request.json();
+  const body = await request.json() as Record<string, unknown>;
+
+  // 입력값 검증
+  if (body.amount !== undefined && (typeof body.amount !== "number" || body.amount <= 0)) {
+    return NextResponse.json({ error: "금액은 0보다 커야 합니다." }, { status: 400 });
+  }
+  if (body.date !== undefined && typeof body.date === "string" && isNaN(new Date(body.date).getTime())) {
+    return NextResponse.json({ error: "날짜 형식이 올바르지 않습니다." }, { status: 400 });
+  }
+
   const patch = {
     ...(body.type !== undefined ? { type: body.type } : {}),
     ...(body.category !== undefined ? { category: body.category } : {}),
