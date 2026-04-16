@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft, ChevronDown, ChevronUp, Image as ImageIcon,
-  LoaderCircle, Save, Settings, Trash2,
+  LoaderCircle, Save, Settings, Smartphone, Trash2,
 } from "lucide-react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -28,12 +28,16 @@ type SiteSettings = {
   meta_og_image: string;
   logo_url: string;
   custom_greeting: string;
+  pwa_icon_url: string;
+  pwa_splash_url: string;
 };
 
 export default function MyPage() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const ogFileRef = useRef<HTMLInputElement>(null);
+  const pwaIconFileRef = useRef<HTMLInputElement>(null);
+  const pwaSplashFileRef = useRef<HTMLInputElement>(null);
 
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -46,11 +50,20 @@ export default function MyPage() {
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [settings, setSettings] = useState<SiteSettings>({
     meta_title: "", meta_description: "", meta_og_image: "", logo_url: "", custom_greeting: "",
+    pwa_icon_url: "", pwa_splash_url: "",
   });
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settingsSuccess, setSettingsSuccess] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
   const [ogUploading, setOgUploading] = useState(false);
+  const [pwaIconUploading, setPwaIconUploading] = useState(false);
+  const [pwaSplashUploading, setPwaSplashUploading] = useState(false);
+
+  // ?settings=open 파라미터로 옵션 패널 자동 전개
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("settings") === "open") setOptionsOpen(true);
+  }, []);
 
   useEffect(() => {
     const supabase = createClient();
@@ -106,7 +119,7 @@ export default function MyPage() {
 
   const uploadImage = async (
     file: File,
-    field: "logo_url" | "meta_og_image",
+    field: "logo_url" | "meta_og_image" | "pwa_icon_url" | "pwa_splash_url",
     setUploading: (v: boolean) => void
   ) => {
     setUploading(true);
@@ -251,6 +264,100 @@ export default function MyPage() {
                     <Trash2 size={12} /> 삭제
                   </button>
                 )}
+              </div>
+            </div>
+
+            <hr style={{ border: "none", borderTop: "1px solid var(--border)" }} />
+
+            {/* PWA 설정 */}
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center gap-1.5">
+                <Smartphone size={14} style={{ color: ACCENT }} />
+                <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>PWA 설정</p>
+              </div>
+
+              {/* 앱 아이콘 */}
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>
+                  앱 아이콘 (홈 화면 아이콘)
+                </label>
+                <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                  홈 화면에 설치될 아이콘을 업로드하세요. (권장: 512×512px, PNG)
+                </p>
+                <div className="flex items-center gap-3">
+                  {settings.pwa_icon_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={settings.pwa_icon_url} alt="앱 아이콘" className="w-12 h-12 rounded-xl object-cover" />
+                  ) : (
+                    <div className="w-12 h-12 rounded-xl flex items-center justify-center"
+                      style={{ background: "rgba(234,88,12,0.1)", color: ACCENT }}>
+                      <Smartphone size={20} />
+                    </div>
+                  )}
+                  <input type="url" value={settings.pwa_icon_url}
+                    onChange={(e) => setSettings((p) => ({ ...p, pwa_icon_url: e.target.value }))}
+                    placeholder="이미지 URL 직접 입력" style={{ ...inputStyle, flex: 1 }} />
+                </div>
+                <div className="flex gap-2">
+                  <input ref={pwaIconFileRef} type="file" accept="image/*" className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) uploadImage(f, "pwa_icon_url", setPwaIconUploading);
+                    }} />
+                  <button type="button" onClick={() => pwaIconFileRef.current?.click()}
+                    disabled={pwaIconUploading}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50"
+                    style={{ background: "rgba(234,88,12,0.12)", color: ACCENT }}>
+                    {pwaIconUploading ? <LoaderCircle size={12} className="animate-spin" /> : <ImageIcon size={12} />}
+                    {pwaIconUploading ? "업로드 중..." : "파일 선택"}
+                  </button>
+                  {settings.pwa_icon_url && (
+                    <button type="button" onClick={() => setSettings((p) => ({ ...p, pwa_icon_url: "" }))}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold"
+                      style={{ background: "rgba(244,63,94,0.1)", color: "#F43F5E" }}>
+                      <Trash2 size={12} /> 삭제
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* 스플래시 이미지 */}
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>
+                  스플래시 화면 이미지 (앱 시작 화면)
+                </label>
+                <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                  PWA 앱 시작 시 표시되는 이미지입니다. iOS 권장 크기: 2048×2732px, PNG
+                </p>
+                {settings.pwa_splash_url && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={settings.pwa_splash_url} alt="스플래시 이미지" className="rounded-xl object-cover w-full"
+                    style={{ maxHeight: 120 }} />
+                )}
+                <input type="url" value={settings.pwa_splash_url}
+                  onChange={(e) => setSettings((p) => ({ ...p, pwa_splash_url: e.target.value }))}
+                  placeholder="https://..." style={inputStyle} />
+                <div className="flex gap-2">
+                  <input ref={pwaSplashFileRef} type="file" accept="image/*" className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) uploadImage(f, "pwa_splash_url", setPwaSplashUploading);
+                    }} />
+                  <button type="button" onClick={() => pwaSplashFileRef.current?.click()}
+                    disabled={pwaSplashUploading}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50"
+                    style={{ background: "rgba(234,88,12,0.12)", color: ACCENT }}>
+                    {pwaSplashUploading ? <LoaderCircle size={12} className="animate-spin" /> : <ImageIcon size={12} />}
+                    {pwaSplashUploading ? "업로드 중..." : "파일 선택"}
+                  </button>
+                  {settings.pwa_splash_url && (
+                    <button type="button" onClick={() => setSettings((p) => ({ ...p, pwa_splash_url: "" }))}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold"
+                      style={{ background: "rgba(244,63,94,0.1)", color: "#F43F5E" }}>
+                      <Trash2 size={12} /> 삭제
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
 

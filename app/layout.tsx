@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 import "./globals.css";
 import ThemeProvider from "@/components/ThemeProvider";
+import PushSubscriptionModal from "@/components/PushSubscriptionModal";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +33,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const title = s.meta_title || "달디단 — 일상의 편리함";
   const description = s.meta_description || "날씨, 쇼핑, 영화, 여행, 가계부를 한 곳에서";
   const ogImage = s.meta_og_image || undefined;
+  const splashUrl = s.pwa_splash_url || undefined;
 
   return {
     title,
@@ -40,6 +42,13 @@ export async function generateMetadata(): Promise<Metadata> {
       title,
       description,
       ...(ogImage ? { images: [{ url: ogImage }] } : {}),
+    },
+    // iOS PWA 대응
+    appleWebApp: {
+      capable: true,
+      statusBarStyle: "black-translucent",
+      title: "달디단",
+      ...(splashUrl ? { startupImage: [splashUrl] } : {}),
     },
   };
 }
@@ -60,7 +69,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             }
           `}
         </Script>
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          {children}
+          <PushSubscriptionModal />
+        </ThemeProvider>
       </body>
     </html>
   );

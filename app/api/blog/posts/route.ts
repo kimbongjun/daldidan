@@ -4,6 +4,7 @@ import { ensureUniqueBlogSlug, extractFirstImageFromHtml, getPublishedBlogPosts 
 import { extractDescriptionFromHtml } from "@/lib/blog-shared";
 import { createClient } from "@/lib/supabase/server";
 import { sendBlogPublishNotification } from "@/lib/resend";
+import { sendPushToAllSubscribers } from "@/lib/push-notification";
 
 export async function GET(request: NextRequest) {
   const limitParam = Number(request.nextUrl.searchParams.get("limit") ?? "9");
@@ -75,7 +76,7 @@ export async function POST(request: NextRequest) {
   revalidatePath("/blog");
   revalidatePath(`/blog/${slug}`);
 
-  // 가입 유저 전체에게 이메일 알림 발송 (비동기 — 응답 지연 없음)
+  // 이메일 알림 발송 (비동기 — 응답 지연 없음)
   sendBlogPublishNotification({
     title,
     description,
@@ -84,6 +85,16 @@ export async function POST(request: NextRequest) {
     thumbnailUrl: resolvedThumbnail,
   }).catch(() => {
     // 이메일 발송 실패는 글 발행 결과에 영향을 주지 않음
+  });
+
+  // FCM 푸시 알림 발송 (비동기 — 응답 지연 없음)
+  sendPushToAllSubscribers({
+    title: "달디단 — 새 글이 등록되었습니다",
+    body: title,
+    url: `/blog/${encodeURIComponent(slug)}`,
+    icon: resolvedThumbnail ?? undefined,
+  }).catch(() => {
+    // 푸시 발송 실패는 글 발행 결과에 영향을 주지 않음
   });
 
   return NextResponse.json({ slug }, { status: 201 });

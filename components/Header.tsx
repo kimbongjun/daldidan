@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Bell, BellOff, Check, LogOut, Pencil, Sparkles, Trash2, User, Moon, Sun, UserCircle, X } from "lucide-react";
+import { Bell, BellOff, Check, LogOut, Pencil, Settings, Sparkles, Trash2, User, Moon, Sun, UserCircle, X } from "lucide-react";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 import { useThemeStore } from "@/store/useThemeStore";
@@ -349,6 +349,17 @@ export default function Header() {
                     {user.email}
                   </p>
                 </div>
+                <Link
+                  href="/mypage?settings=open"
+                  onClick={() => setDropdownOpen(false)}
+                  style={{
+                    width: "100%", padding: "0.75rem 1rem", display: "flex", alignItems: "center",
+                    gap: "0.5rem", fontSize: "0.85rem", color: "var(--text-primary)", borderBottom: "1px solid var(--border)",
+                  }}
+                >
+                  <Settings size={14} />
+                  사이트 옵션
+                </Link>
                 <Link
                   href="/mypage"
                   onClick={() => setDropdownOpen(false)}

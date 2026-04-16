@@ -370,3 +370,35 @@ create policy "site_settings_write" on public.site_settings for all using (auth.
 create trigger set_updated_at_site_settings
   before update on public.site_settings
   for each row execute procedure public.set_updated_at();
+
+
+-- ══════════════════════════════════════════════════════════════
+-- 12. 푸시 구독 (Push Subscriptions)
+-- FCM 토큰 저장 — 비로그인 구독도 허용 (user_id nullable)
+-- ══════════════════════════════════════════════════════════════
+create table if not exists public.push_subscriptions (
+  id          uuid primary key default uuid_generate_v4(),
+  user_id     uuid references public.profiles(id) on delete set null,
+  fcm_token   text not null unique,
+  device_type text not null default 'web' check (device_type in ('web', 'ios', 'android')),
+  user_agent  text,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+
+create index if not exists idx_push_subscriptions_user
+  on public.push_subscriptions (user_id);
+
+-- RLS
+alter table public.push_subscriptions enable row level security;
+-- 누구나 INSERT (비로그인 포함)
+create policy "push_subscriptions_insert" on public.push_subscriptions
+  for insert with check (true);
+-- 토큰을 알고 있으면 자신 것만 삭제 가능 (서버는 service_role로 RLS 우회)
+create policy "push_subscriptions_delete" on public.push_subscriptions
+  for delete using (true);
+-- 클라이언트 SELECT 불가 (service_role은 RLS 우회하므로 서버는 항상 조회 가능)
+
+create trigger set_updated_at_push_subscriptions
+  before update on public.push_subscriptions
+  for each row execute procedure public.set_updated_at();

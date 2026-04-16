@@ -10,6 +10,8 @@ const DEFAULTS: Record<string, string> = {
   meta_og_image: "",
   logo_url: "",
   custom_greeting: "",
+  pwa_icon_url: "",
+  pwa_splash_url: "",
 };
 
 export async function GET() {
