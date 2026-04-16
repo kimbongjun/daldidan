@@ -7,11 +7,14 @@ export const runtime = "nodejs";
 const MAX_INPUT_BYTES = 20 * 1024 * 1024;
 const OCR_TIMEOUT_MS = 15_000;
 
-// ── 일반 OCR 응답 타입 ──────────────────────────────────────────
+// ── 응답 타입 ────────────────────────────────────────────────────
+type Vertex = { x?: number; y?: number };
+
 type ClovaField = {
   inferText?: string;
   inferConfidence?: number;
   lineBreak?: boolean;
+  boundingPoly?: { vertices?: Vertex[] };
 };
 
 type ClovaImage = {
@@ -28,62 +31,177 @@ type ClovaResponse = {
 function getEnv() {
   const invokeUrl = process.env.NAVER_CLOVA_OCR_INVOKE_URL?.trim() ?? "";
   return {
-    invokeUrl: invokeUrl.replace(/\/+$/, ""), // 후행 슬래시 제거
+    invokeUrl: invokeUrl.replace(/\/+$/, ""),
     secretKey: process.env.NAVER_CLOVA_OCR_SECRET_KEY?.trim(),
   };
 }
 
 function diagnoseInvokeUrl(url: string): string {
   if (!url) return "NAVER_CLOVA_OCR_INVOKE_URL 환경 변수가 비어 있습니다.";
-  if (url.startsWith("http://")) {
-    return "Invoke URL이 http:// 로 시작합니다. NCP VPC 내부 전용 주소입니다. CLOVA OCR 콘솔에서 발급한 https:// 외부 Invoke URL을 사용하세요.";
-  }
-  if (!url.startsWith("https://")) {
+  if (url.startsWith("http://"))
+    return "Invoke URL이 http:// 로 시작합니다. NCP VPC 내부 전용 주소입니다. https:// 외부 Invoke URL을 사용하세요.";
+  if (!url.startsWith("https://"))
     return "Invoke URL 형식이 올바르지 않습니다. https:// 로 시작하는 Invoke URL을 확인하세요.";
-  }
   return "CLOVA OCR 서버에 연결하지 못했습니다. Invoke URL과 네트워크 상태를 확인해 주세요.";
 }
 
-// ── 텍스트 추출 ─────────────────────────────────────────────────
-function extractTexts(image: ClovaImage): string[] {
-  return (image.fields ?? [])
-    .map((f) => f.inferText?.trim() ?? "")
-    .filter(Boolean);
+// ── 위치 기반 필드 분류 ─────────────────────────────────────────
+/**
+ * boundingPoly의 Y 좌표 중앙값을 반환.
+ * 없으면 순서 기반 비율(index / total)을 fallback으로 사용.
+ */
+function fieldYRatio(field: ClovaField, index: number, total: number): number {
+  const verts = field.boundingPoly?.vertices;
+  if (verts && verts.length >= 4) {
+    const ys = verts.map((v) => v.y ?? 0);
+    const yCenter = (Math.min(...ys) + Math.max(...ys)) / 2;
+    // 최대 Y로 정규화 (같은 이미지 내 다른 필드의 최대와 비교)
+    return yCenter;
+  }
+  return (index / Math.max(total - 1, 1));
+}
+
+interface PositionedField {
+  text: string;
+  yRatio: number; // 0~1 (상단=0, 하단=1) 또는 절대 Y px
+  isAbsolute: boolean;
+}
+
+function buildPositionedFields(image: ClovaImage): PositionedField[] {
+  const fields = image.fields ?? [];
+  const total = fields.length;
+
+  // 절대 Y 좌표가 있는지 확인
+  const hasAbsoluteY = fields.some(
+    (f) => (f.boundingPoly?.vertices?.length ?? 0) >= 2 && (f.boundingPoly?.vertices?.[0]?.y ?? -1) >= 0,
+  );
+
+  if (hasAbsoluteY) {
+    // 절대 좌표 → 최대 Y 계산 후 정규화
+    let maxY = 1;
+    fields.forEach((f) => {
+      const verts = f.boundingPoly?.vertices ?? [];
+      verts.forEach((v) => { if ((v.y ?? 0) > maxY) maxY = v.y ?? 0; });
+    });
+    return fields
+      .map((f) => {
+        const verts = f.boundingPoly?.vertices ?? [];
+        const ys = verts.map((v) => v.y ?? 0);
+        const yCenter = ys.length ? (Math.min(...ys) + Math.max(...ys)) / 2 : 0;
+        return {
+          text: f.inferText?.trim() ?? "",
+          yRatio: yCenter / maxY,
+          isAbsolute: true,
+        };
+      })
+      .filter((f) => f.text.length > 0);
+  }
+
+  // fallback: 순서 기반 비율
+  return fields
+    .map((f, i) => ({
+      text: f.inferText?.trim() ?? "",
+      yRatio: fieldYRatio(f, i, total),
+      isAbsolute: false,
+    }))
+    .filter((f) => f.text.length > 0);
+}
+
+// ── 숫자 정규화 ─────────────────────────────────────────────────
+/** "12,500원" / "12 500" / "12500" 모두 → 12500 */
+function toNumber(text: string): number {
+  const stripped = text
+    .replace(/[,\s]/g, "")   // 천단위 쉼표·공백 제거
+    .replace(/원$/, "")       // 원 단위 제거
+    .replace(/[^\d]/g, "");  // 나머지 비숫자 제거
+  return stripped ? Number(stripped) : 0;
 }
 
 // ── 금액 파싱 ───────────────────────────────────────────────────
-function parseAmount(texts: string[]): number {
-  const keywords = ["합계", "총액", "결제금액", "청구금액", "받을금액", "total", "sum", "소계", "지불금액"];
+const AMOUNT_KEYWORDS = [
+  "합계", "총액", "결제금액", "청구금액", "받을금액",
+  "지불금액", "실결제", "최종금액", "total", "sum", "grand total",
+];
+const AMOUNT_NOISE = [
+  "부가세", "vat", "봉사료", "할인", "쿠폰", "포인트",
+  "단가", "수량", "개수", "ea",
+];
+
+function parseAmount(fields: PositionedField[]): number {
+  // 1차: 키워드 주변 슬라이딩 윈도우 (전체 텍스트 대상)
+  const texts = fields.map((f) => f.text);
   for (let i = 0; i < texts.length; i++) {
     const lower = texts[i].toLowerCase();
-    if (keywords.some((k) => lower.includes(k))) {
-      for (let j = i; j <= Math.min(i + 2, texts.length - 1); j++) {
-        const numeric = texts[j].replace(/[^\d]/g, "");
-        if (numeric.length >= 3) return Number(numeric);
+    if (AMOUNT_KEYWORDS.some((k) => lower.includes(k))) {
+      // 키워드 포함 텍스트 자체 + 이후 4개 블록 탐색
+      for (let j = i; j <= Math.min(i + 4, texts.length - 1); j++) {
+        const n = toNumber(texts[j]);
+        if (n >= 100) return n;
       }
     }
   }
-  // 키워드 없으면 3자리 이상 숫자 중 최댓값
-  const candidates = texts
-    .map((t) => Number(t.replace(/[^\d]/g, "")))
+
+  // 2차: 하단 40% 필드에서 가장 큰 숫자 (합계는 보통 영수증 하단)
+  const bottomFields = fields.filter((f) => f.yRatio >= 0.6);
+  const bottomCandidates = bottomFields
+    .map((f) => toNumber(f.text))
+    .filter((n) => n >= 100 && !isNaN(n));
+  if (bottomCandidates.length) return Math.max(...bottomCandidates);
+
+  // 3차: 노이즈 필드 제외 후 전체에서 가장 큰 숫자
+  const allCandidates = texts
+    .filter((t) => !AMOUNT_NOISE.some((k) => t.toLowerCase().includes(k)))
+    .map((t) => toNumber(t))
     .filter((n) => n >= 100);
-  return candidates.length ? Math.max(...candidates) : 0;
+  return allCandidates.length ? Math.max(...allCandidates) : 0;
 }
 
 // ── 날짜 파싱 ───────────────────────────────────────────────────
 function parseDate(texts: string[]): string {
-  const patterns = [
-    /(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})/,
-    /(\d{2})[.\-/](\d{1,2})[.\-/](\d{1,2})/,
+  // 패턴 목록 — 우선순위 순
+  const patterns: Array<{ re: RegExp; parse: (m: RegExpMatchArray) => string }> = [
+    // YYYY-MM-DD HH:mm (시간 포함)
+    {
+      re: /(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})[\sT]\d{1,2}:\d{2}/,
+      parse: (m) => `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`,
+    },
+    // YYYY-MM-DD
+    {
+      re: /(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})/,
+      parse: (m) => `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`,
+    },
+    // YY-MM-DD
+    {
+      re: /(\d{2})[.\-/](\d{1,2})[.\-/](\d{1,2})/,
+      parse: (m) => `20${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`,
+    },
+    // 20241016 (8자리 연속 숫자)
+    {
+      re: /(20\d{2})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])/,
+      parse: (m) => `${m[1]}-${m[2]}-${m[3]}`,
+    },
+    // 2024년 10월 16일
+    {
+      re: /(\d{4})년\s*(\d{1,2})월\s*(\d{1,2})일/,
+      parse: (m) => `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`,
+    },
+    // 24년 10월 16일
+    {
+      re: /(\d{2})년\s*(\d{1,2})월\s*(\d{1,2})일/,
+      parse: (m) => `20${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`,
+    },
   ];
+
   for (const text of texts) {
-    for (const pattern of patterns) {
-      const m = text.match(pattern);
+    for (const { re, parse } of patterns) {
+      const m = text.match(re);
       if (m) {
-        const year = m[1].length === 2 ? `20${m[1]}` : m[1];
-        const month = m[2].padStart(2, "0");
-        const day = m[3].padStart(2, "0");
-        return `${year}-${month}-${day}`;
+        const result = parse(m);
+        // 유효한 날짜인지 검증
+        const d = new Date(result);
+        if (!isNaN(d.getTime()) && d.getFullYear() >= 2000 && d.getFullYear() <= 2099) {
+          return result;
+        }
       }
     }
   }
@@ -91,33 +209,92 @@ function parseDate(texts: string[]): string {
 }
 
 // ── 매장명 파싱 ─────────────────────────────────────────────────
-// 영수증 상단에 위치하는 한글/영문 2자 이상의 첫 번째 텍스트
-function parseMerchantName(texts: string[]): string {
-  for (const text of texts.slice(0, 10)) {
-    if (/[가-힣a-zA-Z]{2,}/.test(text) && !/^\d+$/.test(text)) {
-      return text;
-    }
-  }
-  return texts[0] ?? "";
+// 걸러낼 패턴 (주소·전화번호·사업자번호 등 상호명이 아닌 텍스트)
+const MERCHANT_NOISE_RE = [
+  /^\d{2,4}-\d{3,4}-\d{4}$/,         // 전화번호
+  /^\d{3}-\d{2}-\d{5}$/,              // 사업자번호
+  /\d+층/,                              // 주소 (층)
+  /^서울|^경기|^인천|^부산|^대구|^대전|^광주|^울산/,  // 도시명
+  /영수증|receipt|합계|total|감사합니다|안녕/i,
+];
+
+function parseMerchantName(fields: PositionedField[]): string {
+  // 상단 30% 필드 우선 탐색
+  const topFields = fields.filter((f) => f.yRatio <= 0.3);
+  const candidates = (topFields.length >= 2 ? topFields : fields.slice(0, 12));
+
+  // 유효한 상호명 후보 필터
+  const valid = candidates.filter((f) => {
+    const t = f.text;
+    if (t.length < 2) return false;
+    if (!/[가-힣a-zA-Z]/.test(t)) return false;      // 한글 또는 영문 포함
+    if (/^\d+$/.test(t)) return false;                 // 순수 숫자 제외
+    if (MERCHANT_NOISE_RE.some((re) => re.test(t))) return false;
+    return true;
+  });
+
+  if (!valid.length) return candidates[0]?.text ?? "";
+
+  // 가장 긴 유효 텍스트 = 상호명일 가능성 높음
+  return valid.reduce((best, cur) => cur.text.length > best.text.length ? cur : best).text;
 }
 
 // ── 카테고리 추천 ───────────────────────────────────────────────
+const CATEGORY_RULES: Array<{ category: string; keywords: string[] }> = [
+  {
+    category: "식비",
+    keywords: [
+      "카페", "coffee", "café", "스타벅스", "이디야", "투썸", "메가커피", "빽다방",
+      "버거", "치킨", "피자", "식당", "음식", "restaurant", "배달", "쿠팡이츠",
+      "맥도날드", "롯데리아", "버거킹", "편의점", "cu", "gs25", "세븐일레븐",
+      "이마트24", "베이커리", "빵집", "분식", "국밥", "삼겹살", "한식", "중식", "일식",
+    ],
+  },
+  {
+    category: "교통",
+    keywords: [
+      "주유", "주유소", "sk에너지", "gs칼텍스", "택시", "카카오t", "우버", "티머니",
+      "톨게이트", "하이패스", "버스", "지하철", "korail", "srt", "철도", "ktx", "항공",
+    ],
+  },
+  {
+    category: "쇼핑",
+    keywords: [
+      "마트", "이마트", "홈플러스", "롯데마트", "코스트코", "다이소", "올리브영",
+      "무신사", "쿠팡", "네이버쇼핑", "11번가", "g마켓", "옥션", "백화점", "롯데", "신세계",
+    ],
+  },
+  {
+    category: "문화",
+    keywords: [
+      "영화", "cgv", "메가박스", "롯데시네마", "공연", "콘서트", "전시", "박물관",
+      "서점", "교보문고", "yes24", "알라딘", "게임",
+    ],
+  },
+  {
+    category: "의료",
+    keywords: ["약국", "병원", "의원", "치과", "한의원", "약제", "의약품", "클리닉"],
+  },
+  {
+    category: "통신",
+    keywords: ["skt", "kt", "lg u+", "lg유플러스", "통신", "요금제", "데이터", "휴대폰"],
+  },
+  {
+    category: "공과금",
+    keywords: ["전기", "수도", "가스", "관리비", "한전", "도시가스"],
+  },
+  {
+    category: "구독비",
+    keywords: ["netflix", "넷플릭스", "youtube", "spotify", "apple", "구글", "구독", "멤버십"],
+  },
+  { category: "급여",  keywords: ["급여", "월급", "상여", "임금"] },
+  { category: "대출",  keywords: ["이자", "대출", "원리금"] },
+];
+
 function recommendCategory(source: string): string {
   const normalized = source.toLowerCase();
-  const rules: Array<{ category: string; keywords: string[] }> = [
-    { category: "식비", keywords: ["카페", "coffee", "스타벅스", "이디야", "투썸", "메가", "빽다방", "버거", "치킨", "피자", "식당", "restaurant", "배달", "맥도날드", "롯데리아", "편의점", "cu", "gs25", "세븐일레븐", "베이커리"] },
-    { category: "교통", keywords: ["주유", "주유소", "택시", "카카오t", "우버", "톨게이트", "버스", "지하철", "korail", "srt", "철도"] },
-    { category: "쇼핑", keywords: ["마트", "이마트", "홈플러스", "롯데마트", "다이소", "올리브영", "무신사", "쿠팡", "스토어", "백화점"] },
-    { category: "문화", keywords: ["영화", "cgv", "메가박스", "롯데시네마", "공연", "전시", "서점", "교보문고"] },
-    { category: "의료", keywords: ["약국", "병원", "의원", "치과", "한의원"] },
-    { category: "통신", keywords: ["skt", "kt", "lg u+", "통신", "요금제", "휴대폰"] },
-    { category: "공과금", keywords: ["전기", "수도", "가스", "관리비"] },
-    { category: "구독비", keywords: ["netflix", "youtube", "spotify", "apple", "구독", "멤버십"] },
-    { category: "급여", keywords: ["급여", "월급", "상여"] },
-    { category: "대출", keywords: ["이자", "대출"] },
-  ];
-  for (const rule of rules) {
-    if (rule.keywords.some((k) => normalized.includes(k.toLowerCase()))) return rule.category;
+  for (const { category, keywords } of CATEGORY_RULES) {
+    if (keywords.some((k) => normalized.includes(k.toLowerCase()))) return category;
   }
   return "기타";
 }
@@ -131,7 +308,7 @@ export async function POST(request: NextRequest) {
   const { invokeUrl, secretKey } = getEnv();
   if (!invokeUrl || !secretKey) {
     return NextResponse.json(
-      { error: "CLOVA OCR 환경 변수가 설정되지 않았습니다. NAVER_CLOVA_OCR_INVOKE_URL, NAVER_CLOVA_OCR_SECRET_KEY를 확인해 주세요." },
+      { error: "CLOVA OCR 환경 변수가 설정되지 않았습니다." },
       { status: 500 },
     );
   }
@@ -144,13 +321,10 @@ export async function POST(request: NextRequest) {
   }
 
   const file = formData.get("image");
-  if (!(file instanceof Blob)) {
+  if (!(file instanceof Blob))
     return NextResponse.json({ error: "이미지 파일이 없습니다." }, { status: 400 });
-  }
-
-  if (file.size > MAX_INPUT_BYTES) {
+  if (file.size > MAX_INPUT_BYTES)
     return NextResponse.json({ error: "파일 크기가 너무 큽니다. 20MB 이하 이미지를 사용해 주세요." }, { status: 413 });
-  }
 
   const fileName = "name" in file && typeof file.name === "string" && file.name
     ? file.name
@@ -191,51 +365,40 @@ export async function POST(request: NextRequest) {
     try {
       json = JSON.parse(raw) as ClovaResponse;
     } catch {
-      if (!response.ok) {
+      if (!response.ok)
         return NextResponse.json(
-          { error: "CLOVA OCR 응답을 해석하지 못했습니다. Invoke URL이 올바른지 확인해 주세요." },
+          { error: "CLOVA OCR 응답을 해석하지 못했습니다. Invoke URL을 확인해 주세요." },
           { status: 502 },
         );
-      }
     }
   }
 
   if (!response.ok) {
-    const errBody = json as { message?: string };
-    const detail = errBody.message ? `: ${errBody.message}` : "";
+    const detail = (json as { message?: string }).message;
     return NextResponse.json(
-      { error: `CLOVA OCR 오류 (${response.status})${detail}` },
+      { error: `CLOVA OCR 오류 (${response.status})${detail ? `: ${detail}` : ""}` },
       { status: response.status },
     );
   }
 
   const image = json.images?.[0];
-  if (!image || image.inferResult === "ERROR") {
+  if (!image || image.inferResult === "ERROR")
     return NextResponse.json(
       { error: `CLOVA OCR 분석 실패${image?.message ? `: ${image.message}` : ""}` },
       { status: 422 },
     );
-  }
 
-  const texts = extractTexts(image);
-  if (texts.length === 0) {
+  const posFields = buildPositionedFields(image);
+  if (posFields.length === 0)
     return NextResponse.json({ error: "이미지에서 텍스트를 인식하지 못했습니다." }, { status: 422 });
-  }
 
-  const merchantName = parseMerchantName(texts);
-  const amount = parseAmount(texts);
+  const texts = posFields.map((f) => f.text);
+  const merchantName = parseMerchantName(posFields);
+  const amount = parseAmount(posFields);
   const date = parseDate(texts);
   const rawText = texts.join(" | ");
   const recommendedCategory = recommendCategory(rawText);
   const note = merchantName ? `${merchantName} 영수증` : "영수증 자동입력";
 
-  return NextResponse.json({
-    merchantName,
-    location: "",
-    amount,
-    date,
-    note,
-    recommendedCategory,
-    rawText,
-  });
+  return NextResponse.json({ merchantName, location: "", amount, date, note, recommendedCategory, rawText });
 }

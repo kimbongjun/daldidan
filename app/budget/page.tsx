@@ -1,28 +1,18 @@
 "use client";
 
-import { type CSSProperties, useCallback, useEffect, useMemo, useState } from "react";
+import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PageHeader from "@/components/PageHeader";
 import { uploadImagesToStorage } from "@/lib/image-upload";
 import { sendNativeNotification } from "@/lib/notifications";
 import { analyzeReceiptImage } from "@/lib/receipt-ocr";
-import { ImagePlus, LoaderCircle, PencilLine, Plus, Trash2, TrendingDown, TrendingUp, Wallet } from "lucide-react";
+import { CheckCircle2, ChevronDown, ChevronUp, ImagePlus, LoaderCircle, Pencil, Trash2, TrendingDown, TrendingUp, Wallet, XCircle } from "lucide-react";
+import OcrScanModal from "@/components/OcrScanModal";
+import { preprocessReceiptImage } from "@/lib/image-preprocess";
 
 const ACCENT = "#6366F1";
 
 const CATEGORIES = ["식비", "교통", "쇼핑", "문화", "의료", "통신", "공과금", "구독비", "대출", "급여", "기타"];
 const BUYER_OPTIONS = ["공동", "봉준", "달희"] as const;
-
-const inputStyle: CSSProperties = {
-  background: "var(--bg-input)",
-  border: "1px solid var(--border)",
-  borderRadius: "0.5rem",
-  padding: "0.5rem 0.75rem",
-  fontSize: "0.875rem",
-  color: "var(--text-primary)",
-  outline: "none",
-  width: "100%",
-  boxSizing: "border-box",
-};
 
 const CATEGORY_COLORS: Record<string, string> = {
   식비: "#F59E0B",
@@ -36,6 +26,18 @@ const CATEGORY_COLORS: Record<string, string> = {
   대출: "#EF4444",
   급여: "#10B981",
   기타: "#8B8BA7",
+};
+
+const inputStyle: CSSProperties = {
+  background: "var(--bg-input)",
+  border: "1px solid var(--border)",
+  borderRadius: "0.5rem",
+  padding: "0.5rem 0.75rem",
+  fontSize: "0.875rem",
+  color: "var(--text-primary)",
+  outline: "none",
+  width: "100%",
+  boxSizing: "border-box",
 };
 
 interface Transaction {
@@ -64,22 +66,20 @@ interface TransactionApiResponse {
   date: string;
 }
 
-function normalizeTransaction(transaction: TransactionApiResponse): Transaction {
+function normalizeTransaction(t: TransactionApiResponse): Transaction {
   return {
-    id: transaction.id,
-    type: transaction.type,
-    category: transaction.category,
-    buyer: transaction.buyer ?? "공동",
-    merchantName: transaction.merchant_name ?? "",
-    location: transaction.location ?? "",
-    receiptImageUrl: transaction.receipt_image_url ?? null,
-    amount: transaction.amount,
-    note: transaction.note,
-    date: transaction.date,
+    id: t.id,
+    type: t.type,
+    category: t.category,
+    buyer: t.buyer ?? "공동",
+    merchantName: t.merchant_name ?? "",
+    location: t.location ?? "",
+    receiptImageUrl: t.receipt_image_url ?? null,
+    amount: t.amount,
+    note: t.note,
+    date: t.date,
   };
 }
-
-type Period = "daily" | "monthly" | "yearly";
 
 const EMPTY_FORM = (): Omit<Transaction, "id"> => ({
   type: "expense",
@@ -93,15 +93,25 @@ const EMPTY_FORM = (): Omit<Transaction, "id"> => ({
   date: new Date().toISOString().slice(0, 10),
 });
 
+type SaveStatus = "idle" | "saving" | "success" | "error";
+
 export default function BudgetPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
-  const [period, setPeriod] = useState<Period>("monthly");
-  const [editingId, setEditingId] = useState<string | null>(null); // null = 새 거래 추가 모드
-  const [showEditor, setShowEditor] = useState(false);
-  const [selectedTransactionId, setSelectedTransactionId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState<Omit<Transaction, "id">>(EMPTY_FORM());
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const [saveError, setSaveError] = useState("");
+  const [chartsOpen, setChartsOpen] = useState(false);
+  const [period, setPeriod] = useState<"daily" | "monthly" | "yearly">("monthly");
 
-  // ── 거래 목록 로드 ──────────────────────────────────────────
+  // OCR 상태
+  const [ocrLoading, setOcrLoading] = useState(false);
+  const [ocrError, setOcrError] = useState("");
+  const [ocrSuggestedCategory, setOcrSuggestedCategory] = useState("");
+  const [ocrModalImage, setOcrModalImage] = useState<string | null>(null); // ObjectURL
+  const [ocrDone, setOcrDone] = useState(false);
+
   const loadTransactions = useCallback(async () => {
     setLoading(true);
     try {
@@ -117,385 +127,558 @@ export default function BudgetPage() {
 
   useEffect(() => { loadTransactions(); }, [loadTransactions]);
 
+  // URL 파라미터로 특정 거래 편집 진입
   useEffect(() => {
     if (typeof window === "undefined") return;
-
     const params = new URLSearchParams(window.location.search);
-    setSelectedTransactionId(params.get("transaction"));
-  }, []);
-
-  useEffect(() => {
-    if (!selectedTransactionId || transactions.length === 0) return;
-
-    const matched = transactions.find((transaction) => transaction.id === selectedTransactionId);
+    const tid = params.get("transaction");
+    if (!tid) return;
+    const matched = transactions.find((t) => t.id === tid);
     if (!matched) return;
-
     setEditingId(matched.id);
-    setShowEditor(true);
-  }, [selectedTransactionId, transactions]);
+    setForm({
+      type: matched.type,
+      category: matched.category,
+      buyer: matched.buyer,
+      merchantName: matched.merchantName,
+      location: matched.location,
+      receiptImageUrl: matched.receiptImageUrl,
+      amount: matched.amount,
+      note: matched.note,
+      date: matched.date,
+    });
+  }, [transactions]);
 
-  // ── 집계 ──────────────────────────────────────────────────
-  const income = transactions.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0);
-  const expense = transactions.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0);
+  const income = useMemo(() => transactions.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0), [transactions]);
+  const expense = useMemo(() => transactions.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0), [transactions]);
   const balance = income - expense;
-  const editing = transactions.find((t) => t.id === editingId) ?? null;
 
-  // ── 거래 추가 ──────────────────────────────────────────────
-  const handleAdd = async (form: Omit<Transaction, "id">) => {
-    const res = await fetch("/api/transactions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
-    });
-    if (res.ok) {
-      const created = normalizeTransaction(await res.json() as TransactionApiResponse);
-      setTransactions((prev) => [created, ...prev]);
-      sendNativeNotification(
-        "가계부 내역이 추가되었어요",
-        `${created.note || created.category} · ${created.amount.toLocaleString()}원`,
-      );
-    }
-    setShowEditor(false);
+  const resetForm = () => {
+    setForm(EMPTY_FORM());
     setEditingId(null);
+    setOcrSuggestedCategory("");
+    setOcrError("");
   };
 
-  // ── 거래 수정 ──────────────────────────────────────────────
-  const handleUpdate = async (id: string, patch: Omit<Transaction, "id">) => {
-    const res = await fetch(`/api/transactions/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(patch),
-    });
-    if (res.ok) {
-      const updated = normalizeTransaction(await res.json() as TransactionApiResponse);
-      setTransactions((prev) => prev.map((t) => (t.id === id ? updated : t)));
+  const handleSave = async () => {
+    if (form.amount <= 0 || ocrLoading) return;
+    setSaveStatus("saving");
+    setSaveError("");
+    try {
+      if (editingId) {
+        const res = await fetch(`/api/transactions/${editingId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(form),
+        });
+        if (!res.ok) {
+          const d = await res.json() as { error?: string };
+          throw new Error(d.error ?? "수정에 실패했습니다.");
+        }
+        const updated = normalizeTransaction(await res.json() as TransactionApiResponse);
+        setTransactions((prev) => prev.map((t) => (t.id === editingId ? updated : t)));
+      } else {
+        const res = await fetch("/api/transactions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(form),
+        });
+        if (!res.ok) {
+          const d = await res.json() as { error?: string };
+          throw new Error(d.error ?? "저장에 실패했습니다.");
+        }
+        const created = normalizeTransaction(await res.json() as TransactionApiResponse);
+        setTransactions((prev) => [created, ...prev]);
+        sendNativeNotification(
+          "가계부 내역이 추가되었어요",
+          `${created.note || created.category} · ${created.amount.toLocaleString()}원`,
+        );
+      }
+      setSaveStatus("success");
+      resetForm();
+      setTimeout(() => setSaveStatus("idle"), 2000);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "저장에 실패했습니다.");
+      setSaveStatus("error");
     }
-    setEditingId(null);
-    setShowEditor(false);
   };
 
-  // ── 거래 삭제 ──────────────────────────────────────────────
   const handleDelete = async (id: string) => {
     await fetch(`/api/transactions/${id}`, { method: "DELETE" });
     setTransactions((prev) => prev.filter((t) => t.id !== id));
-    if (editingId === id) { setEditingId(null); setShowEditor(false); }
+    if (editingId === id) resetForm();
   };
 
-  const openAdd = () => { setEditingId(null); setShowEditor(true); };
-  const openEdit = (id: string) => { setEditingId(id); setShowEditor(true); };
+  const startEdit = (tx: Transaction) => {
+    setEditingId(tx.id);
+    setForm({
+      type: tx.type, category: tx.category, buyer: tx.buyer,
+      merchantName: tx.merchantName, location: tx.location,
+      receiptImageUrl: tx.receiptImageUrl, amount: tx.amount,
+      note: tx.note, date: tx.date,
+    });
+    setOcrSuggestedCategory("");
+    setOcrError("");
+    setSaveStatus("idle");
+    setSaveError("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleOcr = async (file: File) => {
+    // 모달용 미리보기는 원본 파일로 표시 (전처리 전)
+    const previewUrl = URL.createObjectURL(file);
+    setOcrModalImage(previewUrl);
+    setOcrDone(false);
+    setOcrLoading(true);
+    setOcrError("");
+    try {
+      // 이미지 전처리 (그레이스케일 + 대비 강화) → OCR 정확도 향상
+      const processedFile = await preprocessReceiptImage(file);
+
+      const [uploadResult, ocrResult] = await Promise.allSettled([
+        uploadImagesToStorage([file]),          // 원본을 스토리지에 저장
+        analyzeReceiptImage(processedFile),     // 전처리본으로 OCR
+      ]);
+      const receiptImageUrl = uploadResult.status === "fulfilled"
+        ? (uploadResult.value[0]?.url ?? "")
+        : "";
+      const extracted = ocrResult.status === "fulfilled" ? ocrResult.value : null;
+
+      if (!receiptImageUrl && !extracted) throw new Error("영수증 업로드와 OCR 분석에 모두 실패했습니다.");
+
+      setOcrSuggestedCategory(extracted?.recommendedCategory ?? "");
+      setForm((prev) => ({
+        ...prev,
+        category: extracted?.recommendedCategory || prev.category,
+        merchantName: extracted?.merchantName || prev.merchantName,
+        location: extracted?.location || prev.location,
+        amount: extracted && extracted.amount > 0 ? extracted.amount : prev.amount,
+        date: extracted?.date || prev.date,
+        note: extracted?.note || prev.note,
+        receiptImageUrl: receiptImageUrl || prev.receiptImageUrl,
+      }));
+
+      if (ocrResult.status === "rejected") {
+        setOcrError(ocrResult.reason instanceof Error ? ocrResult.reason.message : "영수증 OCR 처리에 실패했습니다.");
+      } else if (uploadResult.status === "rejected") {
+        setOcrError("영수증 업로드에 실패했습니다.");
+      }
+    } catch (err) {
+      setOcrError(err instanceof Error ? err.message : "영수증 OCR 처리에 실패했습니다.");
+    } finally {
+      setOcrLoading(false);
+      setOcrDone(true); // 성공/실패 무관하게 스캔 완료 표시
+    }
+  };
+
+  const closeOcrModal = () => {
+    if (ocrModalImage) URL.revokeObjectURL(ocrModalImage);
+    setOcrModalImage(null);
+    setOcrDone(false);
+  };
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg-base)" }}>
-      <div className="max-w-[1200px] mx-auto px-4 sm:px-6 pb-12">
-        <PageHeader title="가계부 분석" subtitle="내 소비 흐름을 한눈에" accentColor={ACCENT} />
+      {/* OCR 스캔 모달 */}
+      {ocrModalImage && (
+        <OcrScanModal
+          imageUrl={ocrModalImage}
+          isDone={ocrDone}
+          onClose={closeOcrModal}
+        />
+      )}
 
-        {/* 요약 카드 */}
-        <div className="grid grid-cols-3 gap-4 mb-6">
-          {[
-            { label: "잔액", value: balance, color: balance >= 0 ? "#10B981" : "#F43F5E", icon: <Wallet size={18} /> },
-            { label: "총 수입", value: income, color: "#10B981", icon: <TrendingUp size={18} /> },
-            { label: "총 지출", value: expense, color: "#F43F5E", icon: <TrendingDown size={18} /> },
-          ].map((item) => (
-            <div key={item.label} className="bento-card p-4">
-              <div className="flex items-center gap-2 mb-2" style={{ color: item.color }}>{item.icon}<span className="text-sm font-semibold">{item.label}</span></div>
-              <p className="text-md md:text-2xl font-black" style={{ color: item.color }}>{(Math.abs(item.value) / 10000).toFixed(1)}만원</p>
-              <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>{item.value.toLocaleString()}원</p>
-            </div>
-          ))}
-        </div>
+      <div className="max-w-[1100px] mx-auto px-4 sm:px-6 pb-16">
+        <PageHeader title="가계부" subtitle="내역 입력 및 소비 분석" accentColor={ACCENT} />
 
-        {/* 기간 탭 */}
-        <div className="flex gap-2 mb-6">
-          {([["daily", "일별"], ["monthly", "월별"], ["yearly", "연간"]] as const).map(([key, label]) => (
-            <button key={key} onClick={() => setPeriod(key)}
-              className="px-4 py-2 rounded-xl text-sm font-semibold transition-colors"
-              style={{ background: period === key ? ACCENT : "var(--bg-card)", color: period === key ? "#fff" : "var(--text-muted)", border: "1px solid", borderColor: period === key ? ACCENT : "var(--border)" }}>
-              {label}
-            </button>
-          ))}
-        </div>
+        <div className="grid lg:grid-cols-[1fr_360px] gap-6">
 
-        <div className="grid lg:grid-cols-[1fr_380px] gap-6">
-          {/* 차트 영역 */}
+          {/* ── 왼쪽: 입력 폼 + 내역 목록 ── */}
           <div className="flex flex-col gap-4">
-            {period === "daily"   && <DailyBarChart   transactions={transactions} />}
-            {period === "monthly" && <MonthlyLineChart transactions={transactions} />}
-            {period === "yearly"  && <YearlyBarChart   transactions={transactions} />}
-            <PieChart transactions={transactions} />
-          </div>
 
-          {/* 에디터 + 목록 */}
-          <div className="flex flex-col gap-4">
-            {showEditor ? (
-              <EditorCard
-                key={editingId ?? "new"}
-                transaction={editing}
-                onCancel={() => { setShowEditor(false); setEditingId(null); }}
-                onSave={(form) => {
-                  if (editingId) handleUpdate(editingId, form);
-                  else handleAdd(form);
-                }}
+            {/* 입력 폼 */}
+            <div className="bento-card p-5 flex flex-col gap-4">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
+                  {editingId ? "내역 수정" : "거래 추가"}
+                </p>
+                {editingId && (
+                  <button onClick={resetForm} className="text-xs font-semibold hover:opacity-70 transition-opacity"
+                    style={{ color: "var(--text-muted)" }}>
+                    취소
+                  </button>
+                )}
+              </div>
+
+              {/* 수입/지출 토글 */}
+              <div className="flex gap-2">
+                {(["expense", "income"] as const).map((type) => (
+                  <button key={type} onClick={() => setForm((f) => ({ ...f, type }))}
+                    className="flex-1 py-2 rounded-lg text-sm font-semibold transition-colors"
+                    style={{
+                      background: form.type === type ? ACCENT : "transparent",
+                      color: form.type === type ? "#fff" : "var(--text-muted)",
+                      border: "1px solid",
+                      borderColor: form.type === type ? ACCENT : "var(--border)",
+                    }}>
+                    {type === "expense" ? "지출" : "수입"}
+                  </button>
+                ))}
+              </div>
+
+              {/* 영수증 OCR */}
+              <OcrUploader
+                ocrLoading={ocrLoading}
+                ocrError={ocrError}
+                receiptImageUrl={form.receiptImageUrl}
+                ocrSuggestedCategory={ocrSuggestedCategory}
+                onFileSelect={handleOcr}
+                onClearImage={() => setForm((f) => ({ ...f, receiptImageUrl: null }))}
               />
-            ) : (
-              <div className="bento-card p-5 flex flex-col items-center justify-center gap-3" style={{ minHeight: 180 }}>
-                <PencilLine size={28} style={{ color: ACCENT }} />
-                <p className="text-sm text-center" style={{ color: "var(--text-muted)" }}>내역을 선택해 수정하거나<br />새 거래를 추가하세요.</p>
-                <button
-                  onClick={openAdd}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-opacity hover:opacity-80"
-                  style={{ background: ACCENT, color: "#fff" }}
-                >
-                  <Plus size={14} /> 거래 추가
-                </button>
-              </div>
-            )}
 
-            {/* 거래 목록 */}
-            <div className="bento-card p-4 flex flex-col gap-2 flex-1 overflow-auto" style={{ maxHeight: 520 }}>
-              <div className="flex items-center justify-between mb-1">
-                <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>전체 내역</p>
-                <button
-                  onClick={openAdd}
-                  className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg transition-opacity hover:opacity-70"
-                  style={{ background: ACCENT + "22", color: ACCENT }}
-                >
-                  <Plus size={11} />추가
-                </button>
+              {/* 카테고리 + 구매자 */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>카테고리</label>
+                  <select value={form.category}
+                    onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
+                    style={inputStyle}>
+                    {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>구매자</label>
+                  <select value={form.buyer}
+                    onChange={(e) => setForm((f) => ({ ...f, buyer: e.target.value as Transaction["buyer"] }))}
+                    style={inputStyle}>
+                    {BUYER_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                </div>
               </div>
+
+              {/* 금액 + 날짜 */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>금액 (원)</label>
+                  <input
+                    type="number"
+                    placeholder="0"
+                    value={form.amount || ""}
+                    onChange={(e) => setForm((f) => ({ ...f, amount: Number(e.target.value) }))}
+                    style={inputStyle}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>날짜</label>
+                  <input type="date" value={form.date}
+                    onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
+                    style={inputStyle} />
+                </div>
+              </div>
+
+              {/* 매장명 + 위치 */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>매장명</label>
+                  <input placeholder="예: 스타벅스" value={form.merchantName}
+                    onChange={(e) => setForm((f) => ({ ...f, merchantName: e.target.value }))}
+                    style={inputStyle} />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>위치</label>
+                  <input placeholder="예: 성수점" value={form.location}
+                    onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))}
+                    style={inputStyle} />
+                </div>
+              </div>
+
+              {/* 메모 */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>메모</label>
+                <input placeholder="메모 (선택)" value={form.note}
+                  onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
+                  style={inputStyle} />
+              </div>
+
+              {/* 에러 메시지 */}
+              {saveStatus === "error" && (
+                <div className="flex items-center gap-2 rounded-lg px-3 py-2"
+                  style={{ background: "rgba(244,63,94,0.1)", border: "1px solid rgba(244,63,94,0.2)" }}>
+                  <XCircle size={14} style={{ color: "#F43F5E", flexShrink: 0 }} />
+                  <p className="text-xs" style={{ color: "#F43F5E" }}>{saveError}</p>
+                </div>
+              )}
+
+              {/* 저장 버튼 */}
+              <button
+                onClick={handleSave}
+                disabled={form.amount <= 0 || ocrLoading || saveStatus === "saving"}
+                className="w-full py-2.5 rounded-lg text-sm font-bold text-white flex items-center justify-center gap-2 transition-opacity disabled:opacity-40"
+                style={{ background: saveStatus === "success" ? "#10B981" : ACCENT }}
+              >
+                {saveStatus === "saving" && <LoaderCircle size={14} className="animate-spin" />}
+                {saveStatus === "success" && <CheckCircle2 size={14} />}
+                {saveStatus === "saving" ? "저장 중..." : saveStatus === "success" ? "저장됨!" : (editingId ? "수정 저장" : "거래 추가")}
+              </button>
+            </div>
+
+            {/* 거래 내역 목록 */}
+            <div className="bento-card p-4 flex flex-col gap-2">
+              <p className="text-sm font-bold mb-1" style={{ color: "var(--text-primary)" }}>
+                전체 내역 <span className="font-normal text-xs" style={{ color: "var(--text-muted)" }}>({transactions.length}건)</span>
+              </p>
 
               {loading ? (
-                <div className="flex items-center justify-center py-8">
-                  <div style={{ width: 20, height: 20, borderRadius: "50%", border: `2px solid ${ACCENT}`, borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }} />
+                <div className="flex items-center justify-center py-10">
+                  <LoaderCircle size={20} className="animate-spin" style={{ color: ACCENT }} />
                 </div>
               ) : transactions.length === 0 ? (
-                <p className="text-sm text-center py-8" style={{ color: "var(--text-muted)" }}>아직 거래 내역이 없습니다.</p>
+                <p className="text-sm text-center py-8" style={{ color: "var(--text-muted)" }}>
+                  아직 거래 내역이 없습니다.<br />위 폼에서 첫 거래를 추가해 보세요.
+                </p>
               ) : (
                 transactions.map((tx) => (
-                  <div key={tx.id} className="flex items-center gap-2.5 rounded-xl px-3 py-2.5"
-                    style={{
-                      background: editingId === tx.id ? ACCENT + "11" : "rgba(255,255,255,0.03)",
-                      border: selectedTransactionId === tx.id ? `1px solid ${ACCENT}55` : "1px solid transparent",
-                    }}>
-                    <button onClick={() => openEdit(tx.id)} className="flex items-center gap-2.5 flex-1 min-w-0 text-left">
-                      <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-xs font-bold"
-                        style={{ background: (CATEGORY_COLORS[tx.category] ?? "#8B8BA7") + "22", color: CATEGORY_COLORS[tx.category] ?? "#8B8BA7" }}>
-                        {tx.category.slice(0, 1)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold truncate" style={{ color: "var(--text-primary)" }}>{tx.note || tx.category}</p>
-                        <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
-                          <span className="text-[11px] px-1.5 py-0.5 rounded-md" style={{ color: "#6366F1", background: "#6366F122" }}>{tx.buyer}</span>
-                          {tx.merchantName ? (
-                            <span className="text-xs" style={{ color: "var(--text-muted)" }}>{tx.merchantName}</span>
-                          ) : null}
-                          <span className="text-xs" style={{ color: "var(--text-muted)" }}>{tx.category} · {tx.date}</span>
-                        </div>
-                      </div>
-                    </button>
-                    <span className={`text-sm font-bold shrink-0 ${tx.type === "income" ? "text-emerald-400" : "text-rose-400"}`}>
-                      {tx.type === "income" ? "+" : "-"}{tx.amount.toLocaleString()}원
-                    </span>
-                    <button onClick={() => handleDelete(tx.id)} className="opacity-40 hover:opacity-80 transition-opacity shrink-0">
-                      <Trash2 size={12} style={{ color: "var(--text-muted)" }} />
-                    </button>
-                  </div>
+                  <TransactionRow
+                    key={tx.id}
+                    tx={tx}
+                    isEditing={editingId === tx.id}
+                    onEdit={() => startEdit(tx)}
+                    onDelete={() => handleDelete(tx.id)}
+                  />
                 ))
+              )}
+            </div>
+          </div>
+
+          {/* ── 오른쪽: 요약 + 차트 ── */}
+          <div className="flex flex-col gap-4">
+
+            {/* 요약 카드 */}
+            <div className="bento-card p-5 flex flex-col gap-4">
+              <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>이번 달 요약</p>
+              <div className="flex flex-col gap-3">
+                {[
+                  { label: "잔액", value: balance, color: balance >= 0 ? "#10B981" : "#F43F5E", icon: <Wallet size={15} /> },
+                  { label: "총 수입", value: income, color: "#10B981", icon: <TrendingUp size={15} /> },
+                  { label: "총 지출", value: expense, color: "#F43F5E", icon: <TrendingDown size={15} /> },
+                ].map((item) => (
+                  <div key={item.label} className="flex items-center justify-between rounded-xl px-3 py-2.5"
+                    style={{ background: "rgba(255,255,255,0.03)", border: "1px solid var(--border)" }}>
+                    <div className="flex items-center gap-2" style={{ color: item.color }}>
+                      {item.icon}
+                      <span className="text-sm font-semibold">{item.label}</span>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-black" style={{ color: item.color }}>
+                        {(Math.abs(item.value) / 10000).toFixed(1)}만원
+                      </p>
+                      <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                        {item.value.toLocaleString()}원
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* 저축률 */}
+              {income > 0 && (
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>저축률</span>
+                    <span className="text-sm font-black"
+                      style={{ color: balance >= 0 ? "#10B981" : "#F43F5E" }}>
+                      {income > 0 ? Math.round(((income - expense) / income) * 100) : 0}%
+                    </span>
+                  </div>
+                  <div style={{ height: 6, borderRadius: 999, background: "var(--border)", overflow: "hidden" }}>
+                    <div style={{
+                      width: `${Math.min(Math.max(income > 0 ? Math.round(((income - expense) / income) * 100) : 0, 0), 100)}%`,
+                      height: "100%", borderRadius: 999,
+                      background: balance >= 0 ? "#10B981" : "#F43F5E",
+                      transition: "width 0.6s ease",
+                    }} />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 카테고리 비율 */}
+            <PieChart transactions={transactions} />
+
+            {/* 차트 — 접기/펼치기 */}
+            <div className="bento-card overflow-hidden">
+              <button
+                onClick={() => setChartsOpen((v) => !v)}
+                className="w-full flex items-center justify-between p-4 hover:opacity-80 transition-opacity"
+                style={{ background: "transparent", border: "none", cursor: "pointer" }}
+                aria-label={chartsOpen ? "차트 접기" : "차트 펼치기"}
+              >
+                <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>기간별 그래프</p>
+                {chartsOpen
+                  ? <ChevronUp size={15} style={{ color: "var(--text-muted)" }} />
+                  : <ChevronDown size={15} style={{ color: "var(--text-muted)" }} />}
+              </button>
+
+              {chartsOpen && (
+                <div className="px-4 pb-4 flex flex-col gap-4">
+                  <div className="flex gap-2">
+                    {([["daily", "일별"], ["monthly", "월별"], ["yearly", "연간"]] as const).map(([key, label]) => (
+                      <button key={key} onClick={() => setPeriod(key)}
+                        className="flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+                        style={{
+                          background: period === key ? ACCENT : "transparent",
+                          color: period === key ? "#fff" : "var(--text-muted)",
+                          border: "1px solid",
+                          borderColor: period === key ? ACCENT : "var(--border)",
+                        }}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  {period === "daily"   && <DailyBarChart transactions={transactions} />}
+                  {period === "monthly" && <MonthlyLineChart transactions={transactions} />}
+                  {period === "yearly"  && <YearlyBarChart transactions={transactions} />}
+                </div>
               )}
             </div>
           </div>
         </div>
       </div>
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }
 
-function EditorCard({
-  transaction,
-  onCancel,
-  onSave,
+// ── OCR 업로드 ──────────────────────────────────────────────────
+function OcrUploader({
+  ocrLoading, ocrError, receiptImageUrl, ocrSuggestedCategory,
+  onFileSelect, onClearImage,
 }: {
-  transaction: Transaction | null;
-  onCancel: () => void;
-  onSave: (value: Omit<Transaction, "id">) => void;
+  ocrLoading: boolean;
+  ocrError: string;
+  receiptImageUrl: string | null;
+  ocrSuggestedCategory: string;
+  onFileSelect: (file: File) => void;
+  onClearImage: () => void;
 }) {
-  const [form, setForm] = useState<Omit<Transaction, "id">>(
-    transaction
-      ? {
-          type: transaction.type,
-          category: transaction.category,
-          buyer: transaction.buyer,
-          merchantName: transaction.merchantName,
-          location: transaction.location,
-          receiptImageUrl: transaction.receiptImageUrl,
-          amount: transaction.amount,
-          note: transaction.note,
-          date: transaction.date,
-        }
-      : EMPTY_FORM(),
-  );
-  const [ocrLoading, setOcrLoading] = useState(false);
-  const [ocrError, setOcrError] = useState("");
-  const [ocrSuggestedCategory, setOcrSuggestedCategory] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
 
   return (
-    <div className="bento-card p-4 flex flex-col gap-3">
-      <div className="flex items-center justify-between">
-        <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{transaction ? "내역 수정" : "거래 추가"}</p>
-        <button onClick={onCancel} className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>닫기</button>
-      </div>
-
-      <div className="flex gap-2">
-        {(["expense", "income"] as const).map((type) => (
-          <button key={type} onClick={() => setForm((f) => ({ ...f, type }))}
-            className="flex-1 py-2 rounded-lg text-sm font-semibold transition-colors"
-            style={{ background: form.type === type ? ACCENT : "transparent", color: form.type === type ? "#fff" : "var(--text-muted)", border: "1px solid", borderColor: form.type === type ? ACCENT : "var(--border)" }}>
-            {type === "expense" ? "지출" : "수입"}
-          </button>
-        ))}
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>영수증 첨부</label>
-        <label
-          className="rounded-xl border border-dashed p-3 cursor-pointer transition-opacity hover:opacity-80"
-          style={{ borderColor: "var(--border)", background: "var(--bg-input)" }}
-        >
-          <input
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={async (event) => {
-              const file = event.target.files?.[0];
-              if (!file) return;
-
-              setOcrLoading(true);
-              setOcrError("");
-              try {
-                const [uploadResult, ocrResult] = await Promise.allSettled([
-                  uploadImagesToStorage([file]),
-                  analyzeReceiptImage(file),
-                ]);
-
-                const receiptImageUrl = uploadResult.status === "fulfilled"
-                  ? (uploadResult.value[0]?.url ?? "")
-                  : "";
-                const extracted = ocrResult.status === "fulfilled" ? ocrResult.value : null;
-
-                if (!receiptImageUrl && !extracted) {
-                  throw new Error("영수증 업로드와 OCR 분석에 모두 실패했습니다.");
-                }
-
-                setOcrSuggestedCategory(extracted?.recommendedCategory ?? "");
-                setForm((prev) => ({
-                  ...prev,
-                  category: extracted?.recommendedCategory || prev.category,
-                  merchantName: extracted?.merchantName || prev.merchantName,
-                  location: extracted?.location || prev.location,
-                  amount: extracted && extracted.amount > 0 ? extracted.amount : prev.amount,
-                  date: extracted?.date || prev.date,
-                  note: extracted?.note || prev.note,
-                  receiptImageUrl: receiptImageUrl || prev.receiptImageUrl,
-                }));
-
-                if (ocrResult.status === "rejected") {
-                  setOcrError(ocrResult.reason instanceof Error ? ocrResult.reason.message : "영수증 OCR 처리에 실패했습니다.");
-                } else if (uploadResult.status === "rejected") {
-                  setOcrError(uploadResult.reason instanceof Error ? uploadResult.reason.message : "영수증 업로드에 실패했습니다.");
-                }
-              } catch (error) {
-                setOcrError(error instanceof Error ? error.message : "영수증 OCR 처리에 실패했습니다.");
-              } finally {
-                setOcrLoading(false);
-                event.target.value = "";
-              }
-            }}
-          />
-          <div className="flex items-center gap-2">
-            {ocrLoading ? <LoaderCircle size={16} className="animate-spin" style={{ color: ACCENT }} /> : <ImagePlus size={16} style={{ color: ACCENT }} />}
-            <div className="flex flex-col gap-0.5">
-              <p className="text-sm font-semibold" style={{ color: "var(--text-primary)", margin: 0 }}>
-                {ocrLoading ? "영수증 분석 중..." : "영수증 이미지 선택"}
-              </p>
-              <p className="text-xs" style={{ color: "var(--text-muted)", margin: 0 }}>
-                매장명, 위치, 금액, 날짜를 자동으로 추출합니다.
-              </p>
-            </div>
-          </div>
-        </label>
-        {form.receiptImageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={form.receiptImageUrl}
-            alt="영수증 미리보기"
-            className="w-full rounded-xl border object-cover"
-            style={{ borderColor: "var(--border)", maxHeight: 180 }}
-          />
-        ) : null}
-        {ocrError ? (
-          <p className="text-xs" style={{ color: "#F43F5E", margin: 0 }}>{ocrError}</p>
-        ) : null}
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>카테고리</label>
-          <select value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))} style={inputStyle}>
-            {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
-          {ocrSuggestedCategory ? (
-            <p className="text-[11px]" style={{ color: ACCENT, margin: 0 }}>
-              OCR 추천: {ocrSuggestedCategory}
-            </p>
-          ) : null}
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>구매자</label>
-          <select value={form.buyer} onChange={(e) => setForm((f) => ({ ...f, buyer: e.target.value as Transaction["buyer"] }))} style={inputStyle}>
-            {BUYER_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
-          </select>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>매장명</label>
-          <input placeholder="예: 스타벅스" value={form.merchantName} onChange={(e) => setForm((f) => ({ ...f, merchantName: e.target.value }))} style={inputStyle} />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>위치</label>
-          <input placeholder="예: 성수점" value={form.location} onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))} style={inputStyle} />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>금액</label>
-          <input type="number" placeholder="금액 (원)" value={form.amount || ""} onChange={(e) => setForm((f) => ({ ...f, amount: Number(e.target.value) }))} style={inputStyle} />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>날짜</label>
-          <input type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} style={inputStyle} />
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>메모</label>
-        <input placeholder="메모" value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} style={inputStyle} />
-      </div>
-
-      <button
-        onClick={() => onSave(form)}
-        disabled={form.amount <= 0 || ocrLoading}
-        className="w-full py-2.5 rounded-lg text-sm font-bold text-white transition-opacity disabled:opacity-40"
-        style={{ background: ACCENT }}
+    <div className="flex flex-col gap-1.5">
+      <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>영수증 자동 인식 (선택)</label>
+      <label
+        className="rounded-xl border border-dashed p-3 cursor-pointer transition-opacity hover:opacity-80"
+        style={{ borderColor: "var(--border)", background: "var(--bg-input)" }}
       >
-        {transaction ? "수정 저장" : "추가하기"}
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) onFileSelect(file);
+            e.target.value = "";
+          }}
+        />
+        <div className="flex items-center gap-2">
+          {ocrLoading
+            ? <LoaderCircle size={15} className="animate-spin" style={{ color: ACCENT }} />
+            : <ImagePlus size={15} style={{ color: ACCENT }} />}
+          <div>
+            <p className="text-sm font-semibold" style={{ color: "var(--text-primary)", margin: 0 }}>
+              {ocrLoading ? "영수증 분석 중..." : "영수증 이미지 선택"}
+            </p>
+            <p className="text-xs" style={{ color: "var(--text-muted)", margin: 0 }}>
+              매장명·금액·날짜를 자동으로 추출합니다
+            </p>
+          </div>
+        </div>
+      </label>
+      {receiptImageUrl && (
+        <div className="relative">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={receiptImageUrl} alt="영수증 미리보기"
+            className="w-full rounded-xl object-cover border"
+            style={{ maxHeight: 140, borderColor: "var(--border)" }} />
+          <button
+            type="button"
+            onClick={onClearImage}
+            aria-label="영수증 이미지 제거"
+            className="absolute top-2 right-2 rounded-full flex items-center justify-center transition-opacity hover:opacity-80"
+            style={{ background: "rgba(0,0,0,0.55)", width: 24, height: 24 }}
+          >
+            <Pencil size={11} className="text-white" />
+          </button>
+        </div>
+      )}
+      {ocrSuggestedCategory && !ocrError && (
+        <p className="text-xs" style={{ color: ACCENT }}>OCR 추천 카테고리: {ocrSuggestedCategory}</p>
+      )}
+      {ocrError && (
+        <p className="text-xs" style={{ color: "#F43F5E" }}>{ocrError}</p>
+      )}
+    </div>
+  );
+}
+
+// ── 거래 행 ────────────────────────────────────────────────────
+function TransactionRow({
+  tx, isEditing, onEdit, onDelete,
+}: {
+  tx: Transaction;
+  isEditing: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div
+      className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 transition-colors"
+      style={{
+        background: isEditing ? `${ACCENT}11` : "rgba(255,255,255,0.025)",
+        border: `1px solid ${isEditing ? `${ACCENT}44` : "transparent"}`,
+      }}
+    >
+      <button onClick={onEdit} className="flex items-center gap-2.5 flex-1 min-w-0 text-left">
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-xs font-bold"
+          style={{
+            background: `${CATEGORY_COLORS[tx.category] ?? "#8B8BA7"}22`,
+            color: CATEGORY_COLORS[tx.category] ?? "#8B8BA7",
+          }}>
+          {tx.category.slice(0, 1)}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold truncate" style={{ color: "var(--text-primary)" }}>
+            {tx.note || tx.category}
+          </p>
+          <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+            <span className="text-[11px] px-1.5 py-0.5 rounded-md"
+              style={{ color: "#6366F1", background: "#6366F122" }}>
+              {tx.buyer}
+            </span>
+            {tx.merchantName && (
+              <span className="text-xs" style={{ color: "var(--text-muted)" }}>{tx.merchantName}</span>
+            )}
+            <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+              {tx.category} · {tx.date}
+            </span>
+          </div>
+        </div>
+      </button>
+      <span className={`text-sm font-bold shrink-0 ${tx.type === "income" ? "text-emerald-400" : "text-rose-400"}`}>
+        {tx.type === "income" ? "+" : "-"}{tx.amount.toLocaleString()}원
+      </span>
+      <button
+        onClick={onDelete}
+        aria-label="거래 삭제"
+        className="opacity-40 hover:opacity-80 transition-opacity shrink-0"
+      >
+        <Trash2 size={12} style={{ color: "var(--text-muted)" }} />
       </button>
     </div>
   );
 }
 
+// ── 차트들 ──────────────────────────────────────────────────────
 function DailyBarChart({ transactions }: { transactions: Transaction[] }) {
   const days = useMemo(() => {
     const map: Record<string, { income: number; expense: number }> = {};
@@ -506,21 +689,24 @@ function DailyBarChart({ transactions }: { transactions: Transaction[] }) {
     return Object.entries(map).sort((a, b) => a[0].localeCompare(b[0])).slice(-10);
   }, [transactions]);
   const maxValue = Math.max(...days.flatMap(([, v]) => [v.income, v.expense]), 1);
+
   return (
-    <div className="bento-card p-5">
-      <p className="text-sm font-bold mb-4" style={{ color: "var(--text-primary)" }}>일별 수입/지출</p>
-      <div className="flex items-end gap-2 h-40">
+    <div>
+      <p className="text-xs font-semibold mb-3" style={{ color: "var(--text-muted)" }}>일별 수입/지출 (최근 10일)</p>
+      <div className="flex items-end gap-2 h-32">
         {days.map(([date, v]) => (
           <div key={date} className="flex-1 flex flex-col items-center gap-1">
-            <div className="w-full flex items-end justify-center gap-0.5" style={{ height: 120 }}>
-              <div className="w-[45%] rounded-t" style={{ height: `${(v.income / maxValue) * 110}px`, background: "#10B98188", minHeight: v.income ? 4 : 0 }} />
-              <div className="w-[45%] rounded-t" style={{ height: `${(v.expense / maxValue) * 110}px`, background: "#F43F5E88", minHeight: v.expense ? 4 : 0 }} />
+            <div className="w-full flex items-end justify-center gap-0.5" style={{ height: 100 }}>
+              <div className="w-[45%] rounded-t"
+                style={{ height: `${(v.income / maxValue) * 90}px`, background: "#10B98188", minHeight: v.income ? 3 : 0 }} />
+              <div className="w-[45%] rounded-t"
+                style={{ height: `${(v.expense / maxValue) * 90}px`, background: "#F43F5E88", minHeight: v.expense ? 3 : 0 }} />
             </div>
-            <p className="text-xs" style={{ color: "var(--text-muted)" }}>{date.slice(5)}</p>
+            <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>{date.slice(5)}</p>
           </div>
         ))}
       </div>
-      {days.length === 0 && <p className="text-sm text-center py-4" style={{ color: "var(--text-muted)" }}>데이터 없음</p>}
+      {days.length === 0 && <p className="text-xs text-center py-4" style={{ color: "var(--text-muted)" }}>데이터 없음</p>}
     </div>
   );
 }
@@ -541,20 +727,32 @@ function MonthlyLineChart({ transactions }: { transactions: Transaction[] }) {
     });
   }, [transactions]);
   const maxValue = Math.max(...months.flatMap((m) => [m.income, m.expense]), 1);
-  const W = 340, H = 100, P = 20, step = (W - P * 2) / Math.max(months.length - 1, 1);
+  const W = 300, H = 90, P = 16;
+  const step = (W - P * 2) / Math.max(months.length - 1, 1);
   const toY = (v: number) => H - P - (v / maxValue) * (H - P * 2);
   const ipts = months.map((m, i) => `${P + i * step},${toY(m.income)}`).join(" ");
   const epts = months.map((m, i) => `${P + i * step},${toY(m.expense)}`).join(" ");
+
   return (
-    <div className="bento-card p-5">
-      <p className="text-sm font-bold mb-4" style={{ color: "var(--text-primary)" }}>월별 추이</p>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 120 }}>
+    <div>
+      <p className="text-xs font-semibold mb-3" style={{ color: "var(--text-muted)" }}>월별 수입/지출 추이</p>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 90 }}>
         <polyline points={ipts} fill="none" stroke="#10B981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         <polyline points={epts} fill="none" stroke="#F43F5E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         {months.map((m, i) => (
-          <text key={m.label} x={P + i * step} y={H - 2} textAnchor="middle" fontSize="9" fill="var(--text-muted)">{m.label}</text>
+          <text key={m.label} x={P + i * step} y={H - 2} textAnchor="middle" fontSize="8" fill="var(--text-muted)">{m.label}</text>
         ))}
       </svg>
+      <div className="flex gap-4 mt-1">
+        <div className="flex items-center gap-1.5">
+          <div className="w-2.5 h-1.5 rounded-sm" style={{ background: "#10B981" }} />
+          <span className="text-xs" style={{ color: "var(--text-muted)" }}>수입</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="w-2.5 h-1.5 rounded-sm" style={{ background: "#F43F5E" }} />
+          <span className="text-xs" style={{ color: "var(--text-muted)" }}>지출</span>
+        </div>
+      </div>
     </div>
   );
 }
@@ -563,18 +761,26 @@ function YearlyBarChart({ transactions }: { transactions: Transaction[] }) {
   const year = new Date().getFullYear();
   const months = useMemo(() => Array.from({ length: 12 }, (_, i) => {
     const key = `${year}-${String(i + 1).padStart(2, "0")}`;
-    const expense = transactions.filter((t) => t.type === "expense" && t.date.startsWith(key)).reduce((s, t) => s + t.amount, 0);
+    const expense = transactions
+      .filter((t) => t.type === "expense" && t.date.startsWith(key))
+      .reduce((s, t) => s + t.amount, 0);
     return { label: `${i + 1}`, expense };
   }), [transactions, year]);
   const maxValue = Math.max(...months.map((m) => m.expense), 1);
+
   return (
-    <div className="bento-card p-5">
-      <p className="text-sm font-bold mb-4" style={{ color: "var(--text-primary)" }}>{year}년 월별 지출</p>
-      <div className="flex items-end gap-1.5 h-36">
+    <div>
+      <p className="text-xs font-semibold mb-3" style={{ color: "var(--text-muted)" }}>{year}년 월별 지출</p>
+      <div className="flex items-end gap-1 h-24">
         {months.map((m) => (
           <div key={m.label} className="flex-1 flex flex-col items-center gap-1">
-            <div className="w-full rounded-t" style={{ height: `${Math.max((m.expense / maxValue) * 100, m.expense ? 4 : 0)}px`, background: m.expense > 0 ? `linear-gradient(180deg, ${ACCENT}, ${ACCENT}66)` : "var(--border)", minHeight: m.expense ? 4 : 2 }} />
-            <p className="text-xs" style={{ color: "var(--text-muted)" }}>{m.label}</p>
+            <div className="w-full rounded-t transition-all"
+              style={{
+                height: `${Math.max((m.expense / maxValue) * 80, m.expense ? 3 : 0)}px`,
+                background: m.expense > 0 ? `linear-gradient(180deg, ${ACCENT}, ${ACCENT}66)` : "var(--border)",
+                minHeight: m.expense ? 3 : 1,
+              }} />
+            <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>{m.label}</p>
           </div>
         ))}
       </div>
@@ -585,21 +791,17 @@ function YearlyBarChart({ transactions }: { transactions: Transaction[] }) {
 function PieChart({ transactions }: { transactions: Transaction[] }) {
   const slices = useMemo(() => {
     const map: Record<string, number> = {};
-    transactions.filter((t) => t.type === "expense").forEach((t) => { map[t.category] = (map[t.category] ?? 0) + t.amount; });
+    transactions.filter((t) => t.type === "expense")
+      .forEach((t) => { map[t.category] = (map[t.category] ?? 0) + t.amount; });
     const total = Object.values(map).reduce((s, v) => s + v, 0);
-    return Object.entries(map).sort((a, b) => b[1] - a[1]).map(([category, amount]) => ({ category, amount, pct: total ? amount / total : 0 }));
+    return Object.entries(map)
+      .sort((a, b) => b[1] - a[1])
+      .map(([category, amount]) => ({ category, amount, pct: total ? amount / total : 0 }));
   }, [transactions]);
 
-  if (slices.length === 0) {
-    return (
-      <div className="bento-card p-5">
-        <p className="text-sm font-bold mb-4" style={{ color: "var(--text-primary)" }}>지출 카테고리 비율</p>
-        <p className="text-sm text-center py-4" style={{ color: "var(--text-muted)" }}>지출 내역이 없습니다.</p>
-      </div>
-    );
-  }
+  if (slices.length === 0) return null;
 
-  const R = 60, CX = 80, CY = 80, T = 22;
+  const R = 50, CX = 65, CY = 65, T = 18;
   let a = -Math.PI / 2;
   const arcs = slices.map(({ category, pct }) => {
     const angle = pct * 2 * Math.PI;
@@ -609,25 +811,37 @@ function PieChart({ transactions }: { transactions: Transaction[] }) {
     const large = angle > Math.PI ? 1 : 0;
     const ix1 = CX + (R - T) * Math.cos(a - angle), iy1 = CY + (R - T) * Math.sin(a - angle);
     const ix2 = CX + (R - T) * Math.cos(a), iy2 = CY + (R - T) * Math.sin(a);
-    return { category, pct, amount: slices.find((s) => s.category === category)?.amount ?? 0, d: `M${x1} ${y1} A${R} ${R} 0 ${large} 1 ${x2} ${y2} L${ix2} ${iy2} A${R-T} ${R-T} 0 ${large} 0 ${ix1} ${iy1} Z` };
+    return {
+      category, pct,
+      amount: slices.find((s) => s.category === category)?.amount ?? 0,
+      d: `M${x1} ${y1} A${R} ${R} 0 ${large} 1 ${x2} ${y2} L${ix2} ${iy2} A${R - T} ${R - T} 0 ${large} 0 ${ix1} ${iy1} Z`,
+    };
   });
 
   return (
-    <div className="bento-card p-5">
-      <p className="text-sm font-bold mb-4" style={{ color: "var(--text-primary)" }}>지출 카테고리 비율</p>
-      <div className="flex gap-6 items-center flex-wrap">
-        <svg viewBox="0 0 160 160" style={{ width: 160, height: 160, flexShrink: 0 }}>
-          {arcs.map((arc) => <path key={arc.category} d={arc.d} fill={CATEGORY_COLORS[arc.category] ?? "#8B8BA7"} />)}
+    <div className="bento-card p-4">
+      <p className="text-sm font-bold mb-3" style={{ color: "var(--text-primary)" }}>지출 카테고리</p>
+      <div className="flex gap-4 items-center">
+        <svg viewBox="0 0 130 130" style={{ width: 130, height: 130, flexShrink: 0 }}>
+          {arcs.map((arc) => (
+            <path key={arc.category} d={arc.d} fill={CATEGORY_COLORS[arc.category] ?? "#8B8BA7"} />
+          ))}
         </svg>
-        <div className="flex flex-col gap-2 flex-1">
-          {slices.map((s) => (
+        <div className="flex flex-col gap-1.5 flex-1 min-w-0">
+          {slices.slice(0, 5).map((s) => (
             <div key={s.category} className="flex items-center gap-2">
-              <div className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: CATEGORY_COLORS[s.category] ?? "#8B8BA7" }} />
-              <span className="text-xs flex-1" style={{ color: "var(--text-primary)" }}>{s.category}</span>
-              <span className="text-xs font-semibold" style={{ color: CATEGORY_COLORS[s.category] ?? "#8B8BA7" }}>{(s.pct * 100).toFixed(1)}%</span>
-              <span className="text-xs" style={{ color: "var(--text-muted)" }}>{(s.amount / 10000).toFixed(1)}만</span>
+              <div className="w-2 h-2 rounded-sm shrink-0"
+                style={{ background: CATEGORY_COLORS[s.category] ?? "#8B8BA7" }} />
+              <span className="text-xs flex-1 truncate" style={{ color: "var(--text-primary)" }}>{s.category}</span>
+              <span className="text-xs font-semibold shrink-0"
+                style={{ color: CATEGORY_COLORS[s.category] ?? "#8B8BA7" }}>
+                {(s.pct * 100).toFixed(0)}%
+              </span>
             </div>
           ))}
+          {slices.length > 5 && (
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>외 {slices.length - 5}개</p>
+          )}
         </div>
       </div>
     </div>
