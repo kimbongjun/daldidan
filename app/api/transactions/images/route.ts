@@ -64,10 +64,13 @@ export async function POST(request: NextRequest) {
     });
 
   if (uploadError) {
-    return NextResponse.json(
-      { error: `스토리지 업로드 실패: ${uploadError.message}` },
-      { status: 500 },
-    );
+    // Supabase 버킷 미존재 시 "Bucket not found" 메시지 → 명확한 안내 제공
+    const isBucketMissing = uploadError.message.toLowerCase().includes("bucket not found")
+      || uploadError.message.toLowerCase().includes("not found");
+    const errorMsg = isBucketMissing
+      ? "receipt-images 스토리지 버킷이 존재하지 않습니다. Supabase 대시보드에서 버킷을 생성해 주세요."
+      : `스토리지 업로드 실패: ${uploadError.message}`;
+    return NextResponse.json({ error: errorMsg }, { status: 500 });
   }
 
   const { data: { publicUrl } } = adminSupabase.storage

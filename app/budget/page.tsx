@@ -2,7 +2,6 @@
 
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PageHeader from "@/components/PageHeader";
-import { uploadImagesToStorage } from "@/lib/image-upload";
 import { sendNativeNotification } from "@/lib/notifications";
 import { analyzeReceiptImage } from "@/lib/receipt-ocr";
 import {
@@ -271,6 +270,20 @@ export default function BudgetPage() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  /** 영수증 전용 업로드 — uploadImagesToStorage의 MIME 필터를 우회하고 실제 서버 에러를 그대로 전달 */
+  const uploadReceiptImage = async (file: File): Promise<string> => {
+    const form = new FormData();
+    // file.name이 없으면 fallback
+    form.append("image", file, file.name || "receipt.jpg");
+    const res = await fetch("/api/transactions/images", { method: "POST", body: form });
+    const json = await res.json().catch(() => ({})) as { url?: string; error?: string };
+    if (!res.ok) {
+      throw new Error(json.error ?? `업로드 실패 (HTTP ${res.status})`);
+    }
+    if (!json.url) throw new Error("서버가 URL을 반환하지 않았습니다.");
+    return json.url;
+  };
+
   const handleOcr = async (file: File) => {
     // 모달용 미리보기는 원본 파일로 표시 (전처리 전)
     const previewUrl = URL.createObjectURL(file);
@@ -282,16 +295,22 @@ export default function BudgetPage() {
       // 이미지 전처리 (그레이스케일 + 대비 강화) → OCR 정확도 향상
       const processedFile = await preprocessReceiptImage(file);
 
+      // 업로드(원본)와 OCR(전처리본) 병렬 실행
       const [uploadResult, ocrResult] = await Promise.allSettled([
-        uploadImagesToStorage([file], undefined, "/api/transactions/images"),  // receipt-images 버킷에 저장
-        analyzeReceiptImage(processedFile),     // 전처리본으로 OCR
+        uploadReceiptImage(file),
+        analyzeReceiptImage(processedFile),
       ]);
-      const receiptImageUrl = uploadResult.status === "fulfilled"
-        ? (uploadResult.value[0]?.url ?? "")
-        : "";
+
+      const receiptImageUrl = uploadResult.status === "fulfilled" ? uploadResult.value : "";
       const extracted = ocrResult.status === "fulfilled" ? ocrResult.value : null;
 
-      if (!receiptImageUrl && !extracted) throw new Error("영수증 업로드와 OCR 분석에 모두 실패했습니다.");
+      // 둘 다 실패한 경우에만 전체 실패로 처리
+      if (!receiptImageUrl && !extracted) {
+        const uploadMsg = uploadResult.status === "rejected"
+          ? (uploadResult.reason instanceof Error ? uploadResult.reason.message : "업로드 실패")
+          : "";
+        throw new Error(uploadMsg || "영수증 처리에 실패했습니다.");
+      }
 
       setOcrSuggestedCategory(extracted?.recommendedCategory ?? "");
       setForm((prev) => ({
@@ -305,16 +324,18 @@ export default function BudgetPage() {
         receiptImageUrl: receiptImageUrl || prev.receiptImageUrl,
       }));
 
+      // 부분 실패 시 실제 에러 메시지 표시
       if (ocrResult.status === "rejected") {
-        setOcrError(ocrResult.reason instanceof Error ? ocrResult.reason.message : "영수증 OCR 처리에 실패했습니다.");
+        setOcrError(ocrResult.reason instanceof Error ? ocrResult.reason.message : "OCR 처리에 실패했습니다.");
       } else if (uploadResult.status === "rejected") {
-        setOcrError("영수증 업로드에 실패했습니다.");
+        const msg = uploadResult.reason instanceof Error ? uploadResult.reason.message : "이미지 저장에 실패했습니다.";
+        setOcrError(`이미지 저장 실패 (OCR 데이터는 적용됨): ${msg}`);
       }
     } catch (err) {
-      setOcrError(err instanceof Error ? err.message : "영수증 OCR 처리에 실패했습니다.");
+      setOcrError(err instanceof Error ? err.message : "영수증 처리에 실패했습니다.");
     } finally {
       setOcrLoading(false);
-      setOcrDone(true); // 성공/실패 무관하게 스캔 완료 표시
+      setOcrDone(true);
     }
   };
 
