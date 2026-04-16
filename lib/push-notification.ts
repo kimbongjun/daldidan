@@ -29,6 +29,37 @@ export interface PushDispatchResult {
   }>;
 }
 
+function extractInstallationId(userAgent?: string | null) {
+  if (!userAgent) return null;
+  const match = userAgent.match(/\[iid:([^\]]+)\]/);
+  return match?.[1] ?? null;
+}
+
+function normalizeUserAgentSignature(userAgent?: string | null) {
+  if (!userAgent) return "unknown";
+
+  const raw = userAgent.replace(/\s*\[iid:[^\]]+\]\s*/g, "").toLowerCase();
+  const browser =
+    raw.includes("edg/") ? "edge" :
+    raw.includes("firefox/") ? "firefox" :
+    raw.includes("samsungbrowser/") ? "samsung" :
+    raw.includes("chrome/") ? "chrome" :
+    raw.includes("safari/") ? "safari" :
+    "other";
+  const os =
+    raw.includes("android") ? "android" :
+    raw.includes("iphone") || raw.includes("ipad") || raw.includes("ios") ? "ios" :
+    raw.includes("mac os x") ? "mac" :
+    raw.includes("windows") ? "windows" :
+    "other";
+  const deviceClass =
+    raw.includes("mobile") ? "mobile" :
+    raw.includes("tablet") || raw.includes("ipad") ? "tablet" :
+    "desktop";
+
+  return `${browser}:${os}:${deviceClass}`;
+}
+
 function trimTrailingSlash(value: string) {
   return value.replace(/\/$/, "");
 }
@@ -47,10 +78,16 @@ function toAbsoluteUrl(pathOrUrl: string | undefined, baseUrl: string) {
 }
 
 function buildSubscriptionDedupKey(subscription: PushSubscriptionRow) {
-  if (subscription.user_id && subscription.user_agent) {
-    return `${subscription.user_id}:${subscription.device_type}:${subscription.user_agent}`;
+  const installationId = extractInstallationId(subscription.user_agent);
+  if (installationId) {
+    return `installation:${installationId}`;
   }
-  return subscription.fcm_token;
+
+  if (subscription.user_id) {
+    return `user:${subscription.user_id}:${subscription.device_type}:${normalizeUserAgentSignature(subscription.user_agent)}`;
+  }
+
+  return `token:${subscription.fcm_token}`;
 }
 
 function dedupeSubscriptions(subscriptions: PushSubscriptionRow[]) {

@@ -33,6 +33,21 @@ function detectDevice(): "ios" | "android" | "web" {
 }
 
 const PUSH_STORAGE_KEY = "daldidan-push";
+const PUSH_INSTALLATION_KEY = "daldidan-push-installation-id";
+
+function getPushInstallationId() {
+  if (typeof window === "undefined") return "";
+  const existing = window.localStorage.getItem(PUSH_INSTALLATION_KEY);
+  if (existing) return existing;
+
+  const generated =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+  window.localStorage.setItem(PUSH_INSTALLATION_KEY, generated);
+  return generated;
+}
 
 function extractNotificationPreview(payload: {
   notification?: { title?: string; body?: string; icon?: string };
@@ -253,7 +268,11 @@ export default function Header() {
       const res = await fetch("/api/push/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, deviceType: detectDevice() }),
+        body: JSON.stringify({
+          token,
+          deviceType: detectDevice(),
+          installationId: getPushInstallationId(),
+        }),
       });
       if (!res.ok) {
         setPushErrorMsg("구독 정보 저장에 실패했습니다.");

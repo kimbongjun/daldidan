@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import BlogComments from "@/components/blog/BlogComments";
+import BlogNotifyButton from "@/components/blog/BlogNotifyButton";
 import BlogShareBar from "@/components/blog/BlogShareBar";
 import BlogViewCounter from "@/components/blog/BlogViewCounter";
 import { canEditBlogPost, getBlogPostBySlug } from "@/lib/blog";
@@ -122,6 +123,7 @@ export default async function BlogDetailPage({ params }: { params: Promise<{ slu
             </div>
 
             <div className="bento-card p-5 flex flex-col gap-3">
+              {editable ? <BlogNotifyButton slug={post.slug} /> : null}
               <Link
                 href="/blog"
                 className="w-full py-3 rounded-xl text-center font-semibold"

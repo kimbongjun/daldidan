@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 
 /** POST /api/push/subscribe — FCM 토큰 등록 */
 export async function POST(request: NextRequest) {
-  const body = await request.json() as { token?: string; deviceType?: string };
+  const body = await request.json() as { token?: string; deviceType?: string; installationId?: string };
   const token = body.token?.trim();
 
   if (!token) {
@@ -14,6 +14,9 @@ export async function POST(request: NextRequest) {
 
   const deviceType = (body.deviceType ?? "web") as "web" | "ios" | "android";
   const userAgent = (request.headers.get("user-agent") ?? "").slice(0, 500);
+  const installationId = body.installationId?.trim().slice(0, 120) ?? "";
+  const installationTag = installationId ? ` [iid:${installationId}]` : "";
+  const storedUserAgent = `${userAgent}${installationTag}`.slice(0, 500);
 
   // 로그인 여부와 무관하게 구독 가능 — user_id는 선택
   let userId: string | null = null;
@@ -26,12 +29,31 @@ export async function POST(request: NextRequest) {
   }
 
   const admin = createAdminClient();
+
+  if (installationId) {
+    const { data: existingSubscriptions } = await admin
+      .from("push_subscriptions")
+      .select("fcm_token, user_agent")
+      .like("user_agent", `%[iid:${installationId}]%`);
+
+    const staleTokens = (existingSubscriptions ?? [])
+      .filter((item) => item.fcm_token !== token)
+      .map((item) => item.fcm_token);
+
+    if (staleTokens.length > 0) {
+      await admin
+        .from("push_subscriptions")
+        .delete()
+        .in("fcm_token", staleTokens);
+    }
+  }
+
   const { error } = await admin.from("push_subscriptions").upsert(
     {
       fcm_token: token,
       user_id: userId,
       device_type: deviceType,
-      user_agent: userAgent,
+      user_agent: storedUserAgent,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "fcm_token" },
