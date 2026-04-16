@@ -112,17 +112,6 @@ type NearbyRestaurant = {
   sourceCategory: string;
 };
 
-const CATEGORY_SEARCH_TERMS: Record<RestaurantCategory, string[]> = {
-  한식: ["한식", "백반"],
-  중식: ["중식", "짜장면"],
-  양식: ["양식", "파스타"],
-  아시안: ["아시안", "쌀국수", "일식"],
-  분식: ["분식", "떡볶이"],
-  주점: ["술집", "이자카야"],
-  카페: ["카페", "커피"],
-  퓨전: ["퓨전", "오마카세"],
-};
-
 const CATEGORY_HINTS: Array<{ category: RestaurantCategory; keywords: string[] }> = [
   { category: "카페", keywords: ["카페", "커피", "베이커리", "디저트", "도넛"] },
   { category: "주점", keywords: ["술집", "포차", "이자카야", "호프", "맥주", "와인", "바", "펍"] },
@@ -191,11 +180,11 @@ async function reverseRegion(lat: number, lng: number, clientId: string, clientS
   return { area1, area2, area3 };
 }
 
-async function searchLocal(query: string, clientId: string, clientSecret: string) {
+async function searchLocal(query: string, clientId: string, clientSecret: string, start = 1) {
   const url = new URL("https://openapi.naver.com/v1/search/local.json");
   url.searchParams.set("query", query);
   url.searchParams.set("display", "5");
-  url.searchParams.set("start", "1");
+  url.searchParams.set("start", String(start));
   url.searchParams.set("sort", "comment");
 
   const response = await fetch(url, {
@@ -252,25 +241,20 @@ export async function GET(request: NextRequest) {
     || region?.area1
     || "현재 위치";
 
-  const entries = await Promise.all(
-    (Object.entries(CATEGORY_SEARCH_TERMS) as Array<[RestaurantCategory, string[]]>).map(
-      async ([category, terms]) => {
-        const results = await Promise.all(
-          terms.map((term) => searchLocal(`${areaQuery} ${term}`, clientId, clientSecret)),
-        );
-        return results.flat().map((item) => ({ item, fallbackCategory: category }));
-      },
+  const pagedResults = await Promise.all(
+    Array.from({ length: 6 }, (_, i) =>
+      searchLocal(`${areaQuery} 맛집`, clientId, clientSecret, i * 5 + 1),
     ),
   );
 
   const uniqueMap = new Map<string, { item: NaverLocalItem; fallbackCategory: RestaurantCategory }>();
-  for (const result of entries.flat()) {
-    const title = stripMarkup(result.item.title ?? "");
-    const address = result.item.roadAddress || result.item.address || "";
+  for (const item of pagedResults.flat()) {
+    const title = stripMarkup(item.title ?? "");
+    const address = item.roadAddress || item.address || "";
     if (!title || !address) continue;
     const key = `${title}::${address}`;
     if (!uniqueMap.has(key)) {
-      uniqueMap.set(key, result);
+      uniqueMap.set(key, { item, fallbackCategory: "한식" });
     }
   }
 

@@ -43,7 +43,7 @@ create table if not exists public.transactions (
   user_id     uuid not null references public.profiles(id) on delete cascade,
   type        text not null check (type in ('income', 'expense')),
   category    text not null,
-  buyer       text not null default '공동' check (buyer in ('공동', '봉준', '달희')),
+  buyer       text not null default '공동',
   merchant_name text not null default '',
   location    text not null default '',
   receipt_image_url text,
@@ -55,6 +55,8 @@ create table if not exists public.transactions (
 );
 
 alter table public.transactions add column if not exists buyer text not null default '공동';
+-- buyer 하드코딩 제약 제거 — budget_members 설정과 동기화
+alter table public.transactions drop constraint if exists transactions_buyer_check;
 alter table public.transactions add column if not exists merchant_name text not null default '';
 alter table public.transactions add column if not exists location text not null default '';
 alter table public.transactions add column if not exists receipt_image_url text;

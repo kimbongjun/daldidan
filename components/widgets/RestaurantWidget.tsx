@@ -176,7 +176,7 @@ export default function RestaurantWidget() {
   }, [userCoords]);
 
   const mapsSearchUrl = userCoords
-    ? `https://map.naver.com/p/search/${encodeURIComponent(`${locationLabel || "현재 위치"} 맛집`)}`
+    ? `https://map.naver.com/p/search/%EB%A7%9B%EC%A7%91?c=${userCoords.lng},${userCoords.lat},15,0,0,0,dh`
     : "https://map.naver.com/p/search/%EB%A7%9B%EC%A7%91";
 
   return (

@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json() as {
     type: "income" | "expense";
     category: string;
-    buyer?: "공동" | "봉준" | "달희";
+    buyer?: string;
     merchantName?: string;
     location?: string;
     receiptImageUrl?: string | null;

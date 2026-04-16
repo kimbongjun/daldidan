@@ -1,15 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Clock, MapPin, Star } from "lucide-react";
-import {
-  isRestaurantOpen,
-  RESTAURANT_CATEGORIES,
-  SAMPLE_RESTAURANTS,
-  type Restaurant,
-  type RestaurantCategory,
-} from "@/lib/data/restaurant";
+import { ArrowLeft, MapPin, Star } from "lucide-react";
+import { RESTAURANT_CATEGORIES, type RestaurantCategory } from "@/lib/data/restaurant";
 
 const ACCENT = "#EA580C";
 
@@ -56,15 +50,50 @@ const CATEGORY_STYLE: Record<RestaurantCategory, { bg: string; color: string; gr
   },
 };
 
-type CategoryFilter = "전체" | RestaurantCategory;
-const FILTER_OPTIONS: CategoryFilter[] = ["전체", ...RESTAURANT_CATEGORIES];
+const CATEGORY_EMOJI: Record<RestaurantCategory, string> = {
+  한식: "🍚",
+  중식: "🥟",
+  양식: "🍝",
+  아시안: "🥢",
+  분식: "🍢",
+  주점: "🍺",
+  카페: "☕",
+  퓨전: "🍱",
+};
 
-function RestaurantListCard({ restaurant }: { restaurant: Restaurant }) {
-  const open = isRestaurantOpen(restaurant.openTime, restaurant.closeTime);
+interface NearbyRestaurant {
+  id: string;
+  name: string;
+  address: string;
+  rating: number;
+  reviewCount: number;
+  isOpen: boolean | null;
+  photoRef: string | null;
+  mapUrl: string;
+  category: RestaurantCategory;
+  distance: string;
+  sourceCategory?: string;
+}
+
+type CategoryFilter = "전체" | RestaurantCategory;
+
+function SkeletonCard() {
+  return (
+    <div
+      className="bento-card animate-pulse"
+      style={{ height: 80 }}
+    />
+  );
+}
+
+function RestaurantListCard({ restaurant }: { restaurant: NearbyRestaurant }) {
   const catStyle = CATEGORY_STYLE[restaurant.category];
 
   return (
-    <div
+    <a
+      href={restaurant.mapUrl}
+      target="_blank"
+      rel="noopener noreferrer"
       className="bento-card flex items-center gap-4 p-4 hover:opacity-90 transition-opacity"
     >
       {/* 썸네일 */}
@@ -74,7 +103,7 @@ function RestaurantListCard({ restaurant }: { restaurant: Restaurant }) {
         role="img"
         aria-label={restaurant.category}
       >
-        {restaurant.emoji}
+        {CATEGORY_EMOJI[restaurant.category]}
       </div>
 
       {/* 내용 */}
@@ -90,79 +119,118 @@ function RestaurantListCard({ restaurant }: { restaurant: Restaurant }) {
             {restaurant.category}
           </span>
         </div>
-        <div className="flex items-center gap-1.5 mt-1 min-w-0">
-          <MapPin size={11} style={{ color: "var(--text-muted)", flexShrink: 0 }} />
-          <p className="text-xs truncate" style={{ color: "var(--text-muted)" }}>
-            {restaurant.address}
-          </p>
-        </div>
-        <div className="flex items-center gap-1.5 mt-0.5">
-          <Clock size={11} style={{ color: "var(--text-muted)", flexShrink: 0 }} />
-          <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-            {restaurant.openTime} – {restaurant.closeTime}
-          </p>
-        </div>
-        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-          <div className="flex items-center gap-0.5">
-            <Star size={11} fill="#F59E0B" style={{ color: "#F59E0B" }} />
-            <span className="text-xs font-semibold tabular-nums" style={{ color: "#F59E0B" }}>
-              {restaurant.rating}
-            </span>
-            <span className="text-xs ml-0.5" style={{ color: "var(--text-muted)" }}>
-              ({restaurant.reviewCount.toLocaleString()})
-            </span>
+        {restaurant.address && (
+          <div className="flex items-center gap-1.5 mt-1 min-w-0">
+            <MapPin size={11} style={{ color: "var(--text-muted)", flexShrink: 0 }} />
+            <p className="text-xs truncate" style={{ color: "var(--text-muted)" }}>
+              {restaurant.address}
+            </p>
           </div>
+        )}
+        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+          {restaurant.rating > 0 && (
+            <div className="flex items-center gap-0.5">
+              <Star size={11} fill="#F59E0B" style={{ color: "#F59E0B" }} />
+              <span className="text-xs font-semibold tabular-nums" style={{ color: "#F59E0B" }}>
+                {restaurant.rating.toFixed(1)}
+              </span>
+              {restaurant.reviewCount > 0 && (
+                <span className="text-xs ml-0.5" style={{ color: "var(--text-muted)" }}>
+                  ({restaurant.reviewCount.toLocaleString()})
+                </span>
+              )}
+            </div>
+          )}
           <span className="text-xs" style={{ color: "var(--text-muted)" }}>
             {restaurant.distance}
           </span>
-          <span className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>
-            {restaurant.priceRange}
-          </span>
+          {restaurant.sourceCategory && (
+            <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+              {restaurant.sourceCategory}
+            </span>
+          )}
         </div>
       </div>
 
       {/* 우측: 영업 상태 */}
-      <div className="shrink-0 flex flex-col items-end gap-1">
-        <span
-          className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-semibold"
-          style={
-            open
-              ? { background: "rgba(16,185,129,0.18)", color: "#10B981" }
-              : { background: "rgba(239,68,68,0.18)", color: "#EF4444" }
-          }
-        >
-          {open && (
-            <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse inline-block" />
-          )}
-          {open ? "영업중" : "영업종료"}
-        </span>
-        <div className="flex gap-0.5 flex-wrap justify-end">
-          {restaurant.tags.slice(0, 2).map((tag) => (
-            <span
-              key={tag}
-              className="text-xs px-1.5 py-0.5 rounded"
-              style={{ background: "rgba(255,255,255,0.06)", color: "var(--text-muted)" }}
-            >
-              {tag}
-            </span>
-          ))}
+      {restaurant.isOpen !== null && (
+        <div className="shrink-0">
+          <span
+            className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-semibold"
+            style={
+              restaurant.isOpen
+                ? { background: "rgba(16,185,129,0.18)", color: "#10B981" }
+                : { background: "rgba(239,68,68,0.18)", color: "#EF4444" }
+            }
+          >
+            {restaurant.isOpen && (
+              <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse inline-block" />
+            )}
+            {restaurant.isOpen ? "영업중" : "영업종료"}
+          </span>
         </div>
-      </div>
-    </div>
+      )}
+    </a>
   );
 }
 
 export default function RestaurantPageClient() {
+  const [restaurants, setRestaurants] = useState<NearbyRestaurant[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState<CategoryFilter>("전체");
+
+  const fetchRestaurants = useCallback(async (lat: number, lng: number) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/places/nearby?lat=${lat}&lng=${lng}`);
+      if (!res.ok) throw new Error("맛집 정보를 불러오지 못했습니다.");
+      const data = (await res.json()) as { restaurants: NearbyRestaurant[] };
+      setRestaurants(data.restaurants);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "오류가 발생했습니다.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const fallback = () => fetchRestaurants(37.5665, 126.978);
+
+    if (!navigator.geolocation) {
+      fallback();
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => fetchRestaurants(pos.coords.latitude, pos.coords.longitude),
+      fallback,
+      { timeout: 10000, maximumAge: 300000 },
+    );
+  }, [fetchRestaurants]);
+
+  const availableFilters = useMemo(() => {
+    const categories = RESTAURANT_CATEGORIES.filter((cat) =>
+      restaurants.some((r) => r.category === cat),
+    );
+    return ["전체", ...categories] as CategoryFilter[];
+  }, [restaurants]);
+
+  useEffect(() => {
+    if (!availableFilters.includes(activeCategory)) {
+      setActiveCategory("전체");
+    }
+  }, [activeCategory, availableFilters]);
 
   const filtered = useMemo(() => {
     return activeCategory === "전체"
-      ? SAMPLE_RESTAURANTS
-      : SAMPLE_RESTAURANTS.filter((r) => r.category === activeCategory);
-  }, [activeCategory]);
+      ? restaurants
+      : restaurants.filter((r) => r.category === activeCategory);
+  }, [restaurants, activeCategory]);
 
   const openCount = useMemo(
-    () => filtered.filter((r) => isRestaurantOpen(r.openTime, r.closeTime)).length,
+    () => filtered.filter((r) => r.isOpen === true).length,
     [filtered],
   );
 
@@ -180,7 +248,7 @@ export default function RestaurantPageClient() {
 
       {/* 카테고리 필터 */}
       <div className="flex gap-2 mb-6 flex-wrap">
-        {FILTER_OPTIONS.map((cat) => {
+        {availableFilters.map((cat) => {
           const active = activeCategory === cat;
           return (
             <button
@@ -204,26 +272,41 @@ export default function RestaurantPageClient() {
       </div>
 
       {/* 결과 요약 */}
-      <p className="text-sm mb-4" style={{ color: "var(--text-muted)" }}>
-        총{" "}
-        <span style={{ color: "var(--text-primary)", fontWeight: 700 }}>{filtered.length}</span>개
-        {openCount > 0 && (
-          <>
-            {" "}·{" "}
-            <span className="inline-flex items-center gap-1">
-              <span
-                className="w-1.5 h-1.5 rounded-full inline-block animate-pulse"
-                style={{ background: "#10B981" }}
-              />
-              <span style={{ color: "#10B981", fontWeight: 700 }}>{openCount}</span>
-              <span>곳 영업중</span>
-            </span>
-          </>
-        )}
-      </p>
+      {!loading && !error && (
+        <p className="text-sm mb-4" style={{ color: "var(--text-muted)" }}>
+          총{" "}
+          <span style={{ color: "var(--text-primary)", fontWeight: 700 }}>{filtered.length}</span>개
+          {openCount > 0 && (
+            <>
+              {" "}·{" "}
+              <span className="inline-flex items-center gap-1">
+                <span
+                  className="w-1.5 h-1.5 rounded-full inline-block animate-pulse"
+                  style={{ background: "#10B981" }}
+                />
+                <span style={{ color: "#10B981", fontWeight: 700 }}>{openCount}</span>
+                <span>곳 영업중</span>
+              </span>
+            </>
+          )}
+        </p>
+      )}
 
       {/* 리스트 */}
-      {filtered.length === 0 ? (
+      {loading ? (
+        <div className="flex flex-col gap-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <SkeletonCard key={i} />
+          ))}
+        </div>
+      ) : error ? (
+        <div
+          className="rounded-2xl flex items-center justify-center py-20"
+          style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+        >
+          <p style={{ color: "var(--text-muted)" }}>{error}</p>
+        </div>
+      ) : filtered.length === 0 ? (
         <div
           className="rounded-2xl flex items-center justify-center py-20"
           style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
