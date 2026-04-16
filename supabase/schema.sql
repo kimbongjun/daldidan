@@ -67,29 +67,27 @@ create index if not exists idx_transactions_user_date
 create index if not exists idx_transactions_user_type
   on public.transactions (user_id, type, date desc);
 
--- 월별 집계 뷰 (BudgetWidget / QuickStats에서 사용)
+-- 월별 집계 뷰: 전체 유저 합산 (공유 가계부)
 create or replace view public.monthly_summary as
 select
-  user_id,
-  to_char(date, 'YYYY-MM')                             as ym,
+  to_char(date, 'YYYY-MM')                              as ym,
   sum(case when type = 'income'  then amount else 0 end) as total_income,
   sum(case when type = 'expense' then amount else 0 end) as total_expense,
   sum(case when type = 'income'  then amount
-           when type = 'expense' then -amount end)       as balance
+           when type = 'expense' then -amount end)        as balance
 from public.transactions
-group by user_id, to_char(date, 'YYYY-MM');
+group by to_char(date, 'YYYY-MM');
 
--- 카테고리별 지출 집계 뷰
+-- 카테고리별 지출 집계 뷰: 전체 유저 합산
 create or replace view public.category_expense_summary as
 select
-  user_id,
   to_char(date, 'YYYY-MM') as ym,
   category,
   sum(amount)               as total_amount,
   count(*)                  as tx_count
 from public.transactions
 where type = 'expense'
-group by user_id, to_char(date, 'YYYY-MM'), category;
+group by to_char(date, 'YYYY-MM'), category;
 
 
 -- ══════════════════════════════════════════════════════════════

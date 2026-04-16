@@ -6,9 +6,10 @@
 -- ── profiles ──────────────────────────────────────────────────
 alter table public.profiles enable row level security;
 
-create policy "본인 프로필만 조회"
+-- 모든 인증 유저가 프로필 조회 가능 (거래 작성자 이름 표시용)
+create policy "인증 유저 전체 프로필 조회"
   on public.profiles for select
-  using (auth.uid() = id);
+  using (auth.uid() IS NOT NULL);
 
 create policy "본인 프로필만 수정"
   on public.profiles for update
@@ -18,9 +19,10 @@ create policy "본인 프로필만 수정"
 -- ── transactions ──────────────────────────────────────────────
 alter table public.transactions enable row level security;
 
-create policy "본인 거래만 조회"
+-- 모든 인증 유저가 전체 거래 조회 가능 (공유 가계부)
+create policy "인증 유저 전체 거래 조회"
   on public.transactions for select
-  using (auth.uid() = user_id);
+  using (auth.uid() IS NOT NULL);
 
 create policy "본인 거래만 추가"
   on public.transactions for insert

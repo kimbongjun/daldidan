@@ -90,7 +90,7 @@ export default function BudgetWidget() {
             <Wallet size={22} style={{ color: "#6366F1" }} />
           </div>
           <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>로그인 후 이용 가능합니다</p>
-          <p className="text-xs text-center" style={{ color: "var(--text-muted)" }}>로그인하면 나만의 가계부를<br />기록하고 분석할 수 있어요.</p>
+          <p className="text-xs text-center" style={{ color: "var(--text-muted)" }}>로그인하면 공유 가계부를<br />함께 기록하고 분석할 수 있어요.</p>
           <Link
             href="/login"
             className="flex items-center gap-1.5 text-xs font-semibold px-4 py-2 rounded-lg transition-opacity hover:opacity-70"

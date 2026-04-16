@@ -44,6 +44,8 @@ const inputStyle: CSSProperties = {
 
 interface Transaction {
   id: string;
+  userId: string;
+  authorName: string;
   type: "income" | "expense";
   category: string;
   buyer: string;
@@ -57,6 +59,7 @@ interface Transaction {
 
 interface TransactionApiResponse {
   id: string;
+  user_id: string;
   type: "income" | "expense";
   category: string;
   buyer?: string;
@@ -66,11 +69,14 @@ interface TransactionApiResponse {
   amount: number;
   note: string;
   date: string;
+  profiles?: { display_name: string | null } | null;
 }
 
 function normalizeTransaction(t: TransactionApiResponse): Transaction {
   return {
     id: t.id,
+    userId: t.user_id,
+    authorName: t.profiles?.display_name ?? "알 수 없음",
     type: t.type,
     category: t.category,
     buyer: t.buyer ?? "공동",
@@ -83,7 +89,7 @@ function normalizeTransaction(t: TransactionApiResponse): Transaction {
   };
 }
 
-const EMPTY_FORM = (defaultBuyer = "공동"): Omit<Transaction, "id"> => ({
+const EMPTY_FORM = (defaultBuyer = "공동"): Omit<Transaction, "id" | "userId" | "authorName"> => ({
   type: "expense",
   category: "식비",
   buyer: defaultBuyer,
@@ -105,8 +111,9 @@ function currentMonthStr() {
 export default function BudgetPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState<Omit<Transaction, "id">>(EMPTY_FORM());
+  const [form, setForm] = useState<Omit<Transaction, "id" | "userId" | "authorName">>(EMPTY_FORM());
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [saveError, setSaveError] = useState("");
   const [chartsOpen, setChartsOpen] = useState(false);
@@ -145,6 +152,15 @@ export default function BudgetPage() {
     }
   }, [selectedMonth]);
 
+  const loadCurrentUser = useCallback(async () => {
+    try {
+      const res = await fetch("/api/me");
+      if (!res.ok) return;
+      const data = await res.json() as { id: string };
+      setCurrentUserId(data.id);
+    } catch {}
+  }, []);
+
   const loadSettings = useCallback(async () => {
     try {
       const res = await fetch("/api/site-settings");
@@ -164,6 +180,7 @@ export default function BudgetPage() {
   // 영수증 이미지 뷰어
   const [viewingReceiptTx, setViewingReceiptTx] = useState<Transaction | null>(null);
 
+  useEffect(() => { void loadCurrentUser(); }, [loadCurrentUser]);
   useEffect(() => { void loadSettings(); }, [loadSettings]);
   useEffect(() => { loadTransactions(); }, [loadTransactions]);
 
@@ -541,6 +558,7 @@ export default function BudgetPage() {
                     key={tx.id}
                     tx={tx}
                     isEditing={editingId === tx.id}
+                    isOwner={currentUserId === tx.userId}
                     onEdit={() => startEdit(tx)}
                     onDelete={() => handleDelete(tx.id)}
                     onViewReceipt={tx.receiptImageUrl ? () => setViewingReceiptTx(tx) : undefined}
@@ -733,22 +751,23 @@ function OcrUploader({
 
 // ── 거래 행 ────────────────────────────────────────────────────
 function TransactionRow({
-  tx, isEditing, onEdit, onDelete, onViewReceipt,
+  tx, isEditing, isOwner, onEdit, onDelete, onViewReceipt,
 }: {
   tx: Transaction;
   isEditing: boolean;
-  onEdit: () => void;
-  onDelete: () => void;
+  isOwner: boolean;
+  onEdit?: () => void;
+  onDelete?: () => void;
   onViewReceipt?: () => void;
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const handleDeleteClick = () => {
+    if (!onDelete) return;
     if (confirmDelete) {
       onDelete();
     } else {
       setConfirmDelete(true);
-      // 3초 후 확인 상태 자동 해제
       setTimeout(() => setConfirmDelete(false), 3000);
     }
   };
@@ -761,7 +780,11 @@ function TransactionRow({
         border: `1px solid ${isEditing ? `${ACCENT}44` : "transparent"}`,
       }}
     >
-      <button onClick={onEdit} className="flex items-center gap-2.5 flex-1 min-w-0 text-left">
+      <div
+        className={`flex items-center gap-2.5 flex-1 min-w-0 text-left ${isOwner ? "cursor-pointer" : ""}`}
+        onClick={isOwner && onEdit ? onEdit : undefined}
+        role={isOwner && onEdit ? "button" : undefined}
+      >
         <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-xs font-bold"
           style={{
             background: `${CATEGORY_COLORS[tx.category] ?? "#8B8BA7"}22`,
@@ -778,6 +801,10 @@ function TransactionRow({
               style={{ color: "#6366F1", background: "#6366F122" }}>
               {tx.buyer}
             </span>
+            <span className="text-[11px] px-1.5 py-0.5 rounded-md"
+              style={{ color: "var(--text-muted)", background: "rgba(255,255,255,0.06)" }}>
+              {tx.authorName}
+            </span>
             {tx.merchantName && (
               <span className="text-xs" style={{ color: "var(--text-muted)" }}>{tx.merchantName}</span>
             )}
@@ -786,7 +813,7 @@ function TransactionRow({
             </span>
           </div>
         </div>
-      </button>
+      </div>
       <span className={`text-sm font-bold shrink-0 ${tx.type === "income" ? "text-emerald-400" : "text-rose-400"}`}>
         {tx.type === "income" ? "+" : "-"}{tx.amount.toLocaleString()}원
       </span>
@@ -799,20 +826,22 @@ function TransactionRow({
           <ReceiptText size={13} style={{ color: ACCENT }} />
         </button>
       )}
-      <button
-        onClick={handleDeleteClick}
-        aria-label={confirmDelete ? "삭제 확인" : "거래 삭제"}
-        className="transition-all shrink-0 rounded-md"
-        style={{
-          padding: confirmDelete ? "2px 6px" : "2px",
-          background: confirmDelete ? "rgba(244,63,94,0.15)" : "transparent",
-          border: confirmDelete ? "1px solid rgba(244,63,94,0.3)" : "1px solid transparent",
-        }}
-      >
-        {confirmDelete
-          ? <span className="text-[10px] font-bold" style={{ color: "#F43F5E" }}>삭제?</span>
-          : <Trash2 size={12} className="opacity-40 hover:opacity-80 transition-opacity" style={{ color: "var(--text-muted)" }} />}
-      </button>
+      {isOwner && (
+        <button
+          onClick={handleDeleteClick}
+          aria-label={confirmDelete ? "삭제 확인" : "거래 삭제"}
+          className="transition-all shrink-0 rounded-md"
+          style={{
+            padding: confirmDelete ? "2px 6px" : "2px",
+            background: confirmDelete ? "rgba(244,63,94,0.15)" : "transparent",
+            border: confirmDelete ? "1px solid rgba(244,63,94,0.3)" : "1px solid transparent",
+          }}
+        >
+          {confirmDelete
+            ? <span className="text-[10px] font-bold" style={{ color: "#F43F5E" }}>삭제?</span>
+            : <Trash2 size={12} className="opacity-40 hover:opacity-80 transition-opacity" style={{ color: "var(--text-muted)" }} />}
+        </button>
+      )}
     </div>
   );
 }
