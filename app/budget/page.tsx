@@ -7,8 +7,8 @@ import { sendNativeNotification } from "@/lib/notifications";
 import { analyzeReceiptImage } from "@/lib/receipt-ocr";
 import {
   ArrowLeft, ArrowRight, CheckCircle2, ChevronDown, ChevronUp,
-  ImagePlus, LoaderCircle, Pencil, ReceiptText, Trash2,
-  TrendingDown, TrendingUp, Users, Wallet, XCircle,
+  ImagePlus, LoaderCircle, Pencil, ReceiptText, Trash2, TrendingDown,
+  TrendingUp, Users, Wallet, X, XCircle,
 } from "lucide-react";
 import OcrScanModal from "@/components/OcrScanModal";
 import { preprocessReceiptImage } from "@/lib/image-preprocess";
@@ -161,6 +161,9 @@ export default function BudgetPage() {
       } catch {}
     } catch {}
   }, []);
+
+  // 영수증 이미지 뷰어
+  const [viewingReceiptTx, setViewingReceiptTx] = useState<Transaction | null>(null);
 
   useEffect(() => { void loadSettings(); }, [loadSettings]);
   useEffect(() => { loadTransactions(); }, [loadTransactions]);
@@ -329,6 +332,13 @@ export default function BudgetPage() {
           imageUrl={ocrModalImage}
           isDone={ocrDone}
           onClose={closeOcrModal}
+        />
+      )}
+
+      {viewingReceiptTx && (
+        <ReceiptViewerModal
+          tx={viewingReceiptTx}
+          onClose={() => setViewingReceiptTx(null)}
         />
       )}
 
@@ -512,6 +522,7 @@ export default function BudgetPage() {
                     isEditing={editingId === tx.id}
                     onEdit={() => startEdit(tx)}
                     onDelete={() => handleDelete(tx.id)}
+                    onViewReceipt={tx.receiptImageUrl ? () => setViewingReceiptTx(tx) : undefined}
                   />
                 ))
               )}
@@ -676,8 +687,8 @@ function OcrUploader({
         <div className="relative">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={receiptImageUrl} alt="영수증 미리보기"
-            className="w-full rounded-xl object-cover border"
-            style={{ maxHeight: 140, borderColor: "var(--border)" }} />
+            className="w-full rounded-xl border"
+            style={{ maxHeight: 220, objectFit: "contain", background: "#0a0a0f", borderColor: "var(--border)" }} />
           <button
             type="button"
             onClick={onClearImage}
@@ -701,12 +712,13 @@ function OcrUploader({
 
 // ── 거래 행 ────────────────────────────────────────────────────
 function TransactionRow({
-  tx, isEditing, onEdit, onDelete,
+  tx, isEditing, onEdit, onDelete, onViewReceipt,
 }: {
   tx: Transaction;
   isEditing: boolean;
   onEdit: () => void;
   onDelete: () => void;
+  onViewReceipt?: () => void;
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -757,6 +769,15 @@ function TransactionRow({
       <span className={`text-sm font-bold shrink-0 ${tx.type === "income" ? "text-emerald-400" : "text-rose-400"}`}>
         {tx.type === "income" ? "+" : "-"}{tx.amount.toLocaleString()}원
       </span>
+      {onViewReceipt && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onViewReceipt(); }}
+          aria-label="영수증 보기"
+          className="opacity-50 hover:opacity-90 transition-opacity shrink-0"
+        >
+          <ReceiptText size={13} style={{ color: ACCENT }} />
+        </button>
+      )}
       <button
         onClick={handleDeleteClick}
         aria-label={confirmDelete ? "삭제 확인" : "거래 삭제"}
@@ -1221,6 +1242,98 @@ function PieChart({ transactions }: { transactions: Transaction[] }) {
             <p className="text-xs" style={{ color: "var(--text-muted)" }}>외 {slices.length - 5}개</p>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ── 영수증 이미지 뷰어 모달 ─────────────────────────────────────
+function ReceiptViewerModal({
+  tx,
+  onClose,
+}: {
+  tx: Transaction;
+  onClose: () => void;
+}) {
+  // 키보드 ESC로 닫기
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      style={{ background: "rgba(0,0,0,0.88)", backdropFilter: "blur(8px)" }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        className="relative flex flex-col rounded-2xl overflow-hidden"
+        style={{
+          width: "min(460px, 94vw)",
+          maxHeight: "92vh",
+          background: "var(--bg-card)",
+          border: "1px solid var(--border)",
+          boxShadow: "0 24px 80px rgba(0,0,0,0.7)",
+        }}
+      >
+        {/* 헤더 */}
+        <div
+          className="flex items-center justify-between px-4 py-3 shrink-0"
+          style={{ borderBottom: "1px solid var(--border)" }}
+        >
+          <div className="min-w-0">
+            <p className="text-sm font-bold truncate" style={{ color: "var(--text-primary)" }}>
+              {tx.merchantName || tx.category}
+            </p>
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+              {tx.date} · {tx.buyer} · {tx.category}
+            </p>
+          </div>
+          <div className="flex items-center gap-3 shrink-0 pl-3">
+            <p className="text-sm font-black"
+              style={{ color: tx.type === "income" ? "#10B981" : "#F43F5E" }}>
+              {tx.type === "income" ? "+" : "-"}{tx.amount.toLocaleString()}원
+            </p>
+            <button
+              onClick={onClose}
+              aria-label="닫기"
+              className="p-1.5 rounded-lg hover:opacity-70 transition-opacity"
+              style={{ background: "rgba(255,255,255,0.06)", border: "1px solid var(--border)" }}
+            >
+              <X size={14} style={{ color: "var(--text-muted)" }} />
+            </button>
+          </div>
+        </div>
+
+        {/* 영수증 이미지 — 스크롤 가능, 원본 비율 유지 */}
+        <div
+          className="overflow-y-auto flex-1"
+          style={{ background: "#050508" }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={tx.receiptImageUrl!}
+            alt="영수증"
+            style={{
+              width: "100%",
+              height: "auto",
+              display: "block",
+              objectFit: "contain",
+            }}
+          />
+        </div>
+
+        {/* 메모 (있을 경우) */}
+        {tx.note && (
+          <div
+            className="px-4 py-2.5 shrink-0 text-xs"
+            style={{ borderTop: "1px solid var(--border)", color: "var(--text-muted)" }}
+          >
+            {tx.note}
+          </div>
+        )}
       </div>
     </div>
   );

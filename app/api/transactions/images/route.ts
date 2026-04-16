@@ -34,8 +34,14 @@ export async function POST(request: NextRequest) {
   let outputBuffer: Buffer;
   try {
     outputBuffer = await sharp(inputBuffer, { animated: false })
-      .rotate()
-      .jpeg({ quality: 85 })
+      .rotate()                                             // EXIF 방향 보정
+      .resize({
+        width: 1920,
+        height: 1920,
+        fit: "inside",               // 종횡비 유지, 1920px 박스 안에 맞춤
+        withoutEnlargement: true,    // 원본보다 크게 업스케일 안 함
+      })
+      .webp({ quality: 85 })
       .toBuffer();
   } catch {
     return NextResponse.json(
@@ -44,7 +50,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const filename = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
+  const filename = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.webp`;
   // 유저별 폴더로 분리하여 RLS 없이도 경로로 소유자 구분
   const storagePath = `${user.id}/${filename}`;
 
@@ -53,7 +59,7 @@ export async function POST(request: NextRequest) {
   const { error: uploadError } = await adminSupabase.storage
     .from("receipt-images")
     .upload(storagePath, outputBuffer, {
-      contentType: "image/jpeg",
+      contentType: "image/webp",
       upsert: false,
     });
 
