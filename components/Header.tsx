@@ -1,16 +1,18 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Bell, BellOff, Check, LoaderCircle, LogOut, Pencil, Settings, Share, Sparkles, Trash2, User, Moon, Sun, UserCircle, X } from "lucide-react";
+import { startTransition, useEffect, useRef, useState } from "react";
+import { Bell, BellOff, Check, LoaderCircle, LogOut, Pencil, RefreshCw, Settings, Share, Sparkles, Trash2, User, Moon, Sun, UserCircle, X } from "lucide-react";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 import { useThemeStore } from "@/store/useThemeStore";
+import { useNotificationStore } from "@/store/useNotificationStore";
 import { createClient } from "@/lib/supabase/client";
 import { getFirebaseMessaging } from "@/lib/firebase-client";
-import { getToken, deleteToken } from "firebase/messaging";
+import { deleteToken, getToken, onMessage } from "firebase/messaging";
 import { signOut } from "@/lib/supabase/actions/auth";
 import type { AuthUser as SupabaseUser } from "@supabase/supabase-js";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 // ── 디바이스 유틸 ──────────────────────────────────────────────
 function isIOS(): boolean {
@@ -32,6 +34,22 @@ function detectDevice(): "ios" | "android" | "web" {
 
 const PUSH_STORAGE_KEY = "daldidan-push";
 
+function extractNotificationPreview(payload: {
+  notification?: { title?: string; body?: string; icon?: string };
+  data?: Record<string, string | undefined>;
+  fcmOptions?: { link?: string };
+}) {
+  const title = payload.data?.title ?? payload.notification?.title ?? "달디단";
+  const body = payload.data?.body ?? payload.notification?.body ?? "새 글이 등록되었습니다";
+  const url = payload.data?.url ?? payload.fcmOptions?.link ?? "/blog";
+  const createdAt = new Date().toISOString();
+  const id = payload.data?.url
+    ? `${payload.data.url}:${title}`
+    : `${url}:${title}:${createdAt}`;
+
+  return { id, title, body, url, createdAt };
+}
+
 function getDefaultGreeting(hour: number): string {
   if (hour < 6)  return "새벽이에요";
   if (hour < 12) return "좋은 아침이에요";
@@ -40,6 +58,7 @@ function getDefaultGreeting(hour: number): string {
 }
 
 export default function Header() {
+  const router = useRouter();
   // now를 null로 초기화해 SSR hydration 불일치 방지
   const [now, setNow] = useState<Date | null>(null);
   const [user, setUser] = useState<SupabaseUser | null>(null);
@@ -51,6 +70,7 @@ export default function Header() {
   const [pushStatus, setPushStatus] = useState<PushStatus>("idle");
   const [pushToken, setPushToken] = useState<string | null>(null);
   const [pushErrorMsg, setPushErrorMsg] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
 
   // 인사말 편집
   const [customGreeting, setCustomGreeting] = useState<string>("");
@@ -64,6 +84,11 @@ export default function Header() {
   const greetingInputRef = useRef<HTMLInputElement>(null);
 
   const { theme, toggle } = useThemeStore();
+  const inbox = useNotificationStore((state) => state.inbox);
+  const addInboxNotification = useNotificationStore((state) => state.addInboxNotification);
+  const markAllInboxRead = useNotificationStore((state) => state.markAllInboxRead);
+  const markInboxRead = useNotificationStore((state) => state.markInboxRead);
+  const unreadInboxCount = inbox.filter((item) => !item.read).length;
 
   // 시계 — 클라이언트에서만 시작
   useEffect(() => {
@@ -129,6 +154,48 @@ export default function Header() {
       .register("/firebase-messaging-sw.js", { scope: "/" })
       .catch(() => { /* 사전 등록 실패는 무시 */ });
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
+
+    const handleMessage = (event: MessageEvent<{ type?: string; payload?: {
+      title?: string;
+      body?: string;
+      url?: string;
+      createdAt?: string;
+    } }>) => {
+      if (event.data?.type !== "blog-notification" || !event.data.payload) return;
+      addInboxNotification({
+        id: `${event.data.payload.url ?? "/blog"}:${event.data.payload.title ?? "달디단"}`,
+        title: event.data.payload.title ?? "달디단",
+        body: event.data.payload.body ?? "새 글이 등록되었습니다",
+        url: event.data.payload.url ?? "/blog",
+        createdAt: event.data.payload.createdAt ?? new Date().toISOString(),
+      });
+    };
+
+    navigator.serviceWorker.addEventListener("message", handleMessage);
+    return () => navigator.serviceWorker.removeEventListener("message", handleMessage);
+  }, [addInboxNotification]);
+
+  useEffect(() => {
+    let active = true;
+    let unsubscribe: (() => void) | undefined;
+
+    (async () => {
+      const messaging = await getFirebaseMessaging();
+      if (!messaging || !active) return;
+
+      unsubscribe = onMessage(messaging, (payload) => {
+        addInboxNotification(extractNotificationPreview(payload));
+      });
+    })();
+
+    return () => {
+      active = false;
+      unsubscribe?.();
+    };
+  }, [addInboxNotification]);
 
   // 편집 모드 진입 시 input 포커스
   useEffect(() => {
@@ -220,6 +287,28 @@ export default function Header() {
     localStorage.removeItem(PUSH_STORAGE_KEY);
     setPushToken(null);
     setPushStatus("idle");
+  };
+
+  const handleRefresh = () => {
+    setRefreshing(true);
+    startTransition(() => {
+      router.refresh();
+    });
+    window.setTimeout(() => setRefreshing(false), 900);
+  };
+
+  const handleOpenNotificationMenu = () => {
+    setNotificationMenuOpen((prev) => {
+      const next = !prev;
+      if (next) markAllInboxRead();
+      return next;
+    });
+  };
+
+  const handleNotificationClick = (id: string, url: string) => {
+    markInboxRead(id);
+    setNotificationMenuOpen(false);
+    router.push(url);
   };
 
   const startEditGreeting = () => {
@@ -353,6 +442,24 @@ export default function Header() {
 
         {/* 다크/라이트 토글 */}
         <button
+          onClick={handleRefresh}
+          aria-label="최근 정보 새로고침"
+          className="w-9 h-9 rounded-xl flex items-center justify-center transition-all hover:opacity-80"
+          style={{
+            background: "var(--bg-card)",
+            border: "1px solid var(--border)",
+          }}
+        >
+          <RefreshCw
+            size={15}
+            style={{
+              color: "var(--text-muted)",
+              animation: refreshing ? "spin 0.8s linear infinite" : undefined,
+            }}
+          />
+        </button>
+
+        <button
           onClick={toggle}
           aria-label={isLight ? "다크 모드로 전환" : "라이트 모드로 전환"}
           className="w-9 h-9 rounded-xl flex items-center justify-center transition-all hover:opacity-80"
@@ -372,7 +479,7 @@ export default function Header() {
         {firebaseConfigured && (
           <div ref={notificationRef} style={{ position: "relative" }}>
             <button
-              onClick={() => setNotificationMenuOpen((v) => !v)}
+              onClick={handleOpenNotificationMenu}
               className="w-9 h-9 rounded-xl flex items-center justify-center transition-colors hover:opacity-80"
               style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
               aria-label="푸시 알림 설정"
@@ -383,6 +490,20 @@ export default function Header() {
                   ? <Bell size={16} style={{ color: "#F59E0B" }} />
                   : <BellOff size={16} style={{ color: "var(--text-muted)" }} />
               }
+              {unreadInboxCount > 0 && (
+                <span
+                  style={{
+                    position: "absolute",
+                    top: 6,
+                    right: 6,
+                    width: 8,
+                    height: 8,
+                    borderRadius: "50%",
+                    background: "#F43F5E",
+                    boxShadow: "0 0 0 2px var(--bg-card)",
+                  }}
+                />
+              )}
               <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
             </button>
 
@@ -460,6 +581,60 @@ export default function Header() {
                       )}
                     </div>
                   )}
+
+                  <div style={{ borderTop: "1px solid var(--border)", paddingTop: "0.75rem", display: "flex", flexDirection: "column", gap: "0.55rem" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem" }}>
+                      <p style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>
+                        최근 알림
+                      </p>
+                      <p style={{ fontSize: "0.7rem", color: "var(--text-muted)", margin: 0 }}>
+                        최대 3개
+                      </p>
+                    </div>
+
+                    {inbox.length === 0 ? (
+                      <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: 0, lineHeight: 1.5 }}>
+                        아직 받은 새 글 알림이 없습니다.
+                      </p>
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem" }}>
+                        {inbox.map((item) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => handleNotificationClick(item.id, item.url)}
+                            className="pressable"
+                            style={{
+                              width: "100%",
+                              textAlign: "left",
+                              padding: "0.7rem 0.75rem",
+                              borderRadius: "0.8rem",
+                              background: item.read ? "var(--bg-input)" : "rgba(245,158,11,0.12)",
+                              border: "1px solid var(--border)",
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: "0.2rem",
+                            }}
+                          >
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem" }}>
+                              <p style={{ fontSize: "0.76rem", fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>
+                                {item.title}
+                              </p>
+                              {!item.read && (
+                                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#F59E0B", flexShrink: 0 }} />
+                              )}
+                            </div>
+                            <p style={{ fontSize: "0.72rem", color: "var(--text-muted)", margin: 0, lineHeight: 1.45 }}>
+                              {item.body}
+                            </p>
+                            <p style={{ fontSize: "0.68rem", color: "var(--text-muted)", margin: 0 }}>
+                              {format(new Date(item.createdAt), "M/d HH:mm")}
+                            </p>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             )}

@@ -1,9 +1,11 @@
 import { createAdminClient } from "@/lib/supabase/server";
-import { getAdminMessaging } from "@/lib/firebase-admin";
+import { sendFcmMessage } from "@/lib/firebase-admin";
 
 interface PushSubscriptionRow {
   fcm_token: string;
   device_type: "web" | "ios" | "android";
+  user_id?: string | null;
+  user_agent?: string | null;
   updated_at?: string | null;
 }
 
@@ -15,7 +17,7 @@ interface PushDispatchParams {
   origin?: string;
 }
 
-interface PushDispatchResult {
+export interface PushDispatchResult {
   sent: number;
   failed: number;
   details: Array<{
@@ -44,7 +46,38 @@ function toAbsoluteUrl(pathOrUrl: string | undefined, baseUrl: string) {
   return `${baseUrl}${normalizedPath}`;
 }
 
-async function deleteInvalidTokens(tokens: string[]) {
+function buildSubscriptionDedupKey(subscription: PushSubscriptionRow) {
+  if (subscription.user_id && subscription.user_agent) {
+    return `${subscription.user_id}:${subscription.device_type}:${subscription.user_agent}`;
+  }
+  return subscription.fcm_token;
+}
+
+function dedupeSubscriptions(subscriptions: PushSubscriptionRow[]) {
+  const sorted = [...subscriptions].sort((a, b) => {
+    const left = a.updated_at ? new Date(a.updated_at).getTime() : 0;
+    const right = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+    return right - left;
+  });
+
+  const seen = new Set<string>();
+  const unique: PushSubscriptionRow[] = [];
+  const redundantTokens: string[] = [];
+
+  for (const subscription of sorted) {
+    const key = buildSubscriptionDedupKey(subscription);
+    if (seen.has(key)) {
+      redundantTokens.push(subscription.fcm_token);
+      continue;
+    }
+    seen.add(key);
+    unique.push(subscription);
+  }
+
+  return { unique, redundantTokens };
+}
+
+async function deleteTokens(tokens: string[]) {
   if (tokens.length === 0) return;
   const supabase = createAdminClient();
   await supabase
@@ -53,108 +86,99 @@ async function deleteInvalidTokens(tokens: string[]) {
     .in("fcm_token", tokens);
 }
 
-function buildWebpushPayload(params: PushDispatchParams) {
+async function dispatchPushToSubscriptions(
+  subscriptions: PushSubscriptionRow[],
+  params: PushDispatchParams,
+): Promise<PushDispatchResult> {
+  const { unique: uniqueSubscriptions, redundantTokens } = dedupeSubscriptions(subscriptions);
+  await deleteTokens(redundantTokens);
+
+  if (uniqueSubscriptions.length === 0) {
+    return { sent: 0, failed: 0, details: [] };
+  }
+
   const siteUrl = params.origin ? trimTrailingSlash(params.origin) : getBaseSiteUrl();
   const targetUrl = toAbsoluteUrl(params.url ?? "/blog", siteUrl);
   const fallbackPath = params.url?.startsWith("/") ? params.url : "/blog";
   const iconUrl = toAbsoluteUrl(params.icon ?? "/favicon.ico", siteUrl) ?? "/favicon.ico";
   const badgeUrl = toAbsoluteUrl("/favicon.ico", siteUrl) ?? "/favicon.ico";
-
-  return {
-    webpush: {
-      notification: {
-        title: params.title,
-        body: params.body,
-        icon: iconUrl,
-        badge: badgeUrl,
-      },
-      data: {
-        title: params.title,
-        body: params.body,
-        icon: iconUrl,
-        badge: badgeUrl,
-        url: targetUrl ?? fallbackPath,
-      },
-      ...(targetUrl ? { fcmOptions: { link: targetUrl } } : {}),
-    },
-    apns: {
-      payload: {
-        aps: {
-          alert: { title: params.title, body: params.body },
-          sound: "default",
-        },
-      },
-      fcmOptions: {
-        imageUrl: params.icon,
-      },
-    },
-  };
-}
-
-async function dispatchPushToSubscriptions(
-  subscriptions: PushSubscriptionRow[],
-  params: PushDispatchParams,
-): Promise<PushDispatchResult> {
-  if (subscriptions.length === 0) {
-    return { sent: 0, failed: 0, details: [] };
-  }
-
-  const messaging = getAdminMessaging();
-  const BATCH_SIZE = 500;
+  const messageUrl = targetUrl ?? fallbackPath;
+  const BATCH_SIZE = 20;
   let sent = 0;
   let failed = 0;
   const details: PushDispatchResult["details"] = [];
   const invalidTokens: string[] = [];
 
-  for (let i = 0; i < subscriptions.length; i += BATCH_SIZE) {
-    const batch = subscriptions.slice(i, i + BATCH_SIZE);
-
-    try {
-      const response = await messaging.sendEachForMulticast({
-        tokens: batch.map((item) => item.fcm_token),
-        ...buildWebpushPayload(params),
-      });
-
-      sent += response.successCount;
-      failed += response.failureCount;
-
-      response.responses.forEach((resp, idx) => {
-        const subscription = batch[idx];
-        const errorCode = resp.success ? null : (resp.error?.code ?? null);
-        const errorMessage = resp.success ? null : (resp.error?.message ?? null);
-
-        details.push({
-          tokenPrefix: subscription.fcm_token.slice(0, 12),
-          deviceType: subscription.device_type,
-          success: resp.success,
-          errorCode,
-          errorMessage,
+  for (let i = 0; i < uniqueSubscriptions.length; i += BATCH_SIZE) {
+    const batch = uniqueSubscriptions.slice(i, i + BATCH_SIZE);
+    const results = await Promise.all(batch.map(async (subscription) => {
+      try {
+        return await sendFcmMessage({
+          token: subscription.fcm_token,
+          title: params.title,
+          body: params.body,
+          iconUrl,
+          badgeUrl,
+          url: messageUrl,
+          imageUrl: params.icon,
         });
-
-        if (
-          !resp.success &&
-          (errorCode === "messaging/registration-token-not-registered" ||
-            errorCode === "messaging/invalid-registration-token")
-        ) {
-          invalidTokens.push(subscription.fcm_token);
-        }
-      });
-    } catch (err) {
-      console.error("[FCM] multicast error:", err);
-      failed += batch.length;
-      batch.forEach((subscription) => {
+      } catch (error) {
         details.push({
           tokenPrefix: subscription.fcm_token.slice(0, 12),
           deviceType: subscription.device_type,
           success: false,
-          errorCode: "multicast-error",
-          errorMessage: err instanceof Error ? err.message : "unknown error",
+          errorCode: "send-failed",
+          errorMessage: error instanceof Error ? error.message : "unknown error",
         });
+        return null;
+      }
+    }));
+
+    results.forEach((result, idx) => {
+      if (!result) {
+        failed += 1;
+        return;
+      }
+
+      const subscription = batch[idx];
+      if (result.success) {
+        sent += 1;
+        details.push({
+          tokenPrefix: subscription.fcm_token.slice(0, 12),
+          deviceType: subscription.device_type,
+          success: true,
+          errorCode: null,
+          errorMessage: null,
+        });
+        return;
+      }
+
+      failed += 1;
+      details.push({
+        tokenPrefix: subscription.fcm_token.slice(0, 12),
+        deviceType: subscription.device_type,
+        success: false,
+        errorCode: result.errorCode,
+        errorMessage: result.errorMessage,
       });
-    }
+
+      if (
+        result.errorCode === "UNREGISTERED" ||
+        result.errorCode === "INVALID_ARGUMENT"
+      ) {
+        const lowerMessage = result.errorMessage?.toLowerCase() ?? "";
+        if (
+          lowerMessage.includes("registration token") ||
+          lowerMessage.includes("not registered") ||
+          lowerMessage.includes("requested entity was not found")
+        ) {
+          invalidTokens.push(subscription.fcm_token);
+        }
+      }
+    });
   }
 
-  await deleteInvalidTokens(invalidTokens);
+  await deleteTokens(invalidTokens);
   return { sent, failed, details };
 }
 
@@ -162,7 +186,7 @@ async function getAllSubscriptions(): Promise<PushSubscriptionRow[]> {
   const supabase = createAdminClient();
   const { data: subscriptions, error } = await supabase
     .from("push_subscriptions")
-    .select("fcm_token, device_type, updated_at");
+    .select("fcm_token, device_type, user_id, user_agent, updated_at");
 
   if (error || !subscriptions) return [];
   return subscriptions;
@@ -187,7 +211,7 @@ export async function sendPushDebugToLatestSubscribers(
   const limit = Math.min(Math.max(params.limit ?? 5, 1), 20);
   const { data: subscriptions, error } = await supabase
     .from("push_subscriptions")
-    .select("fcm_token, device_type, updated_at")
+    .select("fcm_token, device_type, user_id, user_agent, updated_at")
     .order("updated_at", { ascending: false })
     .limit(limit);
 
