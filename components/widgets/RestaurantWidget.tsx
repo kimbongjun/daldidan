@@ -24,6 +24,26 @@ const CATEGORY_STYLE: Record<RestaurantCategory, { bg: string; color: string; gr
       color: "#6366F1",
       gradient: "linear-gradient(135deg, rgba(99,102,241,0.28), rgba(139,92,246,0.18))",
     },
+    아시안: {
+      bg: "rgba(20,184,166,0.25)",
+      color: "#14B8A6",
+      gradient: "linear-gradient(135deg, rgba(20,184,166,0.28), rgba(6,182,212,0.18))",
+    },
+    분식: {
+      bg: "rgba(249,115,22,0.25)",
+      color: "#F97316",
+      gradient: "linear-gradient(135deg, rgba(249,115,22,0.28), rgba(251,191,36,0.18))",
+    },
+    주점: {
+      bg: "rgba(168,85,247,0.25)",
+      color: "#A855F7",
+      gradient: "linear-gradient(135deg, rgba(168,85,247,0.28), rgba(59,130,246,0.18))",
+    },
+    카페: {
+      bg: "rgba(120,113,108,0.25)",
+      color: "#A8A29E",
+      gradient: "linear-gradient(135deg, rgba(120,113,108,0.28), rgba(161,98,7,0.18))",
+    },
     퓨전: {
       bg: "rgba(139,92,246,0.25)",
       color: "#8B5CF6",
@@ -35,6 +55,10 @@ const CATEGORY_EMOJI: Record<RestaurantCategory, string> = {
   한식: "🍚",
   중식: "🥟",
   양식: "🍝",
+  아시안: "🥢",
+  분식: "🍢",
+  주점: "🍺",
+  카페: "☕",
   퓨전: "🍱",
 };
 

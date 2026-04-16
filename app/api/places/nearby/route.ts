@@ -1,9 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 
-type RestaurantCategory = "한식" | "중식" | "양식" | "퓨전";
+type RestaurantCategory = "한식" | "중식" | "양식" | "아시안" | "분식" | "주점" | "카페" | "퓨전";
 
 const KOREAN_TYPES = ["korean_restaurant"];
 const CHINESE_TYPES = ["chinese_restaurant"];
+const ASIAN_TYPES = [
+  "asian_restaurant",
+  "japanese_restaurant",
+  "sushi_restaurant",
+  "ramen_restaurant",
+  "thai_restaurant",
+  "vietnamese_restaurant",
+  "indian_restaurant",
+];
+const BUNSIK_TYPES = [
+  "fast_food_restaurant",
+  "meal_takeaway",
+];
+const PUB_TYPES = ["bar", "pub", "wine_bar", "beer_garden", "bar_and_grill"];
+const CAFE_TYPES = ["cafe", "coffee_shop", "bakery", "dessert_shop"];
 const WESTERN_TYPES = [
   "american_restaurant",
   "italian_restaurant",
@@ -18,9 +33,21 @@ const WESTERN_TYPES = [
   "steak_house",
 ];
 
-function mapCategory(types: string[]): RestaurantCategory {
+const BUNSIK_KEYWORDS = ["떡볶이", "김밥", "분식", "순대", "라면", "우동", "오뎅"];
+const PUB_KEYWORDS = ["포차", "술집", "호프", "이자카야", "맥주", "주점", "펍", "바"];
+const CAFE_KEYWORDS = ["카페", "커피", "베이커리", "도넛", "디저트"];
+
+function hasKeyword(name: string, keywords: string[]) {
+  return keywords.some((keyword) => name.includes(keyword));
+}
+
+function mapCategory(types: string[], name: string): RestaurantCategory {
+  if (types.some((t) => CAFE_TYPES.includes(t)) || hasKeyword(name, CAFE_KEYWORDS)) return "카페";
+  if (types.some((t) => PUB_TYPES.includes(t)) || hasKeyword(name, PUB_KEYWORDS)) return "주점";
+  if (types.some((t) => BUNSIK_TYPES.includes(t)) || hasKeyword(name, BUNSIK_KEYWORDS)) return "분식";
   if (types.some((t) => KOREAN_TYPES.includes(t))) return "한식";
   if (types.some((t) => CHINESE_TYPES.includes(t))) return "중식";
+  if (types.some((t) => ASIAN_TYPES.includes(t))) return "아시안";
   if (types.some((t) => WESTERN_TYPES.includes(t))) return "양식";
   return "퓨전";
 }
@@ -79,8 +106,8 @@ export async function GET(request: NextRequest) {
         "places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.currentOpeningHours,places.photos,places.location,places.googleMapsUri,places.types,places.businessStatus",
     },
     body: JSON.stringify({
-      includedTypes: ["restaurant"],
-      maxResultCount: 20,
+      includedTypes: ["restaurant", "cafe", "coffee_shop", "bar", "pub", "bakery"],
+      maxResultCount: 30,
       locationRestriction: {
         circle: {
           center: { latitude: lat, longitude: lng },
@@ -112,7 +139,7 @@ export async function GET(request: NextRequest) {
         p.googleMapsUri ??
         `https://www.google.com/maps/search/${encodeURIComponent(p.displayName?.text ?? "")}`,
       types: p.types ?? [],
-      category: mapCategory(p.types ?? []),
+      category: mapCategory(p.types ?? [], p.displayName?.text ?? ""),
       distance: calcDistance(lat, lng, p.location?.latitude ?? lat, p.location?.longitude ?? lng),
     }));
 

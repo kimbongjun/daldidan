@@ -1,6 +1,23 @@
-export type RestaurantCategory = "한식" | "중식" | "양식" | "퓨전";
+export type RestaurantCategory =
+  | "한식"
+  | "중식"
+  | "양식"
+  | "아시안"
+  | "분식"
+  | "주점"
+  | "카페"
+  | "퓨전";
 
-export const RESTAURANT_CATEGORIES: RestaurantCategory[] = ["한식", "중식", "양식", "퓨전"];
+export const RESTAURANT_CATEGORIES: RestaurantCategory[] = [
+  "한식",
+  "중식",
+  "양식",
+  "아시안",
+  "분식",
+  "주점",
+  "카페",
+  "퓨전",
+];
 
 export interface Restaurant {
   id: string;
@@ -246,6 +263,182 @@ export const SAMPLE_RESTAURANTS: Restaurant[] = [
     distance: "0.3km",
     priceRange: "₩₩",
     tags: ["나폴리피자", "파스타", "샐러드"],
+  },
+
+  // ─── 아시안 ─────────────────────────────────────────────
+  {
+    id: "as-1",
+    name: "미분당",
+    category: "아시안",
+    emoji: "🍜",
+    address: "강남구 역삼동 619-28",
+    rating: 4.6,
+    reviewCount: 1448,
+    openTime: "11:00",
+    closeTime: "21:30",
+    distance: "0.4km",
+    priceRange: "₩₩",
+    tags: ["쌀국수", "베트남", "분짜"],
+  },
+  {
+    id: "as-2",
+    name: "툭툭누들타이",
+    category: "아시안",
+    emoji: "🥢",
+    address: "마포구 연남동 223-15",
+    rating: 4.5,
+    reviewCount: 932,
+    openTime: "11:30",
+    closeTime: "22:00",
+    distance: "0.9km",
+    priceRange: "₩₩",
+    tags: ["태국음식", "팟타이", "똠얌"],
+  },
+  {
+    id: "as-3",
+    name: "갓포아키",
+    category: "아시안",
+    emoji: "🍣",
+    address: "성동구 성수동2가 300-42",
+    rating: 4.7,
+    reviewCount: 401,
+    openTime: "17:00",
+    closeTime: "23:30",
+    distance: "1.1km",
+    priceRange: "₩₩₩",
+    tags: ["일식", "사시미", "오마카세"],
+  },
+
+  // ─── 분식 ─────────────────────────────────────────────
+  {
+    id: "sn-1",
+    name: "신전떡볶이",
+    category: "분식",
+    emoji: "🍢",
+    address: "서초구 서초동 1308-26",
+    rating: 4.3,
+    reviewCount: 1037,
+    openTime: "11:00",
+    closeTime: "22:00",
+    distance: "0.5km",
+    priceRange: "₩",
+    tags: ["떡볶이", "튀김", "순대"],
+  },
+  {
+    id: "sn-2",
+    name: "고봉민김밥",
+    category: "분식",
+    emoji: "🍙",
+    address: "송파구 잠실동 184-4",
+    rating: 4.2,
+    reviewCount: 678,
+    openTime: "08:00",
+    closeTime: "21:00",
+    distance: "0.8km",
+    priceRange: "₩",
+    tags: ["김밥", "라면", "돈까스"],
+  },
+  {
+    id: "sn-3",
+    name: "죠스떡볶이",
+    category: "분식",
+    emoji: "🥟",
+    address: "마포구 서교동 358-52",
+    rating: 4.1,
+    reviewCount: 821,
+    openTime: "10:30",
+    closeTime: "22:30",
+    distance: "1.0km",
+    priceRange: "₩",
+    tags: ["떡볶이", "오뎅", "찰순대"],
+  },
+
+  // ─── 주점 ─────────────────────────────────────────────
+  {
+    id: "pb-1",
+    name: "을지로 골목집",
+    category: "주점",
+    emoji: "🍺",
+    address: "중구 을지로3가 295-3",
+    rating: 4.4,
+    reviewCount: 593,
+    openTime: "17:00",
+    closeTime: "02:00",
+    distance: "0.7km",
+    priceRange: "₩₩",
+    tags: ["호프", "안주", "생맥주"],
+  },
+  {
+    id: "pb-2",
+    name: "이자카야 나무",
+    category: "주점",
+    emoji: "🍶",
+    address: "강남구 신사동 514-18",
+    rating: 4.6,
+    reviewCount: 447,
+    openTime: "18:00",
+    closeTime: "01:00",
+    distance: "0.6km",
+    priceRange: "₩₩₩",
+    tags: ["이자카야", "하이볼", "사시미"],
+  },
+  {
+    id: "pb-3",
+    name: "한신포차",
+    category: "주점",
+    emoji: "🍻",
+    address: "영등포구 여의도동 44-11",
+    rating: 4.2,
+    reviewCount: 1510,
+    openTime: "16:00",
+    closeTime: "03:00",
+    distance: "1.3km",
+    priceRange: "₩₩",
+    tags: ["포차", "닭발", "주류"],
+  },
+
+  // ─── 카페 ─────────────────────────────────────────────
+  {
+    id: "cf-1",
+    name: "블루보틀 성수",
+    category: "카페",
+    emoji: "☕",
+    address: "성동구 성수동1가 8-1",
+    rating: 4.5,
+    reviewCount: 2380,
+    openTime: "08:00",
+    closeTime: "21:00",
+    distance: "0.6km",
+    priceRange: "₩₩",
+    tags: ["커피", "스페셜티", "디저트"],
+  },
+  {
+    id: "cf-2",
+    name: "스타벅스 더종로R",
+    category: "카페",
+    emoji: "🧋",
+    address: "종로구 종로2가 84-3",
+    rating: 4.3,
+    reviewCount: 4125,
+    openTime: "07:00",
+    closeTime: "22:00",
+    distance: "0.9km",
+    priceRange: "₩₩",
+    tags: ["리저브", "커피", "좌석넓음"],
+  },
+  {
+    id: "cf-3",
+    name: "노티드 청담",
+    category: "카페",
+    emoji: "🍩",
+    address: "강남구 청담동 93-10",
+    rating: 4.4,
+    reviewCount: 1974,
+    openTime: "10:00",
+    closeTime: "21:00",
+    distance: "1.1km",
+    priceRange: "₩₩",
+    tags: ["도넛", "디저트", "커피"],
   },
 
   // ─── 퓨전 ─────────────────────────────────────────────
