@@ -372,23 +372,37 @@ function EditorCard({
               setOcrLoading(true);
               setOcrError("");
               try {
-                const [uploadedImages, extracted] = await Promise.all([
+                const [uploadResult, ocrResult] = await Promise.allSettled([
                   uploadImagesToStorage([file]),
                   analyzeReceiptImage(file),
                 ]);
-                const receiptImageUrl = uploadedImages[0]?.url ?? "";
-                setOcrSuggestedCategory(extracted.recommendedCategory);
 
+                const receiptImageUrl = uploadResult.status === "fulfilled"
+                  ? (uploadResult.value[0]?.url ?? "")
+                  : "";
+                const extracted = ocrResult.status === "fulfilled" ? ocrResult.value : null;
+
+                if (!receiptImageUrl && !extracted) {
+                  throw new Error("영수증 업로드와 OCR 분석에 모두 실패했습니다.");
+                }
+
+                setOcrSuggestedCategory(extracted?.recommendedCategory ?? "");
                 setForm((prev) => ({
                   ...prev,
-                  category: extracted.recommendedCategory || prev.category,
-                  merchantName: extracted.merchantName || prev.merchantName,
-                  location: extracted.location || prev.location,
-                  amount: extracted.amount > 0 ? extracted.amount : prev.amount,
-                  date: extracted.date || prev.date,
-                  note: extracted.note || prev.note,
+                  category: extracted?.recommendedCategory || prev.category,
+                  merchantName: extracted?.merchantName || prev.merchantName,
+                  location: extracted?.location || prev.location,
+                  amount: extracted && extracted.amount > 0 ? extracted.amount : prev.amount,
+                  date: extracted?.date || prev.date,
+                  note: extracted?.note || prev.note,
                   receiptImageUrl: receiptImageUrl || prev.receiptImageUrl,
                 }));
+
+                if (ocrResult.status === "rejected") {
+                  setOcrError(ocrResult.reason instanceof Error ? ocrResult.reason.message : "영수증 OCR 처리에 실패했습니다.");
+                } else if (uploadResult.status === "rejected") {
+                  setOcrError(uploadResult.reason instanceof Error ? uploadResult.reason.message : "영수증 업로드에 실패했습니다.");
+                }
               } catch (error) {
                 setOcrError(error instanceof Error ? error.message : "영수증 OCR 처리에 실패했습니다.");
               } finally {
