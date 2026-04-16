@@ -134,3 +134,27 @@ create policy "본인 블로그만 수정"
 create policy "본인 블로그만 삭제"
   on public.blog_posts for delete
   using (auth.uid() = author_id);
+
+
+-- ── blog_comments ─────────────────────────────────────────────
+alter table public.blog_comments enable row level security;
+
+-- 누구나 댓글 조회 가능
+create policy "댓글 전체 공개 조회"
+  on public.blog_comments for select
+  using (true);
+
+-- 누구나 댓글 작성 가능 (비로그인 포함)
+create policy "댓글 작성 허용"
+  on public.blog_comments for insert
+  with check (true);
+
+-- 로그인 댓글: 본인만 수정
+create policy "본인 댓글만 수정"
+  on public.blog_comments for update
+  using (auth.uid() = user_id);
+
+-- 로그인 댓글: 본인만 삭제 (비로그인 댓글은 서버 서비스롤로 처리)
+create policy "본인 댓글만 삭제"
+  on public.blog_comments for delete
+  using (auth.uid() = user_id);

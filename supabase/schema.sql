@@ -35,6 +35,16 @@ create or replace trigger on_auth_user_created
   for each row execute procedure public.handle_new_user();
 
 
+-- updated_at 자동 갱신 함수 — 이후 모든 트리거에서 사용
+create or replace function public.set_updated_at()
+returns trigger language plpgsql as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+
 -- ══════════════════════════════════════════════════════════════
 -- 2. 가계부 (Budget)
 -- ══════════════════════════════════════════════════════════════
@@ -67,6 +77,9 @@ create index if not exists idx_transactions_user_date
 create index if not exists idx_transactions_user_type
   on public.transactions (user_id, type, date desc);
 
+create index if not exists idx_transactions_buyer
+  on public.transactions (buyer, date desc);
+
 -- 월별 집계 뷰: 전체 유저 합산 (공유 가계부)
 create or replace view public.monthly_summary as
 select
@@ -88,6 +101,17 @@ select
 from public.transactions
 where type = 'expense'
 group by to_char(date, 'YYYY-MM'), category;
+
+-- 구매자별 지출 집계 뷰: 정산 계산용
+create or replace view public.buyer_expense_summary as
+select
+  to_char(date, 'YYYY-MM') as ym,
+  buyer,
+  sum(amount)               as total_amount,
+  count(*)                  as tx_count
+from public.transactions
+where type = 'expense'
+group by to_char(date, 'YYYY-MM'), buyer;
 
 
 -- ══════════════════════════════════════════════════════════════
@@ -368,7 +392,9 @@ values
   ('meta_description', '날씨, 쇼핑, 영화, 여행, 가계부를 한 곳에서'),
   ('meta_og_image',    ''),
   ('logo_url',         ''),
-  ('custom_greeting',  '')
+  ('custom_greeting',  ''),
+  ('budget_members',   '["공동","봉준","달희"]'),
+  ('budget_limits',    '{}')
 on conflict (key) do nothing;
 
 -- RLS: 누구나 읽기 가능, 로그인 유저만 수정

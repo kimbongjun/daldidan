@@ -39,6 +39,7 @@ const inputStyle: CSSProperties = {
   color: "var(--text-primary)",
   outline: "none",
   width: "100%",
+  minWidth: 0,
   boxSizing: "border-box",
 };
 
@@ -454,7 +455,7 @@ export default function BudgetPage() {
 
               {/* 카테고리 + 구매자 */}
               <div className="grid grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1.5">
+                <div className="flex flex-col gap-1.5 min-w-0">
                   <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>카테고리</label>
                   <select value={form.category}
                     onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
@@ -462,7 +463,7 @@ export default function BudgetPage() {
                     {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
-                <div className="flex flex-col gap-1.5">
+                <div className="flex flex-col gap-1.5 min-w-0">
                   <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>구매자</label>
                   <select value={form.buyer}
                     onChange={(e) => setForm((f) => ({ ...f, buyer: e.target.value }))}
@@ -474,7 +475,7 @@ export default function BudgetPage() {
 
               {/* 금액 + 날짜 */}
               <div className="grid grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1.5">
+                <div className="flex flex-col gap-1.5 min-w-0">
                   <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>금액 (원)</label>
                   <input
                     type="number"
@@ -484,7 +485,7 @@ export default function BudgetPage() {
                     style={inputStyle}
                   />
                 </div>
-                <div className="flex flex-col gap-1.5">
+                <div className="flex flex-col gap-1.5 min-w-0">
                   <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>날짜</label>
                   <input type="date" value={form.date}
                     onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
@@ -494,13 +495,13 @@ export default function BudgetPage() {
 
               {/* 매장명 + 위치 */}
               <div className="grid grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1.5">
+                <div className="flex flex-col gap-1.5 min-w-0">
                   <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>매장명</label>
                   <input placeholder="예: 스타벅스" value={form.merchantName}
                     onChange={(e) => setForm((f) => ({ ...f, merchantName: e.target.value }))}
                     style={inputStyle} />
                 </div>
-                <div className="flex flex-col gap-1.5">
+                <div className="flex flex-col gap-1.5 min-w-0">
                   <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>위치</label>
                   <input placeholder="예: 성수점" value={form.location}
                     onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))}
@@ -908,8 +909,30 @@ function SettlementPanel({
         </p>
       </div>
 
-      {/* 구성원별 지출 */}
+      {/* 구성원별 지출 (공동 포함 전체) */}
       <div className="flex flex-col gap-2">
+        {data.sharedTotal > 0 && (
+          <div className="flex items-center justify-between rounded-xl px-3 py-2"
+            style={{ background: "rgba(255,255,255,0.03)", border: "1px solid var(--border)" }}>
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-black"
+                style={{ background: `${ACCENT}22`, color: ACCENT }}>
+                공
+              </div>
+              <div>
+                <p className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>공동</p>
+                {personalMembers.length > 0 && (
+                  <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+                    인당 {Math.round(data.sharedTotal / personalMembers.length).toLocaleString()}원 분담
+                  </p>
+                )}
+              </div>
+            </div>
+            <p className="text-sm font-black" style={{ color: "#F43F5E" }}>
+              {data.sharedTotal.toLocaleString()}원
+            </p>
+          </div>
+        )}
         {data.totals.map((item) => (
           <div key={item.name} className="flex items-center justify-between rounded-xl px-3 py-2"
             style={{ background: "rgba(255,255,255,0.03)", border: "1px solid var(--border)" }}>
@@ -920,9 +943,9 @@ function SettlementPanel({
               </div>
               <div>
                 <p className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>{item.name}</p>
-                {item.shared > 0 && (
+                {item.direct > 0 && item.shared > 0 && (
                   <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>
-                    직접 {item.direct.toLocaleString()} + 공동 {item.shared.toLocaleString()}
+                    직접 {item.direct.toLocaleString()} + 공동분담 {item.shared.toLocaleString()}
                   </p>
                 )}
               </div>
@@ -932,14 +955,6 @@ function SettlementPanel({
             </p>
           </div>
         ))}
-        {data.sharedTotal > 0 && (
-          <div className="flex items-center justify-between px-3 py-1.5">
-            <p className="text-xs" style={{ color: "var(--text-muted)" }}>공동 지출 합계</p>
-            <p className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>
-              {data.sharedTotal.toLocaleString()}원
-            </p>
-          </div>
-        )}
       </div>
 
       {/* 정산 결과 */}

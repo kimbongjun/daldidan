@@ -7,15 +7,14 @@
 -- [가계부 위젯] BudgetWidget
 -- ────────────────────────────────────────────────────────────
 
--- 1. 이번 달 수입/지출/잔액
+-- 1. 이번 달 수입/지출/잔액 (공유 가계부 — 전체 유저 합산)
 select
   sum(case when type = 'income'  then amount else 0 end) as total_income,
   sum(case when type = 'expense' then amount else 0 end) as total_expense,
   sum(case when type = 'income'  then amount
            when type = 'expense' then -amount end)       as balance
 from public.transactions
-where user_id = auth.uid()
-  and to_char(date, 'YYYY-MM') = to_char(current_date, 'YYYY-MM');
+where to_char(date, 'YYYY-MM') = to_char(current_date, 'YYYY-MM');
 
 -- 2. 이번 달 카테고리별 지출 Top 5
 select category, sum(amount) as total
@@ -27,10 +26,9 @@ group by category
 order by total desc
 limit 5;
 
--- 3. 최근 거래 목록 (20건)
-select id, type, category, amount, note, date
+-- 3. 최근 거래 목록 (공유 가계부 — 전체, 20건)
+select id, user_id, type, category, buyer, amount, note, date
 from public.transactions
-where user_id = auth.uid()
 order by date desc, created_at desc
 limit 20;
 
@@ -47,12 +45,17 @@ where id = '<uuid>' and user_id = auth.uid();
 delete from public.transactions
 where id = '<uuid>' and user_id = auth.uid();
 
--- 7. 월별 추이 (최근 6개월)
+-- 7. 월별 추이 (최근 6개월, 공유 가계부 — 전체 합산)
 select ym, total_income, total_expense, balance
 from public.monthly_summary
-where user_id = auth.uid()
-  and ym >= to_char(current_date - interval '6 months', 'YYYY-MM')
+where ym >= to_char(current_date - interval '6 months', 'YYYY-MM')
 order by ym;
+
+-- 8. 구매자별 지출 정산 (특정 월)
+select buyer, total_amount, tx_count
+from public.buyer_expense_summary
+where ym = to_char(current_date, 'YYYY-MM')
+order by total_amount desc;
 
 
 -- ────────────────────────────────────────────────────────────

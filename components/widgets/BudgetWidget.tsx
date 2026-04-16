@@ -152,6 +152,24 @@ export default function BudgetWidget() {
         </div>
       </div>
 
+      {/* 최근 거래 3건 */}
+      {!loading && transactions.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <p className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>최근 거래</p>
+          {transactions.slice(0, 3).map((tx) => (
+            <div key={tx.id} className="flex items-center justify-between rounded-lg px-2.5 py-1.5" style={{ background: "rgba(255,255,255,0.04)" }}>
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-[10px] shrink-0" style={{ color: "var(--text-muted)" }}>{tx.date.slice(5)}</span>
+                <span className="text-xs font-semibold truncate" style={{ color: "var(--text-primary)" }}>{tx.category}</span>
+              </div>
+              <span className="text-xs font-black shrink-0 ml-1" style={{ color: tx.type === "expense" ? "#F43F5E" : "#10B981" }}>
+                {tx.type === "expense" ? "−" : "+"}{tx.amount.toLocaleString()}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* 거래 없을 때 안내 */}
       {!loading && transactions.length === 0 && (
         <div className="flex-1 flex flex-col items-center justify-center gap-2">
