@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "309517387036",
+    "project_id": "daldidan-a1b8d",
+    "storage_bucket": "daldidan-a1b8d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:309517387036:android:8c0d418e94a751d23aa6d9",
+        "android_client_info": {
+          "package_name": "com.classys.dev"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA7ACq6qLLVkMPihgQIRs-_i8Xdvmbwg7w"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
