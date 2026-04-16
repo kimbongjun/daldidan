@@ -76,27 +76,32 @@ export async function POST(request: NextRequest) {
   revalidatePath("/blog");
   revalidatePath(`/blog/${slug}`);
 
-  // 이메일 알림 발송 (비동기 — 응답 지연 없음)
-  sendBlogPublishNotification({
-    title,
-    description,
-    slug,
-    authorName,
-    thumbnailUrl: resolvedThumbnail,
-  }).catch(() => {
-    // 이메일 발송 실패는 글 발행 결과에 영향을 주지 않음
-  });
+  const postPath = `/blog/${encodeURIComponent(slug)}`;
 
-  // FCM 푸시 알림 발송 (비동기 — 응답 지연 없음)
-  sendPushToAllSubscribers({
-    title: "달디단 — 새 글이 등록되었습니다",
-    body: title,
-    url: `/blog/${encodeURIComponent(slug)}`,
-    icon: resolvedThumbnail ?? undefined,
-    origin: request.nextUrl.origin,
-  }).catch(() => {
-    // 푸시 발송 실패는 글 발행 결과에 영향을 주지 않음
-  });
+  // Vercel 서버리스 환경에서도 실제 발송이 완료될 때까지 대기한다.
+  const [emailResult, pushResult] = await Promise.allSettled([
+    sendBlogPublishNotification({
+      title,
+      description,
+      slug,
+      authorName,
+      thumbnailUrl: resolvedThumbnail,
+    }),
+    sendPushToAllSubscribers({
+      title: "달디단 — 새 글이 등록되었습니다",
+      body: title,
+      url: postPath,
+      icon: resolvedThumbnail ?? undefined,
+      origin: request.nextUrl.origin,
+    }),
+  ]);
+
+  if (emailResult.status === "rejected") {
+    console.error("[blog/posts] email notification failed:", emailResult.reason);
+  }
+  if (pushResult.status === "rejected") {
+    console.error("[blog/posts] push notification failed:", pushResult.reason);
+  }
 
   return NextResponse.json({ slug }, { status: 201 });
 }

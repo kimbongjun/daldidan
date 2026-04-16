@@ -62,13 +62,11 @@ export async function sendPushToAllSubscribers(params: {
       const response = await messaging.sendEachForMulticast({
         tokens: batch,
         webpush: {
-          notification: {
+          data: {
             title: params.title,
             body: params.body,
             icon: iconUrl,
             badge: badgeUrl,
-          },
-          data: {
             url: targetUrl ?? fallbackPath,
           },
           ...(targetUrl ? { fcmOptions: { link: targetUrl } } : {}),
