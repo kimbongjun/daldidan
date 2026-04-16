@@ -8,6 +8,7 @@ const DEFAULTS: Record<string, string> = {
   meta_title: "달디단 — 일상의 편리함",
   meta_description: "날씨, 쇼핑, 영화, 여행, 가계부를 한 곳에서",
   meta_og_image: "",
+  favicon_url: "",
   logo_url: "",
   custom_greeting: "",
   pwa_icon_url: "",

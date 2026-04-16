@@ -26,6 +26,7 @@ type SiteSettings = {
   meta_title: string;
   meta_description: string;
   meta_og_image: string;
+  favicon_url: string;
   logo_url: string;
   custom_greeting: string;
   pwa_icon_url: string;
@@ -37,6 +38,7 @@ export default function MyPage() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const ogFileRef = useRef<HTMLInputElement>(null);
+  const faviconFileRef = useRef<HTMLInputElement>(null);
   const pwaIconFileRef = useRef<HTMLInputElement>(null);
   const pwaSplashFileRef = useRef<HTMLInputElement>(null);
 
@@ -50,7 +52,7 @@ export default function MyPage() {
   // 옵션 메뉴
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [settings, setSettings] = useState<SiteSettings>({
-    meta_title: "", meta_description: "", meta_og_image: "", logo_url: "", custom_greeting: "",
+    meta_title: "", meta_description: "", meta_og_image: "", favicon_url: "", logo_url: "", custom_greeting: "",
     pwa_icon_url: "", pwa_splash_url: "", budget_members: '["공동","봉준","달희"]',
   });
   const [newMemberInput, setNewMemberInput] = useState("");
@@ -58,6 +60,7 @@ export default function MyPage() {
   const [settingsSuccess, setSettingsSuccess] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
   const [ogUploading, setOgUploading] = useState(false);
+  const [faviconUploading, setFaviconUploading] = useState(false);
   const [pwaIconUploading, setPwaIconUploading] = useState(false);
   const [pwaSplashUploading, setPwaSplashUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
@@ -122,18 +125,21 @@ export default function MyPage() {
 
   const uploadImage = async (
     file: File,
-    field: "logo_url" | "meta_og_image" | "pwa_icon_url" | "pwa_splash_url",
+    field: "logo_url" | "meta_og_image" | "favicon_url" | "pwa_icon_url" | "pwa_splash_url",
     setUploading: (v: boolean) => void
   ) => {
     setUploading(true);
     setUploadError("");
     try {
       const supabase = createClient();
-      const ext = file.name.split(".").pop() ?? "jpg";
+      const ext = file.name.split(".").pop()?.toLowerCase() ?? "jpg";
       const path = `site/${field}_${Date.now()}.${ext}`;
       const { data, error } = await supabase.storage
         .from("blog-images")
-        .upload(path, file, { upsert: true });
+        .upload(path, file, {
+          upsert: true,
+          contentType: file.type || (ext === "ico" ? "image/x-icon" : undefined),
+        });
       if (error) throw error;
       const { data: { publicUrl } } = supabase.storage.from("blog-images").getPublicUrl(data.path);
       setSettings((prev) => ({ ...prev, [field]: publicUrl }));
@@ -462,6 +468,49 @@ export default function MyPage() {
                   onChange={(e) => setSettings((p) => ({ ...p, meta_description: e.target.value }))}
                   placeholder="날씨, 쇼핑, 영화, 여행, 가계부를 한 곳에서" maxLength={200} rows={2}
                   style={{ ...inputStyle, resize: "vertical" }} />
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>파비콘 (favicon.ico)</label>
+                <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                  {`.ico 파일을 업로드하면 <link rel="icon" type="image/x-icon">로 적용됩니다.`}
+                </p>
+                <div className="flex items-center gap-3">
+                  {settings.favicon_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={settings.favicon_url} alt="파비콘" className="w-10 h-10 rounded-lg object-contain"
+                      style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }} />
+                  ) : (
+                    <div className="w-10 h-10 rounded-lg flex items-center justify-center"
+                      style={{ background: "rgba(234,88,12,0.1)", color: ACCENT }}>
+                      <ImageIcon size={16} />
+                    </div>
+                  )}
+                  <input type="url" value={settings.favicon_url}
+                    onChange={(e) => setSettings((p) => ({ ...p, favicon_url: e.target.value }))}
+                    placeholder="favicon URL 직접 입력" style={{ ...inputStyle, flex: 1 }} />
+                </div>
+                <div className="flex gap-2">
+                  <input ref={faviconFileRef} type="file" accept=".ico,image/x-icon" className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) uploadImage(f, "favicon_url", setFaviconUploading);
+                    }} />
+                  <button type="button" onClick={() => faviconFileRef.current?.click()}
+                    disabled={faviconUploading}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50"
+                    style={{ background: "rgba(234,88,12,0.12)", color: ACCENT }}>
+                    {faviconUploading ? <LoaderCircle size={12} className="animate-spin" /> : <ImageIcon size={12} />}
+                    {faviconUploading ? "업로드 중..." : "ICO 선택"}
+                  </button>
+                  {settings.favicon_url && (
+                    <button type="button" onClick={() => setSettings((p) => ({ ...p, favicon_url: "" }))}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold"
+                      style={{ background: "rgba(244,63,94,0.1)", color: "#F43F5E" }}>
+                      <Trash2 size={12} /> 삭제
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="flex flex-col gap-2">

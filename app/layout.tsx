@@ -33,10 +33,14 @@ export async function generateMetadata(): Promise<Metadata> {
   const description = s.meta_description || "날씨, 쇼핑, 영화, 여행, 가계부를 한 곳에서";
   const ogImage = s.meta_og_image || undefined;
   const splashUrl = s.pwa_splash_url || undefined;
+  const faviconUrl = s.favicon_url || "/favicon.ico";
 
   return {
     title,
     description,
+    icons: {
+      icon: [{ url: faviconUrl, type: "image/x-icon" }],
+    },
     openGraph: {
       title,
       description,
