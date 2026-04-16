@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import BlogComments from "@/components/blog/BlogComments";
+import BlogDeleteButton from "@/components/blog/BlogDeleteButton";
 import BlogNotifyButton from "@/components/blog/BlogNotifyButton";
 import BlogShareBar from "@/components/blog/BlogShareBar";
 import BlogViewCounter from "@/components/blog/BlogViewCounter";
@@ -131,6 +132,7 @@ export default async function BlogDetailPage({ params }: { params: Promise<{ slu
               >
                 목록으로 돌아가기
               </Link>
+              {editable ? <BlogDeleteButton id={post.id} /> : null}
               {!editable ? (
                 <Link
                   href="/blog/write"
