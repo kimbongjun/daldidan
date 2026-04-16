@@ -252,88 +252,13 @@ const FALLBACK: FestivalItem[] = [
   },
 ];
 
-// ── URL 검증 + Naver 검색 폴백 ──────────────────────────────
-// 우선순위: ① primary URL → ② Naver webkr 결과 (유효한 것) → ③ Naver 검색 페이지(항상 유효)
-
-const FETCH_UA =
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
-
-// 소프트 404 감지 패턴 (HTTP 200이어도 오류 페이지인 경우)
-const SOFT_404_PATTERNS = [
-  "error404", 'class="error"', "찾을 수 없", "페이지를 찾을 수 없",
-  "존재하지 않", "잘못된 경로", "안내 페이지", "페이지가 없", "오류가 발생",
-];
-
-// SNS·블로그 제외 (공식 사이트 우선)
-const SKIP_DOMAINS = [
-  "blog.naver.com", "cafe.naver.com", "kin.naver.com",
-  "tistory.com", "instagram.com", "youtube.com", "facebook.com", "twitter.com",
-];
-
-/** GET 요청 + 소프트 404 감지로 URL 유효성 검증 */
-async function isUrlValid(url: string): Promise<boolean> {
-  try {
-    const r = await fetch(url, {
-      redirect: "follow",
-      signal: AbortSignal.timeout(5000),
-      headers: { "User-Agent": FETCH_UA },
-    });
-    if (!r.ok) return false;
-    const text = await r.text();
-    // 너무 짧거나 오류 패턴 포함 시 soft 404로 처리
-    if (text.trim().length < 500) return false;
-    if (SOFT_404_PATTERNS.some((p) => text.substring(0, 6000).includes(p))) return false;
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/** URL 검증 → Naver 검색 폴백 → Naver 검색 페이지(최종 보장) */
-async function resolveDetailUrl(
-  primaryUrl: string,
-  title: string,
-  region: string
-): Promise<string> {
-  // ① primary URL 검증 (GET + soft 404 감지)
-  if (await isUrlValid(primaryUrl)) return primaryUrl;
-
-  // ② Naver 웹 검색으로 실제 공식 URL 탐색
-  const nid = process.env.NAVER_CLIENT_ID;
-  const nsec = process.env.NAVER_CLIENT_SECRET;
-  if (nid && nsec) {
-    try {
-      const query = encodeURIComponent(`${title} ${region} 축제`);
-      const r = await fetch(
-        `https://openapi.naver.com/v1/search/webkr.json?query=${query}&display=5`,
-        {
-          headers: {
-            "X-Naver-Client-Id": nid,
-            "X-Naver-Client-Secret": nsec,
-          },
-          signal: AbortSignal.timeout(3000),
-        }
-      );
-      if (r.ok) {
-        const d = (await r.json()) as { items?: { link?: string }[] };
-        // SNS·블로그 제외한 후보 URL 목록
-        const candidates = (d.items ?? [])
-          .map((i) => i.link)
-          .filter((l): l is string => !!l && !SKIP_DOMAINS.some((s) => l.includes(s)));
-
-        // 후보 중 유효한 첫 번째 URL 반환
-        for (const candidate of candidates) {
-          if (await isUrlValid(candidate)) return candidate;
-        }
-        // 유효성 검사 없이 첫 후보라도 반환 (소프트 404 우려 있으나 최선)
-        if (candidates[0]) return candidates[0];
-      }
-    } catch {
-      // fall through
-    }
+// ── 상세 링크 보정 ──────────────────────────────────────────
+function resolveDetailUrl(primaryUrl: string, title: string, region: string): string {
+  const trimmed = primaryUrl.trim();
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+    return trimmed;
   }
 
-  // ③ 최종 폴백: Naver 검색 페이지 (항상 유효)
   return `https://search.naver.com/search.naver?query=${encodeURIComponent(`${title} ${region} 축제`)}`;
 }
 
@@ -344,17 +269,15 @@ export async function getFestivalItems(): Promise<FestivalResponse> {
 
   const items: FestivalItem[] = [];
 
-  try {
-    // 1) 한국관광공사 TourAPI (GW: KorService2)
-    if (tourKey && tourKey !== "your_tour_api_key_here") {
+  // 1) 한국관광공사 TourAPI (GW: KorService2)
+  if (tourKey && tourKey !== "your_tour_api_key_here") {
+    try {
       const today = new Date();
       // 1개월 전부터 조회해 진행 중인 행사도 포함
       today.setMonth(today.getMonth() - 1);
       const startYmd = today.toISOString().slice(0, 10).replace(/-/g, "");
 
-      const url = new URL(
-        "https://apis.data.go.kr/B551011/KorService2/searchFestival2"
-      );
+      const url = new URL("https://apis.data.go.kr/B551011/KorService2/searchFestival2");
       url.searchParams.set("serviceKey", tourKey);
       url.searchParams.set("numOfRows", "30");
       url.searchParams.set("pageNo", "1");
@@ -362,7 +285,7 @@ export async function getFestivalItems(): Promise<FestivalResponse> {
       url.searchParams.set("MobileApp", "daldidan");
       url.searchParams.set("_type", "json");
       url.searchParams.set("eventStartDate", startYmd);
-      url.searchParams.set("arrange", "A"); // 제목순
+      url.searchParams.set("arrange", "A");
 
       const res = await fetch(url.toString(), { next: { revalidate: 3600 } });
       if (res.ok) {
@@ -375,7 +298,6 @@ export async function getFestivalItems(): Promise<FestivalResponse> {
           : [];
 
         for (const it of list) {
-          // KorService2는 areacode가 비어있고 lDongRegnCd로 대체됨
           const ldong = String(it.lDongRegnCd ?? "");
           const legacyCode = parseInt(String(it.areacode ?? "0"), 10);
           const code = ldong ? (LDONG_TO_AREA_CODE[ldong] ?? legacyCode) : legacyCode;
@@ -385,7 +307,6 @@ export async function getFestivalItems(): Promise<FestivalResponse> {
           if (!start || !it.title) continue;
 
           const status = getStatus(start, end);
-          // 종료된 행사는 수집하지 않음
           if (status === "종료") continue;
 
           items.push({
@@ -405,13 +326,17 @@ export async function getFestivalItems(): Promise<FestivalResponse> {
           });
         }
       }
+    } catch {
+      // 네트워크 또는 외부 API 실패 시 다른 소스와 fallback으로 계속 진행
     }
+  }
 
-    // 2) 서울 열린데이터 광장 — 축제 카테고리
-    if (seoulKey) {
+  // 2) 서울 열린데이터 광장 — 축제 카테고리
+  if (seoulKey) {
+    try {
       const res = await fetch(
         `http://openapi.seoul.go.kr:8088/${seoulKey}/json/culturalEventInfo/1/15/축제`,
-        { next: { revalidate: 3600 } }
+        { next: { revalidate: 3600 } },
       );
       if (res.ok) {
         const data = (await res.json()) as SeoulFestivalResponse;
@@ -421,11 +346,9 @@ export async function getFestivalItems(): Promise<FestivalResponse> {
           const end = (ev.END_DATE ?? "").replace(/-/g, "").slice(0, 8);
           const sid = `seoul-fest-${encodeURIComponent(ev.TITLE)}`;
 
-          // TourAPI에서 이미 동일 행사가 있으면 중복 추가 방지
           if (items.some((i) => i.title === ev.TITLE)) continue;
 
           const seoulStatus = start ? getStatus(start, end || start) : "예정";
-          // 종료된 행사는 수집하지 않음
           if (seoulStatus === "종료") continue;
 
           items.push({
@@ -447,13 +370,9 @@ export async function getFestivalItems(): Promise<FestivalResponse> {
           });
         }
       }
+    } catch {
+      // 서울 API 실패 시 다른 소스와 fallback으로 계속 진행
     }
-  } catch {
-    return {
-      items: FALLBACK,
-      source: "fallback",
-      fetchedAt: new Date().toISOString(),
-    };
   }
 
   if (!items.length) {
@@ -464,13 +383,10 @@ export async function getFestivalItems(): Promise<FestivalResponse> {
     };
   }
 
-  // URL 검증 + 폴백 (전체 병렬 처리 — revalidate:3600 캐시로 시간당 1회만 실행)
-  const resolvedItems = await Promise.all(
-    items.map(async (item) => ({
-      ...item,
-      detailUrl: await resolveDetailUrl(item.detailUrl, item.title, item.region),
-    }))
-  );
+  const resolvedItems = items.map((item) => ({
+    ...item,
+    detailUrl: resolveDetailUrl(item.detailUrl, item.title, item.region),
+  }));
 
   // 진행중 → 예정 → 시작일 오름차순 정렬
   const sorted = resolvedItems.sort((a, b) => {

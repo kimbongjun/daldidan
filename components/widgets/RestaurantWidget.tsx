@@ -53,7 +53,6 @@ interface NearbyRestaurant {
 }
 
 type CategoryFilter = "전체" | RestaurantCategory;
-const FILTER_OPTIONS: CategoryFilter[] = ["전체", ...RESTAURANT_CATEGORIES];
 
 function SkeletonCard() {
   return (
@@ -112,13 +111,31 @@ export default function RestaurantWidget() {
     );
   }, [fetchRestaurants]);
 
+  const openRestaurants = useMemo(
+    () => restaurants.filter((restaurant) => restaurant.isOpen === true),
+    [restaurants],
+  );
+
+  const availableFilters = useMemo(() => {
+    const categories = RESTAURANT_CATEGORIES.filter((category) =>
+      openRestaurants.some((restaurant) => restaurant.category === category),
+    );
+    return ["전체", ...categories] as CategoryFilter[];
+  }, [openRestaurants]);
+
   const visible = useMemo(() => {
     const all =
       activeCategory === "전체"
-        ? restaurants
-        : restaurants.filter((r) => r.category === activeCategory);
+        ? openRestaurants
+        : openRestaurants.filter((r) => r.category === activeCategory);
     return all.slice(0, 12);
-  }, [restaurants, activeCategory]);
+  }, [openRestaurants, activeCategory]);
+
+  useEffect(() => {
+    if (!availableFilters.includes(activeCategory)) {
+      setActiveCategory("전체");
+    }
+  }, [activeCategory, availableFilters]);
 
   const mapsSearchUrl = userCoords
     ? `https://www.google.com/maps/search/음식점/@${userCoords.lat},${userCoords.lng},15z`
@@ -155,7 +172,7 @@ export default function RestaurantWidget() {
 
       {/* 카테고리 필터 */}
       <div className="flex gap-1.5 overflow-x-auto scrollbar-hide">
-        {FILTER_OPTIONS.map((cat) => {
+        {availableFilters.map((cat) => {
           const active = activeCategory === cat;
           return (
             <button
@@ -194,7 +211,7 @@ export default function RestaurantWidget() {
             className="flex-1 flex items-center justify-center text-sm"
             style={{ color: "var(--text-muted)" }}
           >
-            주변 맛집이 없습니다.
+            현재 영업 중인 맛집이 없습니다.
           </div>
         ) : (
           visible.map((restaurant) => (
