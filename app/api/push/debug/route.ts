@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
-import { getAdminMessaging } from "@/lib/firebase-admin";
+import { getFirebaseServiceAccount } from "@/lib/firebase-admin";
 import { sendPushDebugToLatestSubscribers } from "@/lib/push-notification";
 
 export const runtime = "nodejs";
@@ -27,7 +27,7 @@ export async function GET() {
   let firebaseAdminOk = false;
   let firebaseAdminError = "";
   try {
-    getAdminMessaging();
+    getFirebaseServiceAccount();
     firebaseAdminOk = true;
   } catch (error) {
     firebaseAdminError = error instanceof Error ? error.message : "unknown";
