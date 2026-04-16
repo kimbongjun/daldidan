@@ -36,7 +36,9 @@ export default function BudgetWidget() {
     setLoading(true);
     const controller = new AbortController();
 
-    fetch("/api/transactions", { signal: controller.signal })
+    const now = new Date();
+    const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    fetch(`/api/transactions?month=${month}`, { signal: controller.signal })
       .then((r) => r.json())
       .then((data) => {
         if (!active) return;

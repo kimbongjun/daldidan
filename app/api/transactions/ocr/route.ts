@@ -67,8 +67,18 @@ interface PositionedField {
   isAbsolute: boolean;
 }
 
+const CONFIDENCE_THRESHOLD = 0.6;
+
 function buildPositionedFields(image: ClovaImage): PositionedField[] {
-  const fields = image.fields ?? [];
+  const allFields = image.fields ?? [];
+
+  // inferConfidence 기반 저신뢰도 필드 제외
+  // 단, 필터 후 30% 미만 남으면 원본 사용 (어두운 영수증 등 전반적으로 낮은 경우)
+  const confidentFields = allFields.filter((f) => (f.inferConfidence ?? 1) >= CONFIDENCE_THRESHOLD);
+  const fields = confidentFields.length >= Math.ceil(allFields.length * 0.3)
+    ? confidentFields
+    : allFields;
+
   const total = fields.length;
 
   // 절대 Y 좌표가 있는지 확인

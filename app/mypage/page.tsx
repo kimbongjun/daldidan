@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft, ChevronDown, ChevronUp, Image as ImageIcon,
-  LoaderCircle, Save, Settings, Smartphone, Trash2,
+  LoaderCircle, Plus, Save, Settings, Smartphone, Trash2, Users,
 } from "lucide-react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -30,6 +30,7 @@ type SiteSettings = {
   custom_greeting: string;
   pwa_icon_url: string;
   pwa_splash_url: string;
+  budget_members: string; // JSON 배열 문자열
 };
 
 export default function MyPage() {
@@ -50,8 +51,9 @@ export default function MyPage() {
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [settings, setSettings] = useState<SiteSettings>({
     meta_title: "", meta_description: "", meta_og_image: "", logo_url: "", custom_greeting: "",
-    pwa_icon_url: "", pwa_splash_url: "",
+    pwa_icon_url: "", pwa_splash_url: "", budget_members: '["공동","봉준","달희"]',
   });
+  const [newMemberInput, setNewMemberInput] = useState("");
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settingsSuccess, setSettingsSuccess] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
@@ -223,6 +225,84 @@ export default function MyPage() {
         {optionsOpen && (
           <div className="flex flex-col gap-5 px-5 pb-6 pt-1">
             <hr style={{ border: "none", borderTop: "1px solid var(--border)", marginTop: 0 }} />
+
+            {/* 가계부 구성원 관리 */}
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center gap-1.5">
+                <Users size={14} style={{ color: ACCENT }} />
+                <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>가계부 구성원</p>
+              </div>
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                가계부 입력 시 선택하는 구매자 목록입니다. &quot;공동&quot;은 삭제할 수 없습니다.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {(() => {
+                  let members: string[] = ["공동", "봉준", "달희"];
+                  try { members = JSON.parse(settings.budget_members || "[]") as string[]; } catch {}
+                  return members.map((m) => (
+                    <div key={m} className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold"
+                      style={{ background: `${ACCENT}18`, color: ACCENT, border: `1px solid ${ACCENT}33` }}>
+                      {m}
+                      {m !== "공동" && (
+                        <button
+                          type="button"
+                          aria-label={`${m} 삭제`}
+                          onClick={() => {
+                            let cur: string[] = [];
+                            try { cur = JSON.parse(settings.budget_members || "[]") as string[]; } catch {}
+                            setSettings((p) => ({ ...p, budget_members: JSON.stringify(cur.filter((x) => x !== m)) }));
+                          }}
+                          className="ml-0.5 opacity-60 hover:opacity-100 transition-opacity"
+                        >
+                          <Trash2 size={10} />
+                        </button>
+                      )}
+                    </div>
+                  ));
+                })()}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  value={newMemberInput}
+                  onChange={(e) => setNewMemberInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      const name = newMemberInput.trim();
+                      if (!name) return;
+                      let cur: string[] = [];
+                      try { cur = JSON.parse(settings.budget_members || "[]") as string[]; } catch {}
+                      if (!cur.includes(name)) {
+                        setSettings((p) => ({ ...p, budget_members: JSON.stringify([...cur, name]) }));
+                      }
+                      setNewMemberInput("");
+                    }
+                  }}
+                  placeholder="이름 입력 후 Enter 또는 추가"
+                  maxLength={10}
+                  style={{ ...inputStyle, flex: 1 }}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const name = newMemberInput.trim();
+                    if (!name) return;
+                    let cur: string[] = [];
+                    try { cur = JSON.parse(settings.budget_members || "[]") as string[]; } catch {}
+                    if (!cur.includes(name)) {
+                      setSettings((p) => ({ ...p, budget_members: JSON.stringify([...cur, name]) }));
+                    }
+                    setNewMemberInput("");
+                  }}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold"
+                  style={{ background: `${ACCENT}18`, color: ACCENT, border: `1px solid ${ACCENT}33` }}
+                >
+                  <Plus size={12} /> 추가
+                </button>
+              </div>
+            </div>
+
+            <hr style={{ border: "none", borderTop: "1px solid var(--border)" }} />
 
             {/* 로고 이미지 */}
             <div className="flex flex-col gap-2">

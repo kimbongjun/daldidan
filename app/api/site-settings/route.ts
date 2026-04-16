@@ -12,6 +12,8 @@ const DEFAULTS: Record<string, string> = {
   custom_greeting: "",
   pwa_icon_url: "",
   pwa_splash_url: "",
+  budget_members: '["공동","봉준","달희"]', // JSON 배열 — 가계부 구매자 목록
+  budget_limits: "{}",                       // JSON 객체 — 카테고리별 월 예산 한도 (원)
 };
 
 export async function GET() {

@@ -5,14 +5,17 @@ import PageHeader from "@/components/PageHeader";
 import { uploadImagesToStorage } from "@/lib/image-upload";
 import { sendNativeNotification } from "@/lib/notifications";
 import { analyzeReceiptImage } from "@/lib/receipt-ocr";
-import { CheckCircle2, ChevronDown, ChevronUp, ImagePlus, LoaderCircle, Pencil, Trash2, TrendingDown, TrendingUp, Wallet, XCircle } from "lucide-react";
+import {
+  ArrowLeft, ArrowRight, CheckCircle2, ChevronDown, ChevronUp,
+  ImagePlus, LoaderCircle, Pencil, ReceiptText, Trash2,
+  TrendingDown, TrendingUp, Users, Wallet, XCircle,
+} from "lucide-react";
 import OcrScanModal from "@/components/OcrScanModal";
 import { preprocessReceiptImage } from "@/lib/image-preprocess";
 
 const ACCENT = "#6366F1";
 
 const CATEGORIES = ["식비", "교통", "쇼핑", "문화", "의료", "통신", "공과금", "구독비", "대출", "급여", "기타"];
-const BUYER_OPTIONS = ["공동", "봉준", "달희"] as const;
 
 const CATEGORY_COLORS: Record<string, string> = {
   식비: "#F59E0B",
@@ -44,7 +47,7 @@ interface Transaction {
   id: string;
   type: "income" | "expense";
   category: string;
-  buyer: (typeof BUYER_OPTIONS)[number];
+  buyer: string;
   merchantName: string;
   location: string;
   receiptImageUrl: string | null;
@@ -57,7 +60,7 @@ interface TransactionApiResponse {
   id: string;
   type: "income" | "expense";
   category: string;
-  buyer?: (typeof BUYER_OPTIONS)[number];
+  buyer?: string;
   merchant_name?: string;
   location?: string;
   receipt_image_url?: string | null;
@@ -81,10 +84,10 @@ function normalizeTransaction(t: TransactionApiResponse): Transaction {
   };
 }
 
-const EMPTY_FORM = (): Omit<Transaction, "id"> => ({
+const EMPTY_FORM = (defaultBuyer = "공동"): Omit<Transaction, "id"> => ({
   type: "expense",
   category: "식비",
-  buyer: "공동",
+  buyer: defaultBuyer,
   merchantName: "",
   location: "",
   receiptImageUrl: null,
@@ -94,6 +97,11 @@ const EMPTY_FORM = (): Omit<Transaction, "id"> => ({
 });
 
 type SaveStatus = "idle" | "saving" | "success" | "error";
+
+function currentMonthStr() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+}
 
 export default function BudgetPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -105,17 +113,30 @@ export default function BudgetPage() {
   const [chartsOpen, setChartsOpen] = useState(false);
   const [period, setPeriod] = useState<"daily" | "monthly" | "yearly">("monthly");
 
+  // 월 선택
+  const [selectedMonth, setSelectedMonth] = useState(currentMonthStr);
+  const displayMonth = useMemo(() => {
+    const [y, m] = selectedMonth.split("-").map(Number);
+    return `${y}년 ${m}월`;
+  }, [selectedMonth]);
+
+  // 구성원 (사이트 설정에서 로드)
+  const [members, setMembers] = useState<string[]>(["공동", "봉준", "달희"]);
+
+  // 카테고리 예산 한도
+  const [budgetLimits, setBudgetLimits] = useState<Record<string, number>>({});
+
   // OCR 상태
   const [ocrLoading, setOcrLoading] = useState(false);
   const [ocrError, setOcrError] = useState("");
   const [ocrSuggestedCategory, setOcrSuggestedCategory] = useState("");
-  const [ocrModalImage, setOcrModalImage] = useState<string | null>(null); // ObjectURL
+  const [ocrModalImage, setOcrModalImage] = useState<string | null>(null);
   const [ocrDone, setOcrDone] = useState(false);
 
   const loadTransactions = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/transactions");
+      const res = await fetch(`/api/transactions?month=${selectedMonth}`);
       if (res.ok) {
         const data = await res.json() as TransactionApiResponse[];
         setTransactions(Array.isArray(data) ? data.map(normalizeTransaction) : []);
@@ -123,9 +144,32 @@ export default function BudgetPage() {
     } finally {
       setLoading(false);
     }
+  }, [selectedMonth]);
+
+  const loadSettings = useCallback(async () => {
+    try {
+      const res = await fetch("/api/site-settings");
+      if (!res.ok) return;
+      const s = await res.json() as Record<string, string>;
+      try {
+        const m = JSON.parse(s.budget_members ?? "[]") as unknown;
+        if (Array.isArray(m) && m.length > 0) setMembers(m as string[]);
+      } catch {}
+      try {
+        const l = JSON.parse(s.budget_limits ?? "{}") as unknown;
+        if (typeof l === "object" && l !== null) setBudgetLimits(l as Record<string, number>);
+      } catch {}
+    } catch {}
   }, []);
 
+  useEffect(() => { void loadSettings(); }, [loadSettings]);
   useEffect(() => { loadTransactions(); }, [loadTransactions]);
+
+  const navigateMonth = (dir: -1 | 1) => {
+    const [y, m] = selectedMonth.split("-").map(Number);
+    const d = new Date(y, m - 1 + dir, 1);
+    setSelectedMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+  };
 
   // URL 파라미터로 특정 거래 편집 진입
   useEffect(() => {
@@ -291,6 +335,30 @@ export default function BudgetPage() {
       <div className="max-w-[1100px] mx-auto px-4 sm:px-6 pb-16">
         <PageHeader title="가계부" subtitle="내역 입력 및 소비 분석" accentColor={ACCENT} />
 
+        {/* 월 선택 네비게이터 */}
+        <div className="flex items-center justify-center gap-4 mb-5">
+          <button
+            onClick={() => navigateMonth(-1)}
+            aria-label="이전 달"
+            className="p-1.5 rounded-lg hover:opacity-70 transition-opacity"
+            style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+          >
+            <ArrowLeft size={14} style={{ color: "var(--text-muted)" }} />
+          </button>
+          <p className="text-base font-black" style={{ color: "var(--text-primary)", minWidth: 110, textAlign: "center" }}>
+            {displayMonth}
+          </p>
+          <button
+            onClick={() => navigateMonth(1)}
+            aria-label="다음 달"
+            disabled={selectedMonth >= currentMonthStr()}
+            className="p-1.5 rounded-lg hover:opacity-70 transition-opacity disabled:opacity-30"
+            style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+          >
+            <ArrowRight size={14} style={{ color: "var(--text-muted)" }} />
+          </button>
+        </div>
+
         <div className="grid lg:grid-cols-[1fr_360px] gap-6">
 
           {/* ── 왼쪽: 입력 폼 + 내역 목록 ── */}
@@ -349,9 +417,9 @@ export default function BudgetPage() {
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>구매자</label>
                   <select value={form.buyer}
-                    onChange={(e) => setForm((f) => ({ ...f, buyer: e.target.value as Transaction["buyer"] }))}
+                    onChange={(e) => setForm((f) => ({ ...f, buyer: e.target.value }))}
                     style={inputStyle}>
-                    {BUYER_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+                    {members.map((o) => <option key={o} value={o}>{o}</option>)}
                   </select>
                 </div>
               </div>
@@ -425,7 +493,7 @@ export default function BudgetPage() {
             {/* 거래 내역 목록 */}
             <div className="bento-card p-4 flex flex-col gap-2">
               <p className="text-sm font-bold mb-1" style={{ color: "var(--text-primary)" }}>
-                전체 내역 <span className="font-normal text-xs" style={{ color: "var(--text-muted)" }}>({transactions.length}건)</span>
+                {displayMonth} 내역 <span className="font-normal text-xs" style={{ color: "var(--text-muted)" }}>({transactions.length}건)</span>
               </p>
 
               {loading ? (
@@ -455,7 +523,7 @@ export default function BudgetPage() {
 
             {/* 요약 카드 */}
             <div className="bento-card p-5 flex flex-col gap-4">
-              <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>이번 달 요약</p>
+              <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{displayMonth} 요약</p>
               <div className="flex flex-col gap-3">
                 {[
                   { label: "잔액", value: balance, color: balance >= 0 ? "#10B981" : "#F43F5E", icon: <Wallet size={15} /> },
@@ -501,6 +569,16 @@ export default function BudgetPage() {
                 </div>
               )}
             </div>
+
+            {/* 구매자 정산 */}
+            <SettlementPanel transactions={transactions} members={members} displayMonth={displayMonth} />
+
+            {/* 카테고리 예산 한도 */}
+            <BudgetLimitsPanel
+              transactions={transactions}
+              budgetLimits={budgetLimits}
+              onLimitsChange={setBudgetLimits}
+            />
 
             {/* 카테고리 비율 */}
             <PieChart transactions={transactions} />
@@ -693,6 +771,279 @@ function TransactionRow({
           ? <span className="text-[10px] font-bold" style={{ color: "#F43F5E" }}>삭제?</span>
           : <Trash2 size={12} className="opacity-40 hover:opacity-80 transition-opacity" style={{ color: "var(--text-muted)" }} />}
       </button>
+    </div>
+  );
+}
+
+// ── 구매자 정산 패널 ────────────────────────────────────────────
+function SettlementPanel({
+  transactions, members, displayMonth,
+}: {
+  transactions: Transaction[];
+  members: string[];
+  displayMonth: string;
+}) {
+  const personalMembers = useMemo(() => members.filter((m) => m !== "공동"), [members]);
+
+  const data = useMemo(() => {
+    const direct: Record<string, number> = {};
+    personalMembers.forEach((m) => { direct[m] = 0; });
+    let sharedTotal = 0;
+
+    transactions.filter((t) => t.type === "expense").forEach((t) => {
+      if (t.buyer === "공동") {
+        sharedTotal += t.amount;
+      } else if (direct[t.buyer] !== undefined) {
+        direct[t.buyer] += t.amount;
+      }
+    });
+
+    const splitShared = personalMembers.length > 0
+      ? Math.round(sharedTotal / personalMembers.length)
+      : 0;
+
+    const totals = personalMembers.map((m) => ({
+      name: m,
+      direct: direct[m] ?? 0,
+      shared: splitShared,
+      total: (direct[m] ?? 0) + splitShared,
+    }));
+
+    // 정산: 가장 많이 낸 사람 - 가장 적게 낸 사람, 차액의 절반
+    if (totals.length < 2) return { totals, sharedTotal, settlement: null };
+    const sorted = [...totals].sort((a, b) => b.total - a.total);
+    const overpayer = sorted[0];
+    const underpayer = sorted[sorted.length - 1];
+    const diff = overpayer.total - underpayer.total;
+    const settlement = diff > 100 ? {
+      from: underpayer.name,
+      to: overpayer.name,
+      amount: Math.round(diff / 2),
+    } : null;
+
+    return { totals, sharedTotal, settlement };
+  }, [transactions, personalMembers]);
+
+  if (personalMembers.length === 0) return null;
+  const hasActivity = data.totals.some((t) => t.total > 0) || data.sharedTotal > 0;
+  if (!hasActivity) return null;
+
+  return (
+    <div className="bento-card p-4 flex flex-col gap-3">
+      <div className="flex items-center gap-2">
+        <Users size={13} style={{ color: ACCENT }} />
+        <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
+          {displayMonth} 정산
+        </p>
+      </div>
+
+      {/* 구성원별 지출 */}
+      <div className="flex flex-col gap-2">
+        {data.totals.map((item) => (
+          <div key={item.name} className="flex items-center justify-between rounded-xl px-3 py-2"
+            style={{ background: "rgba(255,255,255,0.03)", border: "1px solid var(--border)" }}>
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-black"
+                style={{ background: `${ACCENT}22`, color: ACCENT }}>
+                {item.name[0]}
+              </div>
+              <div>
+                <p className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>{item.name}</p>
+                {item.shared > 0 && (
+                  <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+                    직접 {item.direct.toLocaleString()} + 공동 {item.shared.toLocaleString()}
+                  </p>
+                )}
+              </div>
+            </div>
+            <p className="text-sm font-black" style={{ color: item.total > 0 ? "#F43F5E" : "var(--text-muted)" }}>
+              {item.total.toLocaleString()}원
+            </p>
+          </div>
+        ))}
+        {data.sharedTotal > 0 && (
+          <div className="flex items-center justify-between px-3 py-1.5">
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>공동 지출 합계</p>
+            <p className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>
+              {data.sharedTotal.toLocaleString()}원
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* 정산 결과 */}
+      {data.settlement && (
+        <div className="flex items-center gap-2 rounded-xl px-3 py-2.5"
+          style={{ background: "rgba(99,102,241,0.08)", border: "1px solid rgba(99,102,241,0.2)" }}>
+          <ReceiptText size={13} style={{ color: ACCENT, flexShrink: 0 }} />
+          <p className="text-xs font-semibold" style={{ color: ACCENT }}>
+            {data.settlement.from} → {data.settlement.to}:{" "}
+            <span className="font-black">{data.settlement.amount.toLocaleString()}원</span>
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── 카테고리 예산 한도 패널 ─────────────────────────────────────
+function BudgetLimitsPanel({
+  transactions, budgetLimits, onLimitsChange,
+}: {
+  transactions: Transaction[];
+  budgetLimits: Record<string, number>;
+  onLimitsChange: (limits: Record<string, number>) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editValues, setEditValues] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+
+  const categoryExpenses = useMemo(() => {
+    const map: Record<string, number> = {};
+    transactions.filter((t) => t.type === "expense").forEach((t) => {
+      map[t.category] = (map[t.category] ?? 0) + t.amount;
+    });
+    return map;
+  }, [transactions]);
+
+  const displayCategories = CATEGORIES.filter(
+    (c) => budgetLimits[c] || categoryExpenses[c],
+  );
+
+  const startEdit = () => {
+    const vals: Record<string, string> = {};
+    CATEGORIES.forEach((c) => { vals[c] = budgetLimits[c]?.toString() ?? ""; });
+    setEditValues(vals);
+    setEditing(true);
+    setOpen(true);
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    const newLimits: Record<string, number> = {};
+    Object.entries(editValues).forEach(([k, v]) => {
+      const n = parseInt(v.replace(/,/g, ""), 10);
+      if (!isNaN(n) && n > 0) newLimits[k] = n;
+    });
+    await fetch("/api/site-settings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ budget_limits: JSON.stringify(newLimits) }),
+    });
+    onLimitsChange(newLimits);
+    setEditing(false);
+    setSaving(false);
+  };
+
+  return (
+    <div className="bento-card overflow-hidden">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between p-4 hover:opacity-80 transition-opacity"
+        style={{ background: "transparent", border: "none", cursor: "pointer" }}
+        aria-label={open ? "예산 한도 접기" : "예산 한도 펼치기"}
+      >
+        <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>카테고리 예산 한도</p>
+        <div className="flex items-center gap-2">
+          {!editing && (
+            <button
+              onClick={(e) => { e.stopPropagation(); startEdit(); }}
+              className="text-[10px] font-semibold px-2 py-0.5 rounded-md hover:opacity-80 transition-opacity"
+              style={{ background: `${ACCENT}22`, color: ACCENT }}
+            >
+              한도 설정
+            </button>
+          )}
+          {open
+            ? <ChevronUp size={15} style={{ color: "var(--text-muted)" }} />
+            : <ChevronDown size={15} style={{ color: "var(--text-muted)" }} />}
+        </div>
+      </button>
+
+      {open && (
+        <div className="px-4 pb-4 flex flex-col gap-3">
+          {editing ? (
+            <>
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                월 예산 한도를 원 단위로 입력하세요. 비우면 한도 없음으로 처리됩니다.
+              </p>
+              <div className="flex flex-col gap-2">
+                {CATEGORIES.map((c) => (
+                  <div key={c} className="flex items-center gap-2">
+                    <div className="w-5 h-5 rounded flex items-center justify-center text-[9px] font-black shrink-0"
+                      style={{ background: `${CATEGORY_COLORS[c] ?? "#8B8BA7"}22`, color: CATEGORY_COLORS[c] ?? "#8B8BA7" }}>
+                      {c.slice(0, 1)}
+                    </div>
+                    <span className="text-xs flex-1" style={{ color: "var(--text-primary)" }}>{c}</span>
+                    <input
+                      type="number"
+                      placeholder="한도 없음"
+                      value={editValues[c] ?? ""}
+                      onChange={(e) => setEditValues((prev) => ({ ...prev, [c]: e.target.value }))}
+                      style={{ ...inputStyle, width: 110 }}
+                    />
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <button onClick={handleSave} disabled={saving}
+                  className="flex-1 py-2 rounded-lg text-xs font-bold text-white flex items-center justify-center gap-1.5 disabled:opacity-50"
+                  style={{ background: ACCENT }}>
+                  {saving ? <LoaderCircle size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
+                  {saving ? "저장 중..." : "저장"}
+                </button>
+                <button onClick={() => setEditing(false)}
+                  className="px-4 py-2 rounded-lg text-xs font-semibold"
+                  style={{ background: "var(--bg-input)", color: "var(--text-muted)", border: "1px solid var(--border)" }}>
+                  취소
+                </button>
+              </div>
+            </>
+          ) : displayCategories.length === 0 ? (
+            <p className="text-xs py-2 text-center" style={{ color: "var(--text-muted)" }}>
+              이달 지출 내역이 없습니다.<br />
+              <button onClick={startEdit} className="underline mt-1" style={{ color: ACCENT }}>예산 한도 설정하기</button>
+            </p>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {displayCategories.map((c) => {
+                const spent = categoryExpenses[c] ?? 0;
+                const limit = budgetLimits[c];
+                const pct = limit ? Math.min(spent / limit, 1) : null;
+                const over = limit ? spent > limit : false;
+                return (
+                  <div key={c}>
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-2 h-2 rounded-sm"
+                          style={{ background: CATEGORY_COLORS[c] ?? "#8B8BA7" }} />
+                        <span className="text-xs" style={{ color: "var(--text-primary)" }}>{c}</span>
+                      </div>
+                      <span className="text-xs font-semibold"
+                        style={{ color: over ? "#F43F5E" : "var(--text-muted)" }}>
+                        {spent.toLocaleString()}원
+                        {limit ? ` / ${limit.toLocaleString()}원` : ""}
+                      </span>
+                    </div>
+                    {pct !== null && (
+                      <div style={{ height: 5, borderRadius: 999, background: "var(--border)", overflow: "hidden" }}>
+                        <div style={{
+                          width: `${pct * 100}%`,
+                          height: "100%",
+                          borderRadius: 999,
+                          background: over ? "#F43F5E" : pct > 0.8 ? "#F59E0B" : CATEGORY_COLORS[c] ?? ACCENT,
+                          transition: "width 0.5s ease",
+                        }} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

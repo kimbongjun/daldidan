@@ -1,18 +1,38 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
-// GET /api/transactions — 로그인 유저의 거래 목록
-export async function GET() {
+// GET /api/transactions?month=YYYY-MM&limit=N — 로그인 유저의 거래 목록
+export async function GET(request: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data, error } = await supabase
+  const { searchParams } = new URL(request.url);
+  const month = searchParams.get("month"); // "YYYY-MM"
+  const limitParam = searchParams.get("limit");
+
+  let query = supabase
     .from("transactions")
     .select("id, type, category, buyer, merchant_name, location, receipt_image_url, amount, note, date")
     .eq("user_id", user.id)
     .order("date", { ascending: false })
     .order("created_at", { ascending: false });
+
+  if (month && /^\d{4}-\d{2}$/.test(month)) {
+    const [y, m] = month.split("-").map(Number);
+    const startDate = `${month}-01`;
+    // 해당 월의 마지막 날 계산
+    const lastDay = new Date(y, m, 0).getDate();
+    const endDate = `${month}-${String(lastDay).padStart(2, "0")}`;
+    query = query.gte("date", startDate).lte("date", endDate);
+  }
+
+  if (limitParam) {
+    const n = parseInt(limitParam, 10);
+    if (!isNaN(n) && n > 0) query = query.limit(n);
+  }
+
+  const { data, error } = await query;
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json(data ?? []);
