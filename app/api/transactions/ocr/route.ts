@@ -209,34 +209,92 @@ function parseDate(texts: string[]): string {
 }
 
 // ── 매장명 파싱 ─────────────────────────────────────────────────
-// 걸러낼 패턴 (주소·전화번호·사업자번호 등 상호명이 아닌 텍스트)
+
+// 상호명이 아닌 텍스트 패턴 (주소·전화·사업자번호·일반 문구)
 const MERCHANT_NOISE_RE = [
-  /^\d{2,4}-\d{3,4}-\d{4}$/,         // 전화번호
-  /^\d{3}-\d{2}-\d{5}$/,              // 사업자번호
-  /\d+층/,                              // 주소 (층)
-  /^서울|^경기|^인천|^부산|^대구|^대전|^광주|^울산/,  // 도시명
-  /영수증|receipt|합계|total|감사합니다|안녕/i,
+  /^\d{2,4}-\d{3,4}-\d{4}$/,                         // 전화번호
+  /^\d{3}-\d{2}-\d{5}$/,                              // 사업자번호
+  /\d+층/,                                              // 주소 층수
+  /^서울|^경기|^인천|^부산|^대구|^대전|^광주|^울산/,      // 광역시·도
+  /영수증|receipt|합계|total|감사합니다|고맙습니다|안녕/i,
+  /tel|fax|사업자|대표자|주소|팩스/i,
+  /^\d{5}$/,                                           // 우편번호
 ];
 
-function parseMerchantName(fields: PositionedField[]): string {
-  // 상단 30% 필드 우선 탐색
-  const topFields = fields.filter((f) => f.yRatio <= 0.3);
-  const candidates = (topFields.length >= 2 ? topFields : fields.slice(0, 12));
+/**
+ * 후보 텍스트의 매장명 적합도 점수.
+ * - 상단(yRatio 낮을수록) 가중치 우선
+ * - 2~15자 길이 선호
+ * - 한글·영문 비율 높을수록 보너스
+ * - 숫자·특수문자 비율 높을수록 감점
+ */
+function scoreMerchant(f: PositionedField, poolIndex: number): number {
+  const t = f.text;
+  const len = t.length;
+  let score = 0;
 
-  // 유효한 상호명 후보 필터
-  const valid = candidates.filter((f) => {
+  // 위치 점수: 상단일수록 높음
+  score += (1 - f.yRatio) * 60;
+  // 풀 내 순서 보너스
+  score += Math.max(0, 30 - poolIndex * 4);
+  // 길이 점수: 2~10자 이상적
+  if (len >= 2 && len <= 10) score += 25;
+  else if (len > 10 && len <= 18) score += 10;
+  else score -= 10;
+  // 한글·영문 비율 보너스
+  const letterCount = (t.match(/[가-힣a-zA-Z]/g) ?? []).length;
+  score += (letterCount / Math.max(len, 1)) * 20;
+  // 숫자·특수문자 비율 감점
+  const noisyCount = (t.match(/[\d!@#$%^&*()_+={}[\]|\\:;"'<>,.?/~`]/g) ?? []).length;
+  score -= (noisyCount / Math.max(len, 1)) * 30;
+
+  return score;
+}
+
+function parseMerchantName(fields: PositionedField[]): string {
+  if (fields.length === 0) return "";
+
+  // 상단 25% 필드 우선 — 없으면 앞 12개
+  const topFields = fields.filter((f) => f.yRatio <= 0.25);
+  const pool = topFields.length >= 1 ? topFields : fields.slice(0, 12);
+
+  // 노이즈 필터
+  const valid = pool.filter((f) => {
     const t = f.text;
     if (t.length < 2) return false;
-    if (!/[가-힣a-zA-Z]/.test(t)) return false;      // 한글 또는 영문 포함
-    if (/^\d+$/.test(t)) return false;                 // 순수 숫자 제외
+    if (!/[가-힣a-zA-Z]/.test(t)) return false;
+    if (/^\d+$/.test(t)) return false;
     if (MERCHANT_NOISE_RE.some((re) => re.test(t))) return false;
     return true;
   });
 
-  if (!valid.length) return candidates[0]?.text ?? "";
+  if (!valid.length) return pool[0]?.text ?? "";
 
-  // 가장 긴 유효 텍스트 = 상호명일 가능성 높음
-  return valid.reduce((best, cur) => cur.text.length > best.text.length ? cur : best).text;
+  // 점수 기반 최상위 후보 선정
+  const best = valid
+    .map((f, i) => ({ f, score: scoreMerchant(f, i) }))
+    .sort((a, b) => b.score - a.score)[0].f;
+
+  // 인접 라인 병합: 바로 아래 줄이 지점명인 경우 합치기
+  // 예) "스타벅스" + "홍대점" → "스타벅스 홍대점"
+  const bestIdx = valid.indexOf(best);
+  const next = valid[bestIdx + 1];
+  if (next) {
+    const yDiff = Math.abs(next.yRatio - best.yRatio);
+    const combined = `${best.text} ${next.text}`;
+    if (
+      yDiff < 0.07 &&
+      best.text.length <= 12 &&
+      next.text.length <= 12 &&
+      combined.length <= 22 &&
+      !/^\d/.test(next.text) &&
+      !MERCHANT_NOISE_RE.some((re) => re.test(next.text))
+    ) {
+      return combined;
+    }
+  }
+
+  return best.text;
 }
 
 // ── 카테고리 추천 ───────────────────────────────────────────────
