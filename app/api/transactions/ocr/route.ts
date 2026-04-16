@@ -44,6 +44,8 @@ type ClovaResponse = {
   }>;
 };
 
+const OCR_TIMEOUT_MS = 15_000;
+
 function getEnv() {
   const rawInvokeUrl = process.env.NAVER_CLOVA_OCR_INVOKE_URL?.trim();
   const invokeUrl = rawInvokeUrl
@@ -54,6 +56,17 @@ function getEnv() {
     invokeUrl,
     secretKey: process.env.NAVER_CLOVA_OCR_SECRET_KEY?.trim(),
   };
+}
+
+function diagnoseInvokeUrl(url: string): string {
+  if (!url) return "NAVER_CLOVA_OCR_INVOKE_URL 환경 변수가 비어 있습니다.";
+  if (url.startsWith("http://")) {
+    return "Invoke URL이 http:// 로 시작합니다. NCP VPC 내부 전용 주소입니다. CLOVA OCR 콘솔 → 도메인 → APIGW 연동에서 발급한 https:// 외부 Invoke URL을 사용하세요.";
+  }
+  if (!url.startsWith("https://")) {
+    return "Invoke URL 형식이 올바르지 않습니다. https:// 로 시작하는 APIGW Invoke URL을 확인하세요.";
+  }
+  return "CLOVA OCR 서버에 연결하지 못했습니다. Invoke URL, VPC 접근 정책, 외부 통신 가능 여부를 확인해 주세요.";
 }
 
 function pickFieldValue(field?: ClovaReceiptField | null) {
@@ -183,12 +196,14 @@ export async function POST(request: NextRequest) {
       },
       body: outbound,
       cache: "no-store",
+      signal: AbortSignal.timeout(OCR_TIMEOUT_MS),
     });
-  } catch {
-    return NextResponse.json(
-      { error: "CLOVA OCR 서버에 연결하지 못했습니다. Invoke URL, VPC 접근 정책, 외부 통신 가능 여부를 확인해 주세요." },
-      { status: 502 },
-    );
+  } catch (err) {
+    const isTimeout = err instanceof Error && err.name === "TimeoutError";
+    const msg = isTimeout
+      ? `CLOVA OCR 요청이 ${OCR_TIMEOUT_MS / 1000}초 안에 응답하지 않았습니다. Invoke URL과 네트워크 상태를 확인해 주세요.`
+      : diagnoseInvokeUrl(invokeUrl);
+    return NextResponse.json({ error: msg }, { status: 502 });
   }
 
   const raw = await response.text();

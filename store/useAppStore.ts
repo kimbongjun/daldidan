@@ -29,25 +29,6 @@ export interface WeatherData {
   }>;
 }
 
-export interface TravelSpot {
-  id: string;
-  name: string;
-  location: string;
-  category: string;
-  rating: number;
-  price: string;
-  tag?: string;
-}
-
-export interface Transaction {
-  id: string;
-  type: "income" | "expense";
-  category: string;
-  amount: number;
-  note: string;
-  date: string;
-}
-
 const WEATHER_CITIES: WeatherData[] = [
   {
     city: "서울",
@@ -78,37 +59,12 @@ const WEATHER_CITIES: WeatherData[] = [
   },
 ];
 
-const TRAVEL_SPOTS: TravelSpot[] = [
-  { id: "1", name: "제주 협재 해수욕장", location: "제주도", category: "해변", rating: 4.8, price: "항공 89,000원~", tag: "HOT" },
-  { id: "2", name: "경주 불국사", location: "경상북도", category: "역사", rating: 4.6, price: "당일치기 가능", tag: "추천" },
-  { id: "3", name: "일본 교토", location: "일본", category: "해외", rating: 4.9, price: "항공 199,000원~", tag: "벚꽃시즌" },
-  { id: "4", name: "강릉 안목 해변", location: "강원도", category: "카페거리", rating: 4.5, price: "KTX 56,800원~" },
-];
-
-const TRANSACTIONS: Transaction[] = [];
-
 interface AppState {
   weatherCities: WeatherData[];
   weather: WeatherData | null;
-  travelSpots: TravelSpot[];
-  transactions: Transaction[];
-  removeTransaction: (id: string) => void;
-  updateTransaction: (id: string, patch: Omit<Transaction, "id">) => void;
 }
 
-export const useAppStore = create<AppState>((set) => ({
+export const useAppStore = create<AppState>(() => ({
   weatherCities: WEATHER_CITIES,
   weather: WEATHER_CITIES[0],
-  travelSpots: TRAVEL_SPOTS,
-  transactions: TRANSACTIONS,
-
-  removeTransaction: (id) =>
-    set((state) => ({
-      transactions: state.transactions.filter((item) => item.id !== id),
-    })),
-
-  updateTransaction: (id, patch) =>
-    set((state) => ({
-      transactions: state.transactions.map((item) => (item.id === id ? { ...patch, id } : item)),
-    })),
 }));

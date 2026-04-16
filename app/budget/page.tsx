@@ -12,6 +12,18 @@ const ACCENT = "#6366F1";
 const CATEGORIES = ["식비", "교통", "쇼핑", "문화", "의료", "통신", "공과금", "구독비", "대출", "급여", "기타"];
 const BUYER_OPTIONS = ["공동", "봉준", "달희"] as const;
 
+const inputStyle: CSSProperties = {
+  background: "var(--bg-input)",
+  border: "1px solid var(--border)",
+  borderRadius: "0.5rem",
+  padding: "0.5rem 0.75rem",
+  fontSize: "0.875rem",
+  color: "var(--text-primary)",
+  outline: "none",
+  width: "100%",
+  boxSizing: "border-box",
+};
+
 const CATEGORY_COLORS: Record<string, string> = {
   식비: "#F59E0B",
   교통: "#06B6D4",
@@ -325,18 +337,6 @@ function EditorCard({
   const [ocrLoading, setOcrLoading] = useState(false);
   const [ocrError, setOcrError] = useState("");
   const [ocrSuggestedCategory, setOcrSuggestedCategory] = useState("");
-
-  const inputStyle: CSSProperties = {
-    background: "var(--bg-input)",
-    border: "1px solid var(--border)",
-    borderRadius: "0.5rem",
-    padding: "0.5rem 0.75rem",
-    fontSize: "0.875rem",
-    color: "var(--text-primary)",
-    outline: "none",
-    width: "100%",
-    boxSizing: "border-box",
-  };
 
   return (
     <div className="bento-card p-4 flex flex-col gap-3">

@@ -60,7 +60,6 @@ export async function POST(request: NextRequest) {
   );
 
   if (error) {
-    console.error("[push/subscribe] DB error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 

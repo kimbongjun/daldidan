@@ -93,6 +93,7 @@ export default function Header() {
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [editingGreeting, setEditingGreeting] = useState(false);
   const [greetingInput, setGreetingInput] = useState("");
+  const [greetingSaveError, setGreetingSaveError] = useState(false);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
   const notificationRef = useRef<HTMLDivElement>(null);
@@ -287,7 +288,6 @@ export default function Header() {
       const msg = err instanceof Error ? err.message : "";
       setPushErrorMsg(msg === "timeout" ? "시간 초과. 잠시 후 다시 시도해주세요." : "알림 설정 중 오류가 발생했습니다.");
       setPushStatus("error");
-      console.error("[push] subscribe error:", err);
     }
   };
 
@@ -338,13 +338,21 @@ export default function Header() {
   const saveGreeting = async () => {
     const trimmed = greetingInput.trim();
     if (!trimmed) return;
+    setGreetingSaveError(false);
     setCustomGreeting(trimmed);
     setEditingGreeting(false);
-    await fetch("/api/site-settings", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ custom_greeting: trimmed }),
-    }).catch(() => null);
+    try {
+      const res = await fetch("/api/site-settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ custom_greeting: trimmed }),
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      setCustomGreeting(customGreeting);
+      setGreetingSaveError(true);
+      setTimeout(() => setGreetingSaveError(false), 3000);
+    }
   };
 
   const deleteGreeting = async () => {
@@ -410,14 +418,14 @@ export default function Header() {
                   width: 160,
                 }}
               />
-              <button onClick={saveGreeting} title="저장" className="hover:opacity-70">
+              <button onClick={saveGreeting} title="저장" aria-label="인사말 저장" className="hover:opacity-70">
                 <Check size={13} style={{ color: "#10B981" }} />
               </button>
-              <button onClick={() => setEditingGreeting(false)} title="취소" className="hover:opacity-70">
+              <button onClick={() => setEditingGreeting(false)} title="취소" aria-label="편집 취소" className="hover:opacity-70">
                 <X size={13} style={{ color: "var(--text-muted)" }} />
               </button>
               {customGreeting && (
-                <button onClick={deleteGreeting} title="초기화" className="hover:opacity-70">
+                <button onClick={deleteGreeting} title="초기화" aria-label="인사말 초기화" className="hover:opacity-70">
                   <Trash2 size={12} style={{ color: "#F43F5E" }} />
                 </button>
               )}
@@ -426,10 +434,10 @@ export default function Header() {
             <div className="flex items-center gap-1">
               <p
                 className="text-xs"
-                style={{ color: "var(--text-muted)" }}
+                style={{ color: greetingSaveError ? "#F43F5E" : "var(--text-muted)" }}
                 suppressHydrationWarning
               >
-                {greeting ? `${greeting} ✨` : ""}
+                {greetingSaveError ? "저장에 실패했습니다" : (greeting ? `${greeting} ✨` : "")}
               </p>
               {user && (
                 <button

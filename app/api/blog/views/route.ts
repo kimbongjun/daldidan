@@ -15,13 +15,8 @@ export async function POST(request: NextRequest) {
 
   const supabase = createPublicClient();
 
-  // view_count 증가 (RPC increment_view_count 혹은 단순 update)
-  const { error } = await supabase.rpc("increment_view_count", { post_id: postId });
-
-  // view_count 컬럼이나 RPC 함수가 아직 없으면 조용히 무시
-  if (error && !error.message.includes("increment_view_count")) {
-    console.error("[views] increment error:", error.message);
-  }
+  // view_count 증가 (RPC increment_view_count) — 컬럼/함수 미존재 시 무시
+  await supabase.rpc("increment_view_count", { post_id: postId });
 
   return NextResponse.json({ ok: true });
 }

@@ -99,12 +99,9 @@ export async function POST(request: NextRequest) {
       }),
     ]);
 
-    if (emailResult.status === "rejected") {
-      console.error("[blog/posts] email notification failed:", emailResult.reason);
-    }
-    if (pushResult.status === "rejected") {
-      console.error("[blog/posts] push notification failed:", pushResult.reason);
-    }
+    // 백그라운드 알림 실패는 사용자 응답에 영향 없음 — 무시
+    void emailResult;
+    void pushResult;
   });
 
   return NextResponse.json({ slug }, { status: 201 });

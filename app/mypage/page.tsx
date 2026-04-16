@@ -58,6 +58,7 @@ export default function MyPage() {
   const [ogUploading, setOgUploading] = useState(false);
   const [pwaIconUploading, setPwaIconUploading] = useState(false);
   const [pwaSplashUploading, setPwaSplashUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
 
   // ?settings=open 파라미터로 옵션 패널 자동 전개
   useEffect(() => {
@@ -123,6 +124,7 @@ export default function MyPage() {
     setUploading: (v: boolean) => void
   ) => {
     setUploading(true);
+    setUploadError("");
     try {
       const supabase = createClient();
       const ext = file.name.split(".").pop() ?? "jpg";
@@ -134,7 +136,7 @@ export default function MyPage() {
       const { data: { publicUrl } } = supabase.storage.from("blog-images").getPublicUrl(data.path);
       setSettings((prev) => ({ ...prev, [field]: publicUrl }));
     } catch (err) {
-      console.error("이미지 업로드 실패:", err);
+      setUploadError(err instanceof Error ? err.message : "이미지 업로드에 실패했습니다.");
     } finally { setUploading(false); }
   };
 
@@ -418,6 +420,9 @@ export default function MyPage() {
 
             <hr style={{ border: "none", borderTop: "1px solid var(--border)" }} />
 
+            {uploadError && (
+              <p className="text-sm" style={{ color: "#F43F5E" }}>{uploadError}</p>
+            )}
             {settingsSuccess && (
               <p className="text-sm text-center" style={{ color: "#10B981" }}>옵션이 저장되었습니다. 새로고침 후 적용됩니다.</p>
             )}
