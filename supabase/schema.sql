@@ -43,12 +43,21 @@ create table if not exists public.transactions (
   user_id     uuid not null references public.profiles(id) on delete cascade,
   type        text not null check (type in ('income', 'expense')),
   category    text not null,
+  buyer       text not null default '공동' check (buyer in ('공동', '봉준', '달희')),
+  merchant_name text not null default '',
+  location    text not null default '',
+  receipt_image_url text,
   amount      bigint not null check (amount > 0),    -- 원(KRW) 단위 정수
   note        text not null default '',
   date        date not null default current_date,
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now()
 );
+
+alter table public.transactions add column if not exists buyer text not null default '공동';
+alter table public.transactions add column if not exists merchant_name text not null default '';
+alter table public.transactions add column if not exists location text not null default '';
+alter table public.transactions add column if not exists receipt_image_url text;
 
 create index if not exists idx_transactions_user_date
   on public.transactions (user_id, date desc);

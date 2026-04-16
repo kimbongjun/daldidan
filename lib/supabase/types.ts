@@ -64,6 +64,10 @@ export type Database = {
           user_id: string;
           type: "income" | "expense";
           category: string;
+          buyer: "공동" | "봉준" | "달희";
+          merchant_name: string;
+          location: string;
+          receipt_image_url: string | null;
           amount: number;
           note: string;
           date: string;
@@ -74,6 +78,10 @@ export type Database = {
           user_id: string;
           type: "income" | "expense";
           category: string;
+          buyer?: "공동" | "봉준" | "달희";
+          merchant_name?: string;
+          location?: string;
+          receipt_image_url?: string | null;
           amount: number;
           note?: string;
           date?: string;
@@ -84,6 +92,10 @@ export type Database = {
           user_id?: string;
           type?: "income" | "expense";
           category?: string;
+          buyer?: "공동" | "봉준" | "달희";
+          merchant_name?: string;
+          location?: string;
+          receipt_image_url?: string | null;
           amount?: number;
           note?: string;
           date?: string;

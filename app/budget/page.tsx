@@ -1,13 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { type CSSProperties, useCallback, useEffect, useMemo, useState } from "react";
 import PageHeader from "@/components/PageHeader";
+import { uploadImagesToStorage } from "@/lib/image-upload";
 import { sendNativeNotification } from "@/lib/notifications";
-import { PencilLine, Plus, Trash2, TrendingDown, TrendingUp, Wallet } from "lucide-react";
+import { analyzeReceiptImage } from "@/lib/receipt-ocr";
+import { ImagePlus, LoaderCircle, PencilLine, Plus, Trash2, TrendingDown, TrendingUp, Wallet } from "lucide-react";
 
 const ACCENT = "#6366F1";
 
 const CATEGORIES = ["식비", "교통", "쇼핑", "문화", "의료", "통신", "공과금", "구독비", "대출", "급여", "기타"];
+const BUYER_OPTIONS = ["공동", "봉준", "달희"] as const;
 
 const CATEGORY_COLORS: Record<string, string> = {
   식비: "#F59E0B",
@@ -27,9 +30,41 @@ interface Transaction {
   id: string;
   type: "income" | "expense";
   category: string;
+  buyer: (typeof BUYER_OPTIONS)[number];
+  merchantName: string;
+  location: string;
+  receiptImageUrl: string | null;
   amount: number;
   note: string;
   date: string;
+}
+
+interface TransactionApiResponse {
+  id: string;
+  type: "income" | "expense";
+  category: string;
+  buyer?: (typeof BUYER_OPTIONS)[number];
+  merchant_name?: string;
+  location?: string;
+  receipt_image_url?: string | null;
+  amount: number;
+  note: string;
+  date: string;
+}
+
+function normalizeTransaction(transaction: TransactionApiResponse): Transaction {
+  return {
+    id: transaction.id,
+    type: transaction.type,
+    category: transaction.category,
+    buyer: transaction.buyer ?? "공동",
+    merchantName: transaction.merchant_name ?? "",
+    location: transaction.location ?? "",
+    receiptImageUrl: transaction.receipt_image_url ?? null,
+    amount: transaction.amount,
+    note: transaction.note,
+    date: transaction.date,
+  };
 }
 
 type Period = "daily" | "monthly" | "yearly";
@@ -37,6 +72,10 @@ type Period = "daily" | "monthly" | "yearly";
 const EMPTY_FORM = (): Omit<Transaction, "id"> => ({
   type: "expense",
   category: "식비",
+  buyer: "공동",
+  merchantName: "",
+  location: "",
+  receiptImageUrl: null,
   amount: 0,
   note: "",
   date: new Date().toISOString().slice(0, 10),
@@ -56,8 +95,8 @@ export default function BudgetPage() {
     try {
       const res = await fetch("/api/transactions");
       if (res.ok) {
-        const data = await res.json() as Transaction[];
-        setTransactions(data);
+        const data = await res.json() as TransactionApiResponse[];
+        setTransactions(Array.isArray(data) ? data.map(normalizeTransaction) : []);
       }
     } finally {
       setLoading(false);
@@ -97,7 +136,7 @@ export default function BudgetPage() {
       body: JSON.stringify(form),
     });
     if (res.ok) {
-      const created = await res.json() as Transaction;
+      const created = normalizeTransaction(await res.json() as TransactionApiResponse);
       setTransactions((prev) => [created, ...prev]);
       sendNativeNotification(
         "가계부 내역이 추가되었어요",
@@ -116,7 +155,7 @@ export default function BudgetPage() {
       body: JSON.stringify(patch),
     });
     if (res.ok) {
-      const updated = await res.json() as Transaction;
+      const updated = normalizeTransaction(await res.json() as TransactionApiResponse);
       setTransactions((prev) => prev.map((t) => (t.id === id ? updated : t)));
     }
     setEditingId(null);
@@ -232,7 +271,13 @@ export default function BudgetPage() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold truncate" style={{ color: "var(--text-primary)" }}>{tx.note || tx.category}</p>
-                        <p className="text-xs" style={{ color: "var(--text-muted)" }}>{tx.category} · {tx.date}</p>
+                        <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                          <span className="text-[11px] px-1.5 py-0.5 rounded-md" style={{ color: "#6366F1", background: "#6366F122" }}>{tx.buyer}</span>
+                          {tx.merchantName ? (
+                            <span className="text-xs" style={{ color: "var(--text-muted)" }}>{tx.merchantName}</span>
+                          ) : null}
+                          <span className="text-xs" style={{ color: "var(--text-muted)" }}>{tx.category} · {tx.date}</span>
+                        </div>
                       </div>
                     </button>
                     <span className={`text-sm font-bold shrink-0 ${tx.type === "income" ? "text-emerald-400" : "text-rose-400"}`}>
@@ -264,11 +309,24 @@ function EditorCard({
 }) {
   const [form, setForm] = useState<Omit<Transaction, "id">>(
     transaction
-      ? { type: transaction.type, category: transaction.category, amount: transaction.amount, note: transaction.note, date: transaction.date }
+      ? {
+          type: transaction.type,
+          category: transaction.category,
+          buyer: transaction.buyer,
+          merchantName: transaction.merchantName,
+          location: transaction.location,
+          receiptImageUrl: transaction.receiptImageUrl,
+          amount: transaction.amount,
+          note: transaction.note,
+          date: transaction.date,
+        }
       : EMPTY_FORM(),
   );
+  const [ocrLoading, setOcrLoading] = useState(false);
+  const [ocrError, setOcrError] = useState("");
+  const [ocrSuggestedCategory, setOcrSuggestedCategory] = useState("");
 
-  const inputStyle: React.CSSProperties = {
+  const inputStyle: CSSProperties = {
     background: "var(--bg-input)",
     border: "1px solid var(--border)",
     borderRadius: "0.5rem",
@@ -297,17 +355,124 @@ function EditorCard({
         ))}
       </div>
 
-      <select value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))} style={inputStyle}>
-        {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-      </select>
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>영수증 첨부</label>
+        <label
+          className="rounded-xl border border-dashed p-3 cursor-pointer transition-opacity hover:opacity-80"
+          style={{ borderColor: "var(--border)", background: "var(--bg-input)" }}
+        >
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={async (event) => {
+              const file = event.target.files?.[0];
+              if (!file) return;
 
-      <input type="number" placeholder="금액 (원)" value={form.amount || ""} onChange={(e) => setForm((f) => ({ ...f, amount: Number(e.target.value) }))} style={inputStyle} />
-      <input placeholder="메모" value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} style={inputStyle} />
-      <input type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} style={inputStyle} />
+              setOcrLoading(true);
+              setOcrError("");
+              try {
+                const [uploadedImages, extracted] = await Promise.all([
+                  uploadImagesToStorage([file]),
+                  analyzeReceiptImage(file),
+                ]);
+                const receiptImageUrl = uploadedImages[0]?.url ?? "";
+                setOcrSuggestedCategory(extracted.recommendedCategory);
+
+                setForm((prev) => ({
+                  ...prev,
+                  category: extracted.recommendedCategory || prev.category,
+                  merchantName: extracted.merchantName || prev.merchantName,
+                  location: extracted.location || prev.location,
+                  amount: extracted.amount > 0 ? extracted.amount : prev.amount,
+                  date: extracted.date || prev.date,
+                  note: extracted.note || prev.note,
+                  receiptImageUrl: receiptImageUrl || prev.receiptImageUrl,
+                }));
+              } catch (error) {
+                setOcrError(error instanceof Error ? error.message : "영수증 OCR 처리에 실패했습니다.");
+              } finally {
+                setOcrLoading(false);
+                event.target.value = "";
+              }
+            }}
+          />
+          <div className="flex items-center gap-2">
+            {ocrLoading ? <LoaderCircle size={16} className="animate-spin" style={{ color: ACCENT }} /> : <ImagePlus size={16} style={{ color: ACCENT }} />}
+            <div className="flex flex-col gap-0.5">
+              <p className="text-sm font-semibold" style={{ color: "var(--text-primary)", margin: 0 }}>
+                {ocrLoading ? "영수증 분석 중..." : "영수증 이미지 선택"}
+              </p>
+              <p className="text-xs" style={{ color: "var(--text-muted)", margin: 0 }}>
+                매장명, 위치, 금액, 날짜를 자동으로 추출합니다.
+              </p>
+            </div>
+          </div>
+        </label>
+        {form.receiptImageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={form.receiptImageUrl}
+            alt="영수증 미리보기"
+            className="w-full rounded-xl border object-cover"
+            style={{ borderColor: "var(--border)", maxHeight: 180 }}
+          />
+        ) : null}
+        {ocrError ? (
+          <p className="text-xs" style={{ color: "#F43F5E", margin: 0 }}>{ocrError}</p>
+        ) : null}
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>카테고리</label>
+          <select value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))} style={inputStyle}>
+            {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+          {ocrSuggestedCategory ? (
+            <p className="text-[11px]" style={{ color: ACCENT, margin: 0 }}>
+              OCR 추천: {ocrSuggestedCategory}
+            </p>
+          ) : null}
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>구매자</label>
+          <select value={form.buyer} onChange={(e) => setForm((f) => ({ ...f, buyer: e.target.value as Transaction["buyer"] }))} style={inputStyle}>
+            {BUYER_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+          </select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>매장명</label>
+          <input placeholder="예: 스타벅스" value={form.merchantName} onChange={(e) => setForm((f) => ({ ...f, merchantName: e.target.value }))} style={inputStyle} />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>위치</label>
+          <input placeholder="예: 성수점" value={form.location} onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))} style={inputStyle} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>금액</label>
+          <input type="number" placeholder="금액 (원)" value={form.amount || ""} onChange={(e) => setForm((f) => ({ ...f, amount: Number(e.target.value) }))} style={inputStyle} />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>날짜</label>
+          <input type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} style={inputStyle} />
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>메모</label>
+        <input placeholder="메모" value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} style={inputStyle} />
+      </div>
 
       <button
         onClick={() => onSave(form)}
-        disabled={form.amount <= 0}
+        disabled={form.amount <= 0 || ocrLoading}
         className="w-full py-2.5 rounded-lg text-sm font-bold text-white transition-opacity disabled:opacity-40"
         style={{ background: ACCENT }}
       >
