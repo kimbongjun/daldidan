@@ -938,28 +938,36 @@ function BudgetLimitsPanel({
 
   return (
     <div className="bento-card overflow-hidden">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between p-4 hover:opacity-80 transition-opacity"
-        style={{ background: "transparent", border: "none", cursor: "pointer" }}
-        aria-label={open ? "예산 한도 접기" : "예산 한도 펼치기"}
-      >
-        <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>카테고리 예산 한도</p>
+      {/* 버튼 중첩 방지: 헤더를 div로 구성하고 각 버튼을 독립 배치 */}
+      <div className="w-full flex items-center justify-between p-4">
+        <button
+          onClick={() => setOpen((v) => !v)}
+          className="flex-1 text-left hover:opacity-80 transition-opacity"
+          style={{ background: "transparent", border: "none", cursor: "pointer" }}
+        >
+          <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>카테고리 예산 한도</p>
+        </button>
         <div className="flex items-center gap-2">
           {!editing && (
             <button
-              onClick={(e) => { e.stopPropagation(); startEdit(); }}
+              onClick={startEdit}
               className="text-[10px] font-semibold px-2 py-0.5 rounded-md hover:opacity-80 transition-opacity"
               style={{ background: `${ACCENT}22`, color: ACCENT }}
             >
               한도 설정
             </button>
           )}
-          {open
-            ? <ChevronUp size={15} style={{ color: "var(--text-muted)" }} />
-            : <ChevronDown size={15} style={{ color: "var(--text-muted)" }} />}
+          <button
+            onClick={() => setOpen((v) => !v)}
+            aria-label={open ? "예산 한도 접기" : "예산 한도 펼치기"}
+            style={{ background: "transparent", border: "none", cursor: "pointer", padding: 0 }}
+          >
+            {open
+              ? <ChevronUp size={15} style={{ color: "var(--text-muted)" }} />
+              : <ChevronDown size={15} style={{ color: "var(--text-muted)" }} />}
+          </button>
         </div>
-      </button>
+      </div>
 
       {open && (
         <div className="px-4 pb-4 flex flex-col gap-3">
