@@ -40,25 +40,6 @@ export type Database = {
           updated_at?: string;
         };
       };
-      blog_comment_reactions: {
-        Row: {
-          id: string;
-          comment_id: string;
-          user_id: string | null;
-          browser_id: string | null;
-          reaction: string;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          comment_id: string;
-          user_id?: string | null;
-          browser_id?: string | null;
-          reaction: string;
-          created_at?: string;
-        };
-        Update: Record<string, never>;
-      };
       blog_posts: {
         Row: {
           id: string;

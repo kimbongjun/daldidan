@@ -17,22 +17,6 @@ interface Comment {
   parent_id: string | null;
 }
 
-type ReactionType = "like" | "sad" | "best" | "check" | "heart";
-
-interface ReactionSummary {
-  comment_id: string;
-  counts: Record<string, number>;
-  mine: string[];
-}
-
-const REACTIONS: { type: ReactionType; emoji: string; label: string }[] = [
-  { type: "like", emoji: "👍", label: "좋아요" },
-  { type: "heart", emoji: "❤️", label: "하트" },
-  { type: "sad", emoji: "😢", label: "슬퍼요" },
-  { type: "best", emoji: "⭐", label: "최고예요" },
-  { type: "check", emoji: "✅", label: "확인했어요" },
-];
-
 const ACCENT = "#EA580C";
 
 const inputStyle: React.CSSProperties = {
@@ -115,156 +99,6 @@ function ImageUploadArea({ images, uploading, onUpload, onRemove }: ImageUploadP
 }
 
 // ─────────────────────────────────────────────────────────────
-// 공감 바 (고정 리액션 + 커스텀 이모지)
-// ─────────────────────────────────────────────────────────────
-const FIXED_REACTION_KEYS = new Set(REACTIONS.map((r) => r.type));
-
-interface ReactionBarProps {
-  commentId: string;
-  reactionSummary?: ReactionSummary;
-  reactionLoadingKey: string;
-  onReact: (reaction: string) => void;
-}
-
-function ReactionBar({ commentId, reactionSummary, reactionLoadingKey, onReact }: ReactionBarProps) {
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [customInput, setCustomInput] = useState("");
-  const pickerRef = React.useRef<HTMLDivElement>(null);
-
-  // 다른 사람이 이미 추가한 커스텀 이모지 집계
-  const customKeys = Object.keys(reactionSummary?.counts ?? {}).filter(
-    (k) => k.startsWith("custom:") && !FIXED_REACTION_KEYS.has(k as ReactionType)
-  );
-
-  // 외부 클릭 시 picker 닫기
-  React.useEffect(() => {
-    if (!pickerOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
-        setPickerOpen(false);
-        setCustomInput("");
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [pickerOpen]);
-
-  const submitCustom = () => {
-    const emoji = customInput.trim();
-    if (!emoji) return;
-    onReact(`custom:${emoji}`);
-    setCustomInput("");
-    setPickerOpen(false);
-  };
-
-  return (
-    <div className="flex items-center gap-1.5 flex-wrap" style={{ paddingLeft: "2.25rem" }}>
-      {/* 고정 리액션 */}
-      {REACTIONS.map(({ type, emoji, label }) => {
-        const count = reactionSummary?.counts[type] ?? 0;
-        const isMine = reactionSummary?.mine.includes(type) ?? false;
-        const isLoading = reactionLoadingKey === `${commentId}:${type}`;
-        return (
-          <button
-            key={type}
-            onClick={() => onReact(type)}
-            disabled={isLoading}
-            title={label}
-            className="pressable flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold transition-all disabled:opacity-50"
-            style={{
-              background: isMine ? "rgba(234,88,12,0.18)" : "rgba(255,255,255,0.05)",
-              color: isMine ? ACCENT : "var(--text-muted)",
-              border: `1px solid ${isMine ? "rgba(234,88,12,0.35)" : "var(--border)"}`,
-            }}
-          >
-            <span>{emoji}</span>
-            {count > 0 && <span>{count}</span>}
-          </button>
-        );
-      })}
-
-      {/* 다른 유저가 추가한 커스텀 이모지 */}
-      {customKeys.map((key) => {
-        const emoji = key.slice("custom:".length);
-        const count = reactionSummary?.counts[key] ?? 0;
-        const isMine = reactionSummary?.mine.includes(key) ?? false;
-        const isLoading = reactionLoadingKey === `${commentId}:${key}`;
-        return (
-          <button
-            key={key}
-            onClick={() => onReact(key)}
-            disabled={isLoading}
-            title={emoji}
-            className="pressable flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold transition-all disabled:opacity-50"
-            style={{
-              background: isMine ? "rgba(234,88,12,0.18)" : "rgba(255,255,255,0.05)",
-              color: isMine ? ACCENT : "var(--text-muted)",
-              border: `1px solid ${isMine ? "rgba(234,88,12,0.35)" : "var(--border)"}`,
-            }}
-          >
-            <span>{emoji}</span>
-            {count > 0 && <span>{count}</span>}
-          </button>
-        );
-      })}
-
-      {/* 커스텀 이모지 추가 버튼 */}
-      <div className="relative" ref={pickerRef}>
-        <button
-          onClick={() => { setPickerOpen((v) => !v); setCustomInput(""); }}
-          title="이모지 추가"
-          className="pressable flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold"
-          style={{
-            background: pickerOpen ? "rgba(234,88,12,0.18)" : "rgba(255,255,255,0.05)",
-            color: pickerOpen ? ACCENT : "var(--text-muted)",
-            border: `1px solid ${pickerOpen ? "rgba(234,88,12,0.35)" : "var(--border)"}`,
-          }}
-        >
-          +
-        </button>
-
-        {pickerOpen && (
-          <div
-            className="absolute z-20 flex items-center gap-1.5 p-2 rounded-xl shadow-lg"
-            style={{
-              bottom: "calc(100% + 6px)",
-              left: 0,
-              background: "var(--bg-card)",
-              border: "1px solid var(--border)",
-              minWidth: "160px",
-            }}
-          >
-            <input
-              autoFocus
-              value={customInput}
-              onChange={(e) => setCustomInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") submitCustom(); if (e.key === "Escape") setPickerOpen(false); }}
-              placeholder="이모지 입력"
-              maxLength={8}
-              className="flex-1 min-w-0 text-sm outline-none"
-              style={{
-                background: "transparent",
-                color: "var(--text-primary)",
-                border: "none",
-                fontSize: "1.1rem",
-              }}
-            />
-            <button
-              onClick={submitCustom}
-              disabled={!customInput.trim()}
-              className="pressable px-2 py-0.5 rounded-lg text-xs font-bold disabled:opacity-40"
-              style={{ background: ACCENT, color: "#fff", flexShrink: 0 }}
-            >
-              추가
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────
 // 댓글 카드
 // ─────────────────────────────────────────────────────────────
 interface CommentCardProps {
@@ -275,9 +109,6 @@ interface CommentCardProps {
   onDelete: () => void;
   onReply?: () => void;
   replyCount?: number;
-  reactionSummary?: ReactionSummary;
-  onReact?: (reaction: string) => void;
-  reactionLoadingKey: string;
 }
 
 function CommentCard({
@@ -288,9 +119,6 @@ function CommentCard({
   onDelete,
   onReply,
   replyCount,
-  reactionSummary,
-  onReact,
-  reactionLoadingKey,
 }: CommentCardProps) {
   return (
     <div
@@ -381,15 +209,6 @@ function CommentCard({
         </div>
       )}
 
-      {/* 공감 버튼 */}
-      {onReact && (
-        <ReactionBar
-          commentId={comment.id}
-          reactionSummary={reactionSummary}
-          reactionLoadingKey={reactionLoadingKey}
-          onReact={onReact}
-        />
-      )}
     </div>
   );
 }
@@ -400,8 +219,6 @@ function CommentCard({
 export default function BlogComments({ postId }: { postId: string }) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [reactions, setReactions] = useState<ReactionSummary[]>([]);
-  const [reactionLoadingKey, setReactionLoadingKey] = useState("");
 
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
@@ -463,18 +280,8 @@ export default function BlogComments({ postId }: { postId: string }) {
     }
   };
 
-  const fetchReactions = async () => {
-    const browserId = getBrowserId();
-    const res = await fetch(
-      `/api/blog/comments/reactions?post_id=${encodeURIComponent(postId)}&browser_id=${encodeURIComponent(browserId)}`
-    );
-    const data = await res.json();
-    setReactions(Array.isArray(data) ? data : []);
-  };
-
   useEffect(() => {
     fetchComments();
-    fetchReactions();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [postId]);
 
@@ -508,48 +315,6 @@ export default function BlogComments({ postId }: { postId: string }) {
       setImgUrls((prev) => [...prev, ...uploaded].slice(0, 3));
     } finally {
       setUploading(false);
-    }
-  };
-
-  // ─── 공감 토글 ───
-  const handleReaction = async (commentId: string, reaction: string) => {
-    const key = `${commentId}:${reaction}`;
-    if (reactionLoadingKey === key) return;
-    setReactionLoadingKey(key);
-    try {
-      const browserId = getBrowserId();
-      const res = await fetch(`/api/blog/comments/${commentId}/reactions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reaction, browser_id: browserId }),
-      });
-      const data = await res.json() as { action?: string };
-      if (!res.ok) return;
-
-      setReactions((prev) => {
-        const existing = prev.find((r) => r.comment_id === commentId);
-        if (!existing) {
-          return [...prev, { comment_id: commentId, counts: { [reaction]: 1 }, mine: [reaction] }];
-        }
-        const newCounts = { ...existing.counts };
-        const newMine = [...existing.mine];
-        if (data.action === "removed") {
-          newCounts[reaction] = Math.max(0, (newCounts[reaction] ?? 1) - 1);
-          return prev.map((r) =>
-            r.comment_id === commentId
-              ? { ...r, counts: newCounts, mine: newMine.filter((m) => m !== reaction) }
-              : r
-          );
-        } else {
-          newCounts[reaction] = (newCounts[reaction] ?? 0) + 1;
-          if (!newMine.includes(reaction)) newMine.push(reaction);
-          return prev.map((r) =>
-            r.comment_id === commentId ? { ...r, counts: newCounts, mine: newMine } : r
-          );
-        }
-      });
-    } finally {
-      setReactionLoadingKey("");
     }
   };
 
@@ -727,9 +492,6 @@ export default function BlogComments({ postId }: { postId: string }) {
                     }
                   }}
                   replyCount={replies.length}
-                  reactionSummary={reactions.find((r) => r.comment_id === comment.id)}
-                  onReact={(reaction) => handleReaction(comment.id, reaction)}
-                  reactionLoadingKey={reactionLoadingKey}
                 />
 
                 {/* 대댓글 목록 */}
@@ -743,9 +505,6 @@ export default function BlogComments({ postId }: { postId: string }) {
                         canManage={canManage(reply)}
                         onEdit={() => openEdit(reply)}
                         onDelete={() => openDelete(reply)}
-                        reactionSummary={reactions.find((r) => r.comment_id === reply.id)}
-                        onReact={(reaction) => handleReaction(reply.id, reaction)}
-                        reactionLoadingKey={reactionLoadingKey}
                       />
                     ))}
                   </div>

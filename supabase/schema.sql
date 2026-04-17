@@ -364,35 +364,6 @@ create index if not exists idx_blog_comments_parent
 
 
 -- ══════════════════════════════════════════════════════════════
--- 10. 댓글 공감 (Blog Comment Reactions)
--- ══════════════════════════════════════════════════════════════
-create table if not exists public.blog_comment_reactions (
-  id          uuid primary key default uuid_generate_v4(),
-  comment_id  uuid not null references public.blog_comments(id) on delete cascade,
-  user_id     uuid references auth.users(id) on delete cascade,
-  browser_id  text,
-  reaction    text not null check (
-    reaction in ('like', 'sad', 'best', 'check', 'heart')
-    or reaction like 'custom:%'
-  ),
-  created_at  timestamptz not null default now()
-);
-
--- 로그인 유저: 댓글+유저+공감 타입 유니크
-create unique index if not exists idx_reactions_user_unique
-  on public.blog_comment_reactions (comment_id, user_id, reaction)
-  where user_id is not null;
-
--- 비로그인: 댓글+브라우저ID+공감 타입 유니크
-create unique index if not exists idx_reactions_browser_unique
-  on public.blog_comment_reactions (comment_id, browser_id, reaction)
-  where browser_id is not null;
-
-create index if not exists idx_reactions_comment
-  on public.blog_comment_reactions (comment_id);
-
-
--- ══════════════════════════════════════════════════════════════
 -- 12. updated_at 자동 갱신 트리거
 -- ══════════════════════════════════════════════════════════════
 create or replace function public.set_updated_at()
