@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 
-type ReactionType = "like" | "sad" | "best" | "check";
-const VALID_REACTIONS: ReactionType[] = ["like", "sad", "best", "check"];
+const FIXED_REACTIONS = ["like", "sad", "best", "check", "heart"];
+
+function isValidReaction(r: string): boolean {
+  return FIXED_REACTIONS.includes(r) || (r.startsWith("custom:") && r.length <= 32);
+}
 
 export async function POST(
   request: NextRequest,
@@ -13,7 +16,7 @@ export async function POST(
   const reaction = body.reaction;
   const browserId = body.browser_id?.trim() || null;
 
-  if (!reaction || !VALID_REACTIONS.includes(reaction as ReactionType)) {
+  if (!reaction || !isValidReaction(reaction)) {
     return NextResponse.json({ error: "유효하지 않은 공감 타입입니다." }, { status: 400 });
   }
 
@@ -38,7 +41,7 @@ export async function POST(
     await admin.from("blog_comment_reactions").insert({
       comment_id: commentId,
       user_id: user.id,
-      reaction: reaction as ReactionType,
+      reaction,
     });
     return NextResponse.json({ action: "added" });
   }
@@ -64,7 +67,7 @@ export async function POST(
   await admin.from("blog_comment_reactions").insert({
     comment_id: commentId,
     browser_id: browserId,
-    reaction: reaction as ReactionType,
+    reaction,
   });
   return NextResponse.json({ action: "added" });
 }

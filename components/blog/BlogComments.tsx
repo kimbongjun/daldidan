@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { LoaderCircle, MessageCircle, Pencil, Trash2, X, Check, CornerDownRight, Image as ImageIcon } from "lucide-react";
 import { formatBlogDate } from "@/lib/blog-shared";
 import { createClient } from "@/lib/supabase/client";
@@ -17,7 +17,7 @@ interface Comment {
   parent_id: string | null;
 }
 
-type ReactionType = "like" | "sad" | "best" | "check";
+type ReactionType = "like" | "sad" | "best" | "check" | "heart";
 
 interface ReactionSummary {
   comment_id: string;
@@ -27,6 +27,7 @@ interface ReactionSummary {
 
 const REACTIONS: { type: ReactionType; emoji: string; label: string }[] = [
   { type: "like", emoji: "👍", label: "좋아요" },
+  { type: "heart", emoji: "❤️", label: "하트" },
   { type: "sad", emoji: "😢", label: "슬퍼요" },
   { type: "best", emoji: "⭐", label: "최고예요" },
   { type: "check", emoji: "✅", label: "확인했어요" },
@@ -114,6 +115,156 @@ function ImageUploadArea({ images, uploading, onUpload, onRemove }: ImageUploadP
 }
 
 // ─────────────────────────────────────────────────────────────
+// 공감 바 (고정 리액션 + 커스텀 이모지)
+// ─────────────────────────────────────────────────────────────
+const FIXED_REACTION_KEYS = new Set(REACTIONS.map((r) => r.type));
+
+interface ReactionBarProps {
+  commentId: string;
+  reactionSummary?: ReactionSummary;
+  reactionLoadingKey: string;
+  onReact: (reaction: string) => void;
+}
+
+function ReactionBar({ commentId, reactionSummary, reactionLoadingKey, onReact }: ReactionBarProps) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [customInput, setCustomInput] = useState("");
+  const pickerRef = React.useRef<HTMLDivElement>(null);
+
+  // 다른 사람이 이미 추가한 커스텀 이모지 집계
+  const customKeys = Object.keys(reactionSummary?.counts ?? {}).filter(
+    (k) => k.startsWith("custom:") && !FIXED_REACTION_KEYS.has(k as ReactionType)
+  );
+
+  // 외부 클릭 시 picker 닫기
+  React.useEffect(() => {
+    if (!pickerOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        setPickerOpen(false);
+        setCustomInput("");
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [pickerOpen]);
+
+  const submitCustom = () => {
+    const emoji = customInput.trim();
+    if (!emoji) return;
+    onReact(`custom:${emoji}`);
+    setCustomInput("");
+    setPickerOpen(false);
+  };
+
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap" style={{ paddingLeft: "2.25rem" }}>
+      {/* 고정 리액션 */}
+      {REACTIONS.map(({ type, emoji, label }) => {
+        const count = reactionSummary?.counts[type] ?? 0;
+        const isMine = reactionSummary?.mine.includes(type) ?? false;
+        const isLoading = reactionLoadingKey === `${commentId}:${type}`;
+        return (
+          <button
+            key={type}
+            onClick={() => onReact(type)}
+            disabled={isLoading}
+            title={label}
+            className="pressable flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold transition-all disabled:opacity-50"
+            style={{
+              background: isMine ? "rgba(234,88,12,0.18)" : "rgba(255,255,255,0.05)",
+              color: isMine ? ACCENT : "var(--text-muted)",
+              border: `1px solid ${isMine ? "rgba(234,88,12,0.35)" : "var(--border)"}`,
+            }}
+          >
+            <span>{emoji}</span>
+            {count > 0 && <span>{count}</span>}
+          </button>
+        );
+      })}
+
+      {/* 다른 유저가 추가한 커스텀 이모지 */}
+      {customKeys.map((key) => {
+        const emoji = key.slice("custom:".length);
+        const count = reactionSummary?.counts[key] ?? 0;
+        const isMine = reactionSummary?.mine.includes(key) ?? false;
+        const isLoading = reactionLoadingKey === `${commentId}:${key}`;
+        return (
+          <button
+            key={key}
+            onClick={() => onReact(key)}
+            disabled={isLoading}
+            title={emoji}
+            className="pressable flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold transition-all disabled:opacity-50"
+            style={{
+              background: isMine ? "rgba(234,88,12,0.18)" : "rgba(255,255,255,0.05)",
+              color: isMine ? ACCENT : "var(--text-muted)",
+              border: `1px solid ${isMine ? "rgba(234,88,12,0.35)" : "var(--border)"}`,
+            }}
+          >
+            <span>{emoji}</span>
+            {count > 0 && <span>{count}</span>}
+          </button>
+        );
+      })}
+
+      {/* 커스텀 이모지 추가 버튼 */}
+      <div className="relative" ref={pickerRef}>
+        <button
+          onClick={() => { setPickerOpen((v) => !v); setCustomInput(""); }}
+          title="이모지 추가"
+          className="pressable flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold"
+          style={{
+            background: pickerOpen ? "rgba(234,88,12,0.18)" : "rgba(255,255,255,0.05)",
+            color: pickerOpen ? ACCENT : "var(--text-muted)",
+            border: `1px solid ${pickerOpen ? "rgba(234,88,12,0.35)" : "var(--border)"}`,
+          }}
+        >
+          +
+        </button>
+
+        {pickerOpen && (
+          <div
+            className="absolute z-20 flex items-center gap-1.5 p-2 rounded-xl shadow-lg"
+            style={{
+              bottom: "calc(100% + 6px)",
+              left: 0,
+              background: "var(--bg-card)",
+              border: "1px solid var(--border)",
+              minWidth: "160px",
+            }}
+          >
+            <input
+              autoFocus
+              value={customInput}
+              onChange={(e) => setCustomInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") submitCustom(); if (e.key === "Escape") setPickerOpen(false); }}
+              placeholder="이모지 입력"
+              maxLength={8}
+              className="flex-1 min-w-0 text-sm outline-none"
+              style={{
+                background: "transparent",
+                color: "var(--text-primary)",
+                border: "none",
+                fontSize: "1.1rem",
+              }}
+            />
+            <button
+              onClick={submitCustom}
+              disabled={!customInput.trim()}
+              className="pressable px-2 py-0.5 rounded-lg text-xs font-bold disabled:opacity-40"
+              style={{ background: ACCENT, color: "#fff", flexShrink: 0 }}
+            >
+              추가
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
 // 댓글 카드
 // ─────────────────────────────────────────────────────────────
 interface CommentCardProps {
@@ -125,7 +276,7 @@ interface CommentCardProps {
   onReply?: () => void;
   replyCount?: number;
   reactionSummary?: ReactionSummary;
-  onReact?: (reaction: ReactionType) => void;
+  onReact?: (reaction: string) => void;
   reactionLoadingKey: string;
 }
 
@@ -232,30 +383,12 @@ function CommentCard({
 
       {/* 공감 버튼 */}
       {onReact && (
-        <div className="flex items-center gap-1.5 flex-wrap" style={{ paddingLeft: "2.25rem" }}>
-          {REACTIONS.map(({ type, emoji, label }) => {
-            const count = reactionSummary?.counts[type] ?? 0;
-            const isMine = reactionSummary?.mine.includes(type) ?? false;
-            const isLoading = reactionLoadingKey === `${comment.id}:${type}`;
-            return (
-              <button
-                key={type}
-                onClick={() => onReact(type)}
-                disabled={isLoading}
-                title={label}
-                className="pressable flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold transition-all disabled:opacity-50"
-                style={{
-                  background: isMine ? "rgba(234,88,12,0.18)" : "rgba(255,255,255,0.05)",
-                  color: isMine ? ACCENT : "var(--text-muted)",
-                  border: `1px solid ${isMine ? "rgba(234,88,12,0.35)" : "var(--border)"}`,
-                }}
-              >
-                <span>{emoji}</span>
-                {count > 0 && <span>{count}</span>}
-              </button>
-            );
-          })}
-        </div>
+        <ReactionBar
+          commentId={comment.id}
+          reactionSummary={reactionSummary}
+          reactionLoadingKey={reactionLoadingKey}
+          onReact={onReact}
+        />
       )}
     </div>
   );
@@ -318,10 +451,16 @@ export default function BlogComments({ postId }: { postId: string }) {
   }, []);
 
   const fetchComments = async () => {
-    const res = await fetch(`/api/blog/comments?post_id=${encodeURIComponent(postId)}`);
-    const data = await res.json();
-    setComments(Array.isArray(data) ? data : []);
-    setLoading(false);
+    try {
+      const res = await fetch(`/api/blog/comments?post_id=${encodeURIComponent(postId)}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error((data as { error?: string }).error ?? "댓글을 불러오지 못했습니다.");
+      setComments(Array.isArray(data) ? data : []);
+    } catch {
+      setComments([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const fetchReactions = async () => {
@@ -373,7 +512,7 @@ export default function BlogComments({ postId }: { postId: string }) {
   };
 
   // ─── 공감 토글 ───
-  const handleReaction = async (commentId: string, reaction: ReactionType) => {
+  const handleReaction = async (commentId: string, reaction: string) => {
     const key = `${commentId}:${reaction}`;
     if (reactionLoadingKey === key) return;
     setReactionLoadingKey(key);

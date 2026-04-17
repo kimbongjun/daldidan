@@ -371,7 +371,10 @@ create table if not exists public.blog_comment_reactions (
   comment_id  uuid not null references public.blog_comments(id) on delete cascade,
   user_id     uuid references auth.users(id) on delete cascade,
   browser_id  text,
-  reaction    text not null check (reaction in ('like', 'sad', 'best', 'check')),
+  reaction    text not null check (
+    reaction in ('like', 'sad', 'best', 'check', 'heart')
+    or reaction like 'custom:%'
+  ),
   created_at  timestamptz not null default now()
 );
 

@@ -46,7 +46,7 @@ export type Database = {
           comment_id: string;
           user_id: string | null;
           browser_id: string | null;
-          reaction: 'like' | 'sad' | 'best' | 'check';
+          reaction: string;
           created_at: string;
         };
         Insert: {
@@ -54,7 +54,7 @@ export type Database = {
           comment_id: string;
           user_id?: string | null;
           browser_id?: string | null;
-          reaction: 'like' | 'sad' | 'best' | 'check';
+          reaction: string;
           created_at?: string;
         };
         Update: Record<string, never>;
