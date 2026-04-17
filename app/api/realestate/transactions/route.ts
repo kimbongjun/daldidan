@@ -123,20 +123,95 @@ const MOCK_MARKET_INDEX: MarketIndex[] = [
 
 export const revalidate = 3600;
 
+// ── 국토교통부 실거래가 응답 타입 ─────────────────────────────────────────────
+interface MltxItem {
+  아파트?: string;
+  법정동?: string;
+  전용면적?: string;
+  층?: string;
+  거래금액?: string;
+  년?: string;
+  월?: string;
+  일?: string;
+  지번?: string;
+}
+
+function parseLawd(regionCode: string): string {
+  // 법정동 코드는 5자리 (시군구 코드)
+  return regionCode.slice(0, 5).padEnd(5, "0");
+}
+
+async function fetchRealTransactions(
+  apiKey: string,
+  regionCode: string,
+): Promise<TransactionItem[]> {
+  const now = new Date();
+  const ym = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const lawd = parseLawd(regionCode);
+  const encoded = encodeURIComponent(apiKey);
+
+  const url =
+    `https://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev` +
+    `?serviceKey=${encoded}&pageNo=1&numOfRows=20&LAWD_CD=${lawd}&DEAL_YMD=${ym}&_type=json`;
+
+  const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+  if (!res.ok) throw new Error(`국토부 API ${res.status}`);
+
+  const json = await res.json() as {
+    response: {
+      header: { resultCode: string };
+      body: { items: { item: MltxItem | MltxItem[] }; totalCount: number };
+    };
+  };
+
+  if (json.response.header.resultCode !== "00") throw new Error("국토부 API 오류");
+
+  const rawItems = json.response.body.items?.item ?? [];
+  const items: MltxItem[] = Array.isArray(rawItems) ? rawItems : [rawItems];
+
+  return items.slice(0, 10).map((item, i) => {
+    const priceStr = (item.거래금액 ?? "0").replace(/,/g, "").trim();
+    const price = parseInt(priceStr, 10) || 0;
+    const area = parseFloat(item.전용면적 ?? "0") || 0;
+    const floor = parseInt(item.층 ?? "0", 10) || 0;
+    const dateStr = `${item.년 ?? now.getFullYear()}-${String(item.월 ?? 1).padStart(2, "0")}-${String(item.일 ?? 1).padStart(2, "0")}`;
+    return {
+      id: `tx-live-${i}`,
+      complexName: item.아파트 ?? "아파트",
+      region: `${item.법정동 ?? ""}`,
+      area,
+      floor,
+      price,
+      prevPrice: null,
+      tradeDate: dateStr,
+      tradeType: "매매" as const,
+    };
+  });
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const region = searchParams.get("region") ?? "";
 
-  // TODO: 실제 국토교통부 API 연동 시 활성화
   const apiKey = process.env.REALESTATE_API_KEY?.trim();
   const regionCode = process.env.REALESTATE_REGION_CODE?.trim() ?? "11110";
-  // if (apiKey) { ... }
 
-  const transactions = region
-    ? MOCK_TRANSACTIONS.filter((t) =>
-        t.region.includes(region) || t.complexName.includes(region),
-      )
-    : MOCK_TRANSACTIONS;
+  let transactions: TransactionItem[] = MOCK_TRANSACTIONS;
+
+  if (apiKey) {
+    try {
+      transactions = await fetchRealTransactions(apiKey, regionCode);
+    } catch {
+      // 실 API 실패 시 Mock으로 폴백
+      transactions = MOCK_TRANSACTIONS;
+    }
+  }
+
+  if (region) {
+    transactions = transactions.filter(
+      (t) => t.region.includes(region) || t.complexName.includes(region),
+    );
+  }
 
   return NextResponse.json({
     transactions,

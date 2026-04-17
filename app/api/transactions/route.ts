@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 
 // GET /api/transactions?month=YYYY-MM&limit=N — 전체 거래 목록 (공유 가계부)
 export async function GET(request: NextRequest) {
@@ -32,9 +32,28 @@ export async function GET(request: NextRequest) {
   }
 
   const { data, error } = await query;
-
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(data ?? []);
+
+  // 등록자 이름 확정: display_name 없는 유저는 email 앞부분으로 폴백
+  const rows = data ?? [];
+  const uniqueUserIds = [...new Set(rows.map((r) => r.user_id))];
+  const adminClient = createAdminClient();
+  const emailMap: Record<string, string> = {};
+  await Promise.all(
+    uniqueUserIds.map(async (uid) => {
+      const { data: u } = await adminClient.auth.admin.getUserById(uid);
+      if (u?.user?.email) emailMap[uid] = u.user.email;
+    }),
+  );
+
+  const enriched = rows.map((r) => ({
+    ...r,
+    author_display:
+      (r.profiles as unknown as { display_name: string | null } | null)?.display_name ||
+      (emailMap[r.user_id] ? emailMap[r.user_id].split("@")[0] : "사용자"),
+  }));
+
+  return NextResponse.json(enriched);
 }
 
 // POST /api/transactions — 신규 거래 생성
@@ -84,5 +103,16 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(data, { status: 201 });
+
+  // 새로 등록한 거래의 등록자 이름 확정
+  const adminClient2 = createAdminClient();
+  const { data: newUser } = await adminClient2.auth.admin.getUserById(user.id);
+  const profileName = (data!.profiles as unknown as { display_name: string | null } | null)?.display_name;
+  const emailFallback = newUser?.user?.email ? newUser.user.email.split("@")[0] : "사용자";
+  const enrichedNew = {
+    ...data!,
+    author_display: profileName || emailFallback,
+  };
+
+  return NextResponse.json(enrichedNew, { status: 201 });
 }

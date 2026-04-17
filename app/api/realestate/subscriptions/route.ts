@@ -98,18 +98,83 @@ function getDday(dateStr: string): number {
 
 export const revalidate = 3600; // 1시간 캐시
 
-export async function GET() {
-  // TODO: 실제 공공데이터포털 API 연동 시 아래 코드 활성화
-  // const apiKey = process.env.REALESTATE_API_KEY?.trim();
-  // if (apiKey) {
-  //   const res = await fetch(
-  //     `https://apis.data.go.kr/1613000/AptSmallLoanInfoService/getSmallLoanInfo?serviceKey=${apiKey}&pageNo=1&numOfRows=20&resultType=json`,
-  //     { next: { revalidate: 3600 }, signal: AbortSignal.timeout(8000) }
-  //   );
-  //   if (res.ok) { const data = await res.json(); ... }
-  // }
+// 아파트 분양정보 API 응답 아이템
+interface AptItem {
+  HOUSE_NM?: string;       // 단지명
+  SUBSCRPT_AREA_CODE_NM?: string; // 공급지역명
+  HOUSE_SECD_NM?: string;  // 주택구분 (민영/공공)
+  TOT_SUPLY_HSHLDCO?: string; // 총 공급세대수
+  RCRIT_PBLANC_DE?: string;   // 청약 공고일 (YYYYMMDD)
+  SUBSCRPT_RCEPT_BGNDE?: string; // 청약 시작일
+  SUBSCRPT_RCEPT_ENDDE?: string; // 청약 종료일
+  PRZWNER_PRESNATN_DE?: string;  // 당첨자 발표일
+  HSSPLY_ADRES?: string;   // 공급위치 주소
+  PBLANC_NO?: string;      // 공고번호 (URL 구성용)
+}
 
-  const items = MOCK_SUBSCRIPTIONS.map((s) => ({
+function parseDateStr(s?: string): string {
+  if (!s || s.length < 8) return fmt(today);
+  return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
+}
+
+async function fetchRealSubscriptions(apiKey: string): Promise<SubscriptionItem[]> {
+  const encoded = encodeURIComponent(apiKey);
+  const url =
+    `https://apis.data.go.kr/1613000/AptSmplSearchService/getAptSmplSearchList` +
+    `?serviceKey=${encoded}&pageNo=1&numOfRows=20&_type=json`;
+
+  const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+  if (!res.ok) throw new Error(`청약 API ${res.status}`);
+
+  const json = await res.json() as {
+    response: {
+      header: { resultCode: string };
+      body: { items: { item: AptItem | AptItem[] }; totalCount: number };
+    };
+  };
+
+  if (json.response.header.resultCode !== "00") throw new Error("청약 API 오류");
+
+  const rawItems = json.response.body.items?.item ?? [];
+  const items: AptItem[] = Array.isArray(rawItems) ? rawItems : [rawItems];
+
+  return items.slice(0, 10).map((item, i) => {
+    const startDate = parseDateStr(item.SUBSCRPT_RCEPT_BGNDE);
+    const endDate = parseDateStr(item.SUBSCRPT_RCEPT_ENDDE);
+    const announceDate = parseDateStr(item.PRZWNER_PRESNATN_DE);
+    return {
+      id: `sub-live-${i}`,
+      name: item.HOUSE_NM ?? "아파트",
+      region: item.SUBSCRPT_AREA_CODE_NM ?? item.HSSPLY_ADRES?.slice(0, 10) ?? "",
+      type: item.HOUSE_SECD_NM?.includes("공공") ? "공공" : "민영",
+      totalUnits: parseInt(item.TOT_SUPLY_HSHLDCO ?? "0", 10) || 0,
+      startDate,
+      endDate,
+      announceDate,
+      minPrice: 0,
+      maxPrice: 0,
+      detailUrl: item.PBLANC_NO
+        ? `https://www.applyhome.co.kr/ai/aia/selectAPTLttotPblancDetail.do?houseManageNo=${item.PBLANC_NO}&pblancNo=${item.PBLANC_NO}`
+        : "https://www.applyhome.co.kr",
+    };
+  });
+}
+
+export async function GET() {
+  const apiKey = process.env.REALESTATE_API_KEY?.trim();
+
+  let subscriptions: SubscriptionItem[] = MOCK_SUBSCRIPTIONS;
+
+  if (apiKey) {
+    try {
+      subscriptions = await fetchRealSubscriptions(apiKey);
+    } catch {
+      // 실 API 실패 시 Mock으로 폴백
+      subscriptions = MOCK_SUBSCRIPTIONS;
+    }
+  }
+
+  const items = subscriptions.map((s) => ({
     ...s,
     dday: getDday(s.startDate),
   }));

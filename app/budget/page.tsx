@@ -71,13 +71,14 @@ interface TransactionApiResponse {
   note: string;
   date: string;
   profiles?: { display_name: string | null } | null;
+  author_display?: string; // 서버에서 확정된 등록자 표시명
 }
 
 function normalizeTransaction(t: TransactionApiResponse): Transaction {
   return {
     id: t.id,
     userId: t.user_id,
-    authorName: t.profiles?.display_name ?? t.merchant_name ?? "알 수 없음",
+    authorName: t.author_display ?? t.profiles?.display_name ?? "사용자",
     type: t.type,
     category: t.category,
     buyer: t.buyer ?? "공동",
