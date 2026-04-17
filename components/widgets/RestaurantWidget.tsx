@@ -175,9 +175,7 @@ export default function RestaurantWidget() {
     return () => controller.abort();
   }, [userCoords]);
 
-  const mapsSearchUrl = userCoords
-    ? `https://map.naver.com/p/search/%EB%A7%9B%EC%A7%91?c=${userCoords.lng},${userCoords.lat},15,0,0,0,dh`
-    : "https://map.naver.com/p/search/%EB%A7%9B%EC%A7%91";
+  const mapsSearchUrl = "https://www.google.com/maps/search/맛집";
 
   return (
     <div className="bento-card gradient-orange h-full flex flex-col p-5 gap-3">
@@ -278,18 +276,27 @@ function RestaurantCard({ restaurant }: { restaurant: NearbyRestaurant }) {
       style={{ width:  300, minWidth: 300, height: "100%" }}
     >
       {/* 배경: 실제 사진 or 그라디언트 + 이모지 */}
-      <div
-        className="absolute inset-0 flex items-center justify-center"
-        style={{ background: catStyle.gradient }}
-      >
-        <span
-          className="text-6xl select-none transition-transform duration-300 group-hover:scale-110"
-          role="img"
-          aria-label={restaurant.category}
+      {restaurant.photoRef ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={`/api/places/photo?name=${encodeURIComponent(restaurant.photoRef)}`}
+          alt={restaurant.name}
+          className="absolute inset-0 w-full h-full object-cover"
+        />
+      ) : (
+        <div
+          className="absolute inset-0 flex items-center justify-center"
+          style={{ background: catStyle.gradient }}
         >
-          {CATEGORY_EMOJI[restaurant.category]}
-        </span>
-      </div>
+          <span
+            className="text-6xl select-none transition-transform duration-300 group-hover:scale-110"
+            role="img"
+            aria-label={restaurant.category}
+          >
+            {CATEGORY_EMOJI[restaurant.category]}
+          </span>
+        </div>
+      )}
 
       {/* 하단 그라디언트 오버레이 */}
       <div

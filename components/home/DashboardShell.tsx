@@ -120,7 +120,7 @@ function BentoGrid({
       {/* 데스크톱 */}
       <div className="bento-desktop">
         <div style={{ gridArea: "blog",     minWidth: 0 }}>{blog}</div>
-        <div style={{ gridArea: "budget",   minWidth: 0 }}><ErrorBoundary><BudgetWidget /></ErrorBoundary></div>
+        <div style={{ gridArea: "budget",   minWidth: 0, minHeight: 460 }}><ErrorBoundary><BudgetWidget /></ErrorBoundary></div>
         <div style={{ gridArea: "festival",    minWidth: 0, height: 300 }}><FestivalWidget /></div>
         <div style={{ gridArea: "restaurant", minWidth: 0, height: 300 }}><RestaurantWidget /></div>
       </div>
@@ -128,7 +128,7 @@ function BentoGrid({
       {/* 태블릿 */}
       <div className="bento-tablet">
         <div style={{ minWidth: 0, height: 420 }}>{blog}</div>
-        <div style={{ minWidth: 0, height: 300 }}><ErrorBoundary><BudgetWidget /></ErrorBoundary></div>
+        <div style={{ minWidth: 0, height: 460 }}><ErrorBoundary><BudgetWidget /></ErrorBoundary></div>
         <div style={{ minWidth: 0, height: 300, gridColumn: "1 / -1" }}><FestivalWidget /></div>
         <div style={{ minWidth: 0, height: 300, gridColumn: "1 / -1" }}><RestaurantWidget /></div>
       </div>
@@ -136,7 +136,7 @@ function BentoGrid({
       {/* 모바일 */}
       <div className="bento-mobile">
         <div style={{ minWidth: 0, height: 360 }}>{blog}</div>
-        <div style={{ minWidth: 0, height: 300 }}><ErrorBoundary><BudgetWidget /></ErrorBoundary></div>
+        <div style={{ minWidth: 0, height: 460 }}><ErrorBoundary><BudgetWidget /></ErrorBoundary></div>
         <div style={{ minWidth: 0, height: 300 }}><FestivalWidget /></div>
         <div style={{ minWidth: 0, height: 300 }}><RestaurantWidget /></div>
       </div>

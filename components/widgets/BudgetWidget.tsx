@@ -13,6 +13,8 @@ interface Transaction {
   amount: number;
   note: string;
   date: string;
+  merchant_name?: string;
+  buyer?: string;
 }
 
 
@@ -157,12 +159,29 @@ export default function BudgetWidget() {
         <div className="flex flex-col gap-1.5">
           <p className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>최근 거래</p>
           {transactions.slice(0, 3).map((tx) => (
-            <div key={tx.id} className="flex items-center justify-between rounded-lg px-2.5 py-1.5" style={{ background: "rgba(255,255,255,0.04)" }}>
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="text-[10px] shrink-0" style={{ color: "var(--text-muted)" }}>{tx.date.slice(5)}</span>
-                <span className="text-xs font-semibold truncate" style={{ color: "var(--text-primary)" }}>{tx.category}</span>
+            <div key={tx.id} className="flex items-center justify-between gap-2 rounded-lg px-2.5 py-2" style={{ background: "rgba(255,255,255,0.04)" }}>
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                {/* 카테고리 뱃지 */}
+                <span
+                  className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full font-semibold"
+                  style={{
+                    background: tx.type === "expense" ? "rgba(244,63,94,0.18)" : "rgba(16,185,129,0.18)",
+                    color: tx.type === "expense" ? "#F43F5E" : "#10B981",
+                  }}
+                >
+                  {tx.category}
+                </span>
+                {/* 매장명 + 구매자 */}
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-semibold truncate" style={{ color: "var(--text-primary)" }}>
+                    {tx.merchant_name || tx.note || tx.category}
+                  </p>
+                  <p className="text-[10px] truncate" style={{ color: "var(--text-muted)" }}>
+                    {[tx.buyer, tx.date.slice(5)].filter(Boolean).join(" · ")}
+                  </p>
+                </div>
               </div>
-              <span className="text-xs font-black shrink-0 ml-1" style={{ color: tx.type === "expense" ? "#F43F5E" : "#10B981" }}>
+              <span className="text-xs font-black shrink-0" style={{ color: tx.type === "expense" ? "#F43F5E" : "#10B981" }}>
                 {tx.type === "expense" ? "−" : "+"}{tx.amount.toLocaleString()}
               </span>
             </div>
