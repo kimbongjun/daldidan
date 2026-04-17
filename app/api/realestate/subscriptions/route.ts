@@ -14,38 +14,35 @@ export interface SubscriptionItem {
   detailUrl: string;
 }
 
-/**
- * 청약 일정 API
- *
- * 실제 연동:
- *   - 청약홈 분양정보 API (https://www.applyhome.co.kr)
- *   - 한국토지주택공사 청약 API
- *   - 공공데이터포털: "아파트분양정보서비스" (serviceKey 필요)
- *     https://www.data.go.kr/data/15056785/openapi.do
- *
- * 환경 변수 설정 후 아래 주석 해제:
- *   REALESTATE_API_KEY=<공공데이터포털 API키>
- */
+// ── 유틸 ─────────────────────────────────────────────────────────────────────
 
 const today = new Date();
 const fmt = (d: Date) => d.toISOString().slice(0, 10);
 const addDays = (d: Date, n: number) => new Date(d.getTime() + n * 86400000);
 
-// 청약홈 검색 URL 생성 (단지명 + 지역으로 검색 페이지 직링크)
-function applyHomeSearchUrl(name: string, region: string): string {
-  const q = encodeURIComponent(`${name} ${region}`.trim());
-  return `https://www.applyhome.co.kr/ai/aia/selectAPTLttotPblancList.do?searchKeyword=${q}`;
+function getDday(dateStr: string): number {
+  const target = new Date(dateStr);
+  target.setHours(0, 0, 0, 0);
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  return Math.ceil((target.getTime() - now.getTime()) / 86400000);
 }
 
-// 청약홈 공고번호 기반 상세 URL
-function applyHomeDetailUrl(houseManageNo?: string, pblancNo?: string): string {
-  if (houseManageNo && pblancNo) {
-    return `https://www.applyhome.co.kr/ai/aia/selectAPTLttotPblancDetail.do?houseManageNo=${houseManageNo}&pblancNo=${pblancNo}`;
-  }
-  return "https://www.applyhome.co.kr/ai/aia/selectAPTLttotPblancList.do";
+function stripTags(html: string): string {
+  return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 }
 
-// ── Mock 데이터 (실제 API 연동 전 사용) ─────────────────────────────────────
+// ── Mock 데이터 ───────────────────────────────────────────────────────────────
+
+function applyHomeSearchUrl(name: string): string {
+  const q = encodeURIComponent(name.trim());
+  return `https://www.applyhome.co.kr/ai/aia/selectAPTLttotPblancListView.do?searchKeyword=${q}`;
+}
+
+function applyHomeDetailUrl(hmno: string, pbno: string): string {
+  return `https://www.applyhome.co.kr/ai/aia/selectAPTLttotPblancDetail.do?houseManageNo=${hmno}&pblancNo=${pbno}`;
+}
+
 const MOCK_SUBSCRIPTIONS: SubscriptionItem[] = [
   {
     id: "sub-001",
@@ -58,7 +55,7 @@ const MOCK_SUBSCRIPTIONS: SubscriptionItem[] = [
     announceDate: fmt(addDays(today, 14)),
     minPrice: 75000,
     maxPrice: 140000,
-    detailUrl: applyHomeSearchUrl("마포 더 클래스 그랑종로", "서울 마포구"),
+    detailUrl: applyHomeSearchUrl("마포 더 클래스 그랑종로"),
   },
   {
     id: "sub-002",
@@ -71,7 +68,7 @@ const MOCK_SUBSCRIPTIONS: SubscriptionItem[] = [
     announceDate: fmt(addDays(today, 21)),
     minPrice: 55000,
     maxPrice: 98000,
-    detailUrl: applyHomeSearchUrl("힐스테이트 광교중앙역", "경기 수원시"),
+    detailUrl: applyHomeSearchUrl("힐스테이트 광교중앙역"),
   },
   {
     id: "sub-003",
@@ -84,7 +81,7 @@ const MOCK_SUBSCRIPTIONS: SubscriptionItem[] = [
     announceDate: fmt(addDays(today, 28)),
     minPrice: 95000,
     maxPrice: 160000,
-    detailUrl: applyHomeSearchUrl("래미안 강동 팰리스", "서울 강동구"),
+    detailUrl: applyHomeSearchUrl("래미안 강동 팰리스"),
   },
   {
     id: "sub-004",
@@ -97,109 +94,121 @@ const MOCK_SUBSCRIPTIONS: SubscriptionItem[] = [
     announceDate: fmt(addDays(today, 35)),
     minPrice: 38000,
     maxPrice: 62000,
-    detailUrl: applyHomeSearchUrl("검단 한신더휴 퍼스트", "인천 서구"),
+    detailUrl: applyHomeSearchUrl("검단 한신더휴 퍼스트"),
   },
 ];
-// ────────────────────────────────────────────────────────────────────────────
 
-function getDday(dateStr: string): number {
-  const target = new Date(dateStr);
-  target.setHours(0, 0, 0, 0);
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  return Math.ceil((target.getTime() - now.getTime()) / 86400000);
-}
+// ── 청약홈 HTML 파싱 ──────────────────────────────────────────────────────────
+//
+// 청약홈(applyhome.co.kr)은 공개 API/RSS를 제공하지 않습니다.
+// /ai/aia/selectAPTLttotPblancListView.do 페이지 HTML을 파싱해 실제 공고 목록을 가져옵니다.
+//
+// 파싱 구조:
+//   <tbody> → <tr> 당 1개 공고
+//   td[0] 지역 | td[1] 주택구분 | td[3] 단지명 | td[6] 모집공고일
+//   td[7] 청약기간 (YYYY-MM-DD ~ YYYY-MM-DD) | td[8] 당첨자발표일
+//   data-hmno / data-pbno 속성 → 상세 URL 구성
 
-export const revalidate = 3600; // 1시간 캐시
+async function fetchSubscriptionsFromHtml(): Promise<SubscriptionItem[]> {
+  const url = "https://www.applyhome.co.kr/ai/aia/selectAPTLttotPblancListView.do";
+  const res = await fetch(url, {
+    headers: {
+      "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/124",
+      "Referer": "https://www.applyhome.co.kr/",
+      "Accept-Language": "ko-KR,ko;q=0.9",
+    },
+    signal: AbortSignal.timeout(10000),
+  });
 
-// 아파트 분양정보 API 응답 아이템 (APTLttotPblancInfo)
-interface AptItem {
-  HOUSE_NM?: string;            // 단지명
-  SUBSCRPT_AREA_CODE_NM?: string; // 공급지역명
-  HOUSE_SECD_NM?: string;       // 주택구분 (민영/공공)
-  TOT_SUPLY_HSHLDCO?: string;   // 총 공급세대수
-  RCRIT_PBLANC_DE?: string;     // 청약 공고일 (YYYYMMDD)
-  SUBSCRPT_RCEPT_BGNDE?: string; // 청약 시작일
-  SUBSCRPT_RCEPT_ENDDE?: string; // 청약 종료일
-  PRZWNER_PRESNATN_DE?: string; // 당첨자 발표일
-  HSSPLY_ADRES?: string;        // 공급위치 주소
-  HOUSE_MANAGE_NO?: string;     // 주택관리번호 (상세 URL)
-  PBLANC_NO?: string;           // 공고번호 (상세 URL)
-}
+  if (!res.ok) throw new Error(`청약홈 HTTP ${res.status}`);
+  const html = await res.text();
 
-function parseDateStr(s?: string): string {
-  if (!s || s.length < 8) return fmt(today);
-  return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
-}
+  // hmno / pbno 속성 배열 (순서가 tr 순서와 일치)
+  const hmnoMatches = [...html.matchAll(/data-hmno="([^"]+)"/g)].map((m) => m[1]);
+  const pbnoMatches = [...html.matchAll(/data-pbno="([^"]+)"/g)].map((m) => m[1]);
 
-async function fetchRealSubscriptions(apiKey: string): Promise<SubscriptionItem[]> {
-  const encoded = encodeURIComponent(apiKey);
-  // 공공데이터포털 APTLttotPblancInfo — 아파트 분양공고 목록
-  const url =
-    `https://apis.data.go.kr/1613000/APTLttotPblancInfo/getAPTLttotPblancList` +
-    `?serviceKey=${encoded}&pageNo=1&numOfRows=20&_type=json`;
+  // tbody 내 tr 파싱
+  const tbodyMatch = html.match(/<tbody[^>]*>([\s\S]*?)<\/tbody>/);
+  if (!tbodyMatch) throw new Error("tbody 없음");
 
-  const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
-  if (!res.ok) throw new Error(`청약 API HTTP ${res.status}`);
+  const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/g;
+  const items: SubscriptionItem[] = [];
+  let rowIndex = 0;
+  let match: RegExpExecArray | null;
 
-  const json = await res.json() as {
-    response: {
-      header: { resultCode: string; resultMsg?: string };
-      body: { items: { item: AptItem | AptItem[] } | "" ; totalCount: number };
-    };
-  };
+  while ((match = rowRegex.exec(tbodyMatch[1])) !== null) {
+    const row = match[1];
+    const tds = [...row.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map((m) =>
+      stripTags(m[1]).replace(/[☎]/g, "").trim(),
+    );
 
-  const code = json.response.header.resultCode;
-  if (code !== "00" && code !== "000") {
-    throw new Error(`청약 API 오류: ${code} ${json.response.header.resultMsg ?? ""}`);
-  }
+    if (tds.length < 8) { rowIndex++; continue; }
 
-  // items가 빈 문자열("")인 경우 처리 (공공데이터포털 결과 없을 때)
-  const bodyItems = json.response.body.items;
-  if (!bodyItems || typeof bodyItems !== "object") return [];
+    const region   = tds[0] ?? "";
+    const houseType = tds[1] ?? ""; // 국민/민영/공공
+    const name     = tds[3] ?? tds[2] ?? "";
+    const periodRaw = tds[7] ?? ""; // "YYYY-MM-DD ~ YYYY-MM-DD"
+    const announceDateRaw = tds[8] ?? "";
 
-  const rawItems = (bodyItems as { item: AptItem | AptItem[] }).item ?? [];
-  const items: AptItem[] = Array.isArray(rawItems) ? rawItems : [rawItems];
+    if (!name || name.length < 2) { rowIndex++; continue; }
 
-  return items.slice(0, 10).map((item, i) => {
-    const startDate = parseDateStr(item.SUBSCRPT_RCEPT_BGNDE);
-    const endDate = parseDateStr(item.SUBSCRPT_RCEPT_ENDDE);
-    const announceDate = parseDateStr(item.PRZWNER_PRESNATN_DE);
-    const name = item.HOUSE_NM ?? "아파트";
-    const region = item.SUBSCRPT_AREA_CODE_NM ?? item.HSSPLY_ADRES?.slice(0, 12) ?? "";
-    return {
-      id: `sub-live-${i}`,
+    // 청약기간 파싱
+    const periodDates = periodRaw.match(/(\d{4}-\d{2}-\d{2})/g) ?? [];
+    const startDate  = periodDates[0] ?? fmt(today);
+    const endDate    = periodDates[1] ?? startDate;
+
+    // 당첨자 발표일
+    const announceDates = announceDateRaw.match(/(\d{4}-\d{2}-\d{2})/g) ?? [];
+    const announceDate = announceDates[0] ?? "";
+
+    // 주택구분 → 민영/공공
+    const type = houseType.includes("국민") || houseType.includes("공공") ? "공공" : "민영";
+
+    // 상세 URL (hmno/pbno 인덱스가 row 인덱스와 동일)
+    const hmno = hmnoMatches[rowIndex] ?? "";
+    const pbno = pbnoMatches[rowIndex] ?? "";
+    const detailUrl = hmno && pbno
+      ? applyHomeDetailUrl(hmno, pbno)
+      : applyHomeSearchUrl(name);
+
+    items.push({
+      id: `sub-live-${rowIndex}`,
       name,
       region,
-      type: item.HOUSE_SECD_NM?.includes("공공") ? "공공" : "민영",
-      totalUnits: parseInt(item.TOT_SUPLY_HSHLDCO ?? "0", 10) || 0,
+      type,
+      totalUnits: 0,
       startDate,
       endDate,
       announceDate,
       minPrice: 0,
       maxPrice: 0,
-      detailUrl: applyHomeDetailUrl(item.HOUSE_MANAGE_NO, item.PBLANC_NO),
-    };
-  });
+      detailUrl,
+    });
+
+    rowIndex++;
+  }
+
+  if (items.length === 0) throw new Error("파싱 결과 없음");
+  return items;
 }
 
-export async function GET() {
-  const apiKey = process.env.REALESTATE_API_KEY?.trim();
+// ── Route Handler ─────────────────────────────────────────────────────────────
 
+export const revalidate = 3600; // 1시간 캐시
+
+export async function GET() {
   let subscriptions: SubscriptionItem[] = MOCK_SUBSCRIPTIONS;
   let isMock = true;
   let apiError: string | null = null;
 
-  if (apiKey) {
-    try {
-      const live = await fetchRealSubscriptions(apiKey);
-      if (live.length > 0) {
-        subscriptions = live;
-        isMock = false;
-      }
-    } catch (e) {
-      apiError = e instanceof Error ? e.message : "청약 API 오류";
+  try {
+    const live = await fetchSubscriptionsFromHtml();
+    if (live.length > 0) {
+      subscriptions = live;
+      isMock = false;
     }
+  } catch (e) {
+    apiError = e instanceof Error ? e.message : "청약 데이터 로드 실패";
   }
 
   const items = subscriptions.map((s) => ({
