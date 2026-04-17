@@ -124,7 +124,20 @@ const MOCK_MARKET_INDEX: MarketIndex[] = [
 export const revalidate = 3600;
 
 // ── 국토교통부 실거래가 응답 타입 ─────────────────────────────────────────────
+// 국토교통부 실거래가 API 실제 응답 필드 (camelCase)
 interface MltxItem {
+  aptNm?: string;          // 아파트명
+  aptDong?: string;        // 동
+  estateAgentSggNm?: string; // 시군구명 (실 필드)
+  umdNm?: string;          // 법정동명
+  excluUseAr?: number | string; // 전용면적
+  floor?: number | string;      // 층
+  dealAmount?: string;     // 거래금액 (콤마 포함)
+  dealYear?: number | string;
+  dealMonth?: number | string;
+  dealDay?: number | string;
+  sggCd?: number | string; // 시군구코드
+  // 구버전 XML 키 (폴백)
   아파트?: string;
   법정동?: string;
   전용면적?: string;
@@ -133,7 +146,6 @@ interface MltxItem {
   년?: string;
   월?: string;
   일?: string;
-  지번?: string;
 }
 
 function parseLawd(regionCode: string): string {
@@ -164,26 +176,31 @@ async function fetchRealTransactions(
     };
   };
 
-  if (json.response.header.resultCode !== "00") throw new Error("국토부 API 오류");
+  const code = json.response.header.resultCode;
+  if (code !== "00" && code !== "000") throw new Error(`국토부 API 오류: ${code}`);
 
   const rawItems = json.response.body.items?.item ?? [];
   const items: MltxItem[] = Array.isArray(rawItems) ? rawItems : [rawItems];
 
   return items.slice(0, 10).map((item, i) => {
-    const priceStr = (item.거래금액 ?? "0").replace(/,/g, "").trim();
-    const price = parseInt(priceStr, 10) || 0;
-    const area = parseFloat(item.전용면적 ?? "0") || 0;
-    const floor = parseInt(item.층 ?? "0", 10) || 0;
-    const dateStr = `${item.년 ?? now.getFullYear()}-${String(item.월 ?? 1).padStart(2, "0")}-${String(item.일 ?? 1).padStart(2, "0")}`;
+    // camelCase 우선, XML 구버전 폴백
+    const rawPrice = item.dealAmount ?? item.거래금액 ?? "0";
+    const price = parseInt(String(rawPrice).replace(/,/g, "").trim(), 10) || 0;
+    const area = parseFloat(String(item.excluUseAr ?? item.전용면적 ?? "0")) || 0;
+    const floor = parseInt(String(item.floor ?? item.층 ?? "0"), 10) || 0;
+    const yr = String(item.dealYear ?? item.년 ?? now.getFullYear());
+    const mo = String(item.dealMonth ?? item.월 ?? 1).padStart(2, "0");
+    const dy = String(item.dealDay ?? item.일 ?? 1).padStart(2, "0");
+    const region = item.estateAgentSggNm ?? item.umdNm ?? item.법정동 ?? "";
     return {
       id: `tx-live-${i}`,
-      complexName: item.아파트 ?? "아파트",
-      region: `${item.법정동 ?? ""}`,
+      complexName: item.aptNm ?? item.아파트 ?? "아파트",
+      region,
       area,
       floor,
       price,
       prevPrice: null,
-      tradeDate: dateStr,
+      tradeDate: `${yr}-${mo}-${dy}`,
       tradeType: "매매" as const,
     };
   });

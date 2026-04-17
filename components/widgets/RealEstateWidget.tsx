@@ -71,12 +71,13 @@ function SkeletonRow() {
 
 function SubscriptionTab() {
   const [items, setItems] = useState<(SubscriptionItem & { dday: number })[]>([]);
+  const [isMock, setIsMock] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetch("/api/realestate/subscriptions")
-      .then((r) => r.json() as Promise<{ subscriptions: (SubscriptionItem & { dday: number })[] }>)
-      .then((d) => setItems(d.subscriptions))
+      .then((r) => r.json() as Promise<{ subscriptions: (SubscriptionItem & { dday: number })[]; isMock?: boolean }>)
+      .then((d) => { setItems(d.subscriptions); setIsMock(d.isMock ?? false); })
       .catch(() => null)
       .finally(() => setLoading(false));
   }, []);
@@ -84,45 +85,63 @@ function SubscriptionTab() {
   if (loading) return <div className="flex flex-col gap-2">{[1, 2, 3].map((i) => <SkeletonRow key={i} />)}</div>;
 
   return (
-    <div className="flex flex-col gap-2 overflow-y-auto scrollbar-hide" style={{ maxHeight: 220 }}>
-      {items.map((item) => {
-        const { label, urgent } = getDdayLabel(item.startDate);
-        return (
-          <a key={item.id} href={item.detailUrl} target="_blank" rel="noopener noreferrer"
-            className="flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors hover:opacity-80"
-            style={{ background: "rgba(255,255,255,0.04)", border: "1px solid transparent" }}>
-            {/* D-day 배지 */}
-            <div className="w-11 h-11 rounded-xl flex flex-col items-center justify-center shrink-0 text-center"
-              style={{ background: urgent ? `${ACCENT}22` : "rgba(255,255,255,0.06)" }}>
-              <span className="text-[9px] font-semibold uppercase" style={{ color: urgent ? ACCENT : "var(--text-muted)" }}>청약</span>
-              <span className="text-xs font-black leading-none" style={{ color: urgent ? ACCENT : "var(--text-muted)" }}>{label}</span>
-            </div>
-            {/* 단지 정보 */}
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-bold truncate" style={{ color: "var(--text-primary)" }}>{item.name}</p>
-              <p className="text-[11px] truncate mt-0.5" style={{ color: "var(--text-muted)" }}>
-                {item.region} · {item.totalUnits.toLocaleString()}세대
-              </p>
-              <p className="text-[10px] mt-0.5" style={{ color: "var(--text-muted)" }}>
-                {item.startDate.slice(5)} ~ {item.endDate.slice(5)}
-              </p>
-            </div>
-            {/* 분양가 */}
-            <div className="text-right shrink-0">
-              <p className="text-xs font-bold" style={{ color: "var(--text-primary)" }}>
-                {priceFmt(item.minPrice)}~
-              </p>
-              <span className="text-[10px] px-1.5 py-0.5 rounded-md"
-                style={{
-                  background: item.type === "공공" ? "rgba(16,185,129,0.15)" : `${ACCENT}15`,
-                  color: item.type === "공공" ? "#10B981" : ACCENT,
-                }}>
-                {item.type}
-              </span>
-            </div>
+    <div className="flex flex-col gap-2">
+      {/* 샘플 데이터 안내 */}
+      {isMock && (
+        <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg"
+          style={{ background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.2)" }}>
+          <span className="text-[10px]" style={{ color: "#F59E0B" }}>
+            샘플 데이터 · 실제 청약 일정은
+          </span>
+          <a href="https://www.applyhome.co.kr" target="_blank" rel="noopener noreferrer"
+            className="text-[10px] font-semibold underline" style={{ color: "#F59E0B" }}>
+            청약홈
           </a>
-        );
-      })}
+          <span className="text-[10px]" style={{ color: "#F59E0B" }}>에서 확인</span>
+        </div>
+      )}
+      <div className="flex flex-col gap-2 overflow-y-auto scrollbar-hide" style={{ maxHeight: isMock ? 196 : 220 }}>
+        {items.map((item) => {
+          const { label, urgent } = getDdayLabel(item.startDate);
+          return (
+            <a key={item.id} href={item.detailUrl} target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors hover:opacity-80"
+              style={{ background: "rgba(255,255,255,0.04)", border: "1px solid transparent" }}>
+              {/* D-day 배지 */}
+              <div className="w-11 h-11 rounded-xl flex flex-col items-center justify-center shrink-0 text-center"
+                style={{ background: urgent ? `${ACCENT}22` : "rgba(255,255,255,0.06)" }}>
+                <span className="text-[9px] font-semibold uppercase" style={{ color: urgent ? ACCENT : "var(--text-muted)" }}>청약</span>
+                <span className="text-xs font-black leading-none" style={{ color: urgent ? ACCENT : "var(--text-muted)" }}>{label}</span>
+              </div>
+              {/* 단지 정보 */}
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold truncate" style={{ color: "var(--text-primary)" }}>{item.name}</p>
+                <p className="text-[11px] truncate mt-0.5" style={{ color: "var(--text-muted)" }}>
+                  {item.region} · {item.totalUnits > 0 ? `${item.totalUnits.toLocaleString()}세대` : "세대수 미정"}
+                </p>
+                <p className="text-[10px] mt-0.5" style={{ color: "var(--text-muted)" }}>
+                  {item.startDate.slice(5)} ~ {item.endDate.slice(5)}
+                </p>
+              </div>
+              {/* 분양가 + 타입 */}
+              <div className="text-right shrink-0">
+                {item.minPrice > 0 && (
+                  <p className="text-xs font-bold" style={{ color: "var(--text-primary)" }}>
+                    {priceFmt(item.minPrice)}~
+                  </p>
+                )}
+                <span className="text-[10px] px-1.5 py-0.5 rounded-md"
+                  style={{
+                    background: item.type === "공공" ? "rgba(16,185,129,0.15)" : `${ACCENT}15`,
+                    color: item.type === "공공" ? "#10B981" : ACCENT,
+                  }}>
+                  {item.type}
+                </span>
+              </div>
+            </a>
+          );
+        })}
+      </div>
     </div>
   );
 }

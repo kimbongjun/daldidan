@@ -31,6 +31,20 @@ const today = new Date();
 const fmt = (d: Date) => d.toISOString().slice(0, 10);
 const addDays = (d: Date, n: number) => new Date(d.getTime() + n * 86400000);
 
+// 청약홈 검색 URL 생성 (단지명 + 지역으로 검색 페이지 직링크)
+function applyHomeSearchUrl(name: string, region: string): string {
+  const q = encodeURIComponent(`${name} ${region}`.trim());
+  return `https://www.applyhome.co.kr/ai/aia/selectAPTLttotPblancList.do?searchKeyword=${q}`;
+}
+
+// 청약홈 공고번호 기반 상세 URL
+function applyHomeDetailUrl(houseManageNo?: string, pblancNo?: string): string {
+  if (houseManageNo && pblancNo) {
+    return `https://www.applyhome.co.kr/ai/aia/selectAPTLttotPblancDetail.do?houseManageNo=${houseManageNo}&pblancNo=${pblancNo}`;
+  }
+  return "https://www.applyhome.co.kr/ai/aia/selectAPTLttotPblancList.do";
+}
+
 // ── Mock 데이터 (실제 API 연동 전 사용) ─────────────────────────────────────
 const MOCK_SUBSCRIPTIONS: SubscriptionItem[] = [
   {
@@ -44,7 +58,7 @@ const MOCK_SUBSCRIPTIONS: SubscriptionItem[] = [
     announceDate: fmt(addDays(today, 14)),
     minPrice: 75000,
     maxPrice: 140000,
-    detailUrl: "https://www.applyhome.co.kr",
+    detailUrl: applyHomeSearchUrl("마포 더 클래스 그랑종로", "서울 마포구"),
   },
   {
     id: "sub-002",
@@ -57,7 +71,7 @@ const MOCK_SUBSCRIPTIONS: SubscriptionItem[] = [
     announceDate: fmt(addDays(today, 21)),
     minPrice: 55000,
     maxPrice: 98000,
-    detailUrl: "https://www.applyhome.co.kr",
+    detailUrl: applyHomeSearchUrl("힐스테이트 광교중앙역", "경기 수원시"),
   },
   {
     id: "sub-003",
@@ -70,7 +84,7 @@ const MOCK_SUBSCRIPTIONS: SubscriptionItem[] = [
     announceDate: fmt(addDays(today, 28)),
     minPrice: 95000,
     maxPrice: 160000,
-    detailUrl: "https://www.applyhome.co.kr",
+    detailUrl: applyHomeSearchUrl("래미안 강동 팰리스", "서울 강동구"),
   },
   {
     id: "sub-004",
@@ -83,7 +97,7 @@ const MOCK_SUBSCRIPTIONS: SubscriptionItem[] = [
     announceDate: fmt(addDays(today, 35)),
     minPrice: 38000,
     maxPrice: 62000,
-    detailUrl: "https://www.applyhome.co.kr",
+    detailUrl: applyHomeSearchUrl("검단 한신더휴 퍼스트", "인천 서구"),
   },
 ];
 // ────────────────────────────────────────────────────────────────────────────
@@ -98,18 +112,19 @@ function getDday(dateStr: string): number {
 
 export const revalidate = 3600; // 1시간 캐시
 
-// 아파트 분양정보 API 응답 아이템
+// 아파트 분양정보 API 응답 아이템 (APTLttotPblancInfo)
 interface AptItem {
-  HOUSE_NM?: string;       // 단지명
+  HOUSE_NM?: string;            // 단지명
   SUBSCRPT_AREA_CODE_NM?: string; // 공급지역명
-  HOUSE_SECD_NM?: string;  // 주택구분 (민영/공공)
-  TOT_SUPLY_HSHLDCO?: string; // 총 공급세대수
-  RCRIT_PBLANC_DE?: string;   // 청약 공고일 (YYYYMMDD)
+  HOUSE_SECD_NM?: string;       // 주택구분 (민영/공공)
+  TOT_SUPLY_HSHLDCO?: string;   // 총 공급세대수
+  RCRIT_PBLANC_DE?: string;     // 청약 공고일 (YYYYMMDD)
   SUBSCRPT_RCEPT_BGNDE?: string; // 청약 시작일
   SUBSCRPT_RCEPT_ENDDE?: string; // 청약 종료일
-  PRZWNER_PRESNATN_DE?: string;  // 당첨자 발표일
-  HSSPLY_ADRES?: string;   // 공급위치 주소
-  PBLANC_NO?: string;      // 공고번호 (URL 구성용)
+  PRZWNER_PRESNATN_DE?: string; // 당첨자 발표일
+  HSSPLY_ADRES?: string;        // 공급위치 주소
+  HOUSE_MANAGE_NO?: string;     // 주택관리번호 (상세 URL)
+  PBLANC_NO?: string;           // 공고번호 (상세 URL)
 }
 
 function parseDateStr(s?: string): string {
@@ -119,33 +134,43 @@ function parseDateStr(s?: string): string {
 
 async function fetchRealSubscriptions(apiKey: string): Promise<SubscriptionItem[]> {
   const encoded = encodeURIComponent(apiKey);
+  // 공공데이터포털 APTLttotPblancInfo — 아파트 분양공고 목록
   const url =
-    `https://apis.data.go.kr/1613000/AptSmplSearchService/getAptSmplSearchList` +
+    `https://apis.data.go.kr/1613000/APTLttotPblancInfo/getAPTLttotPblancList` +
     `?serviceKey=${encoded}&pageNo=1&numOfRows=20&_type=json`;
 
   const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
-  if (!res.ok) throw new Error(`청약 API ${res.status}`);
+  if (!res.ok) throw new Error(`청약 API HTTP ${res.status}`);
 
   const json = await res.json() as {
     response: {
-      header: { resultCode: string };
-      body: { items: { item: AptItem | AptItem[] }; totalCount: number };
+      header: { resultCode: string; resultMsg?: string };
+      body: { items: { item: AptItem | AptItem[] } | "" ; totalCount: number };
     };
   };
 
-  if (json.response.header.resultCode !== "00") throw new Error("청약 API 오류");
+  const code = json.response.header.resultCode;
+  if (code !== "00" && code !== "000") {
+    throw new Error(`청약 API 오류: ${code} ${json.response.header.resultMsg ?? ""}`);
+  }
 
-  const rawItems = json.response.body.items?.item ?? [];
+  // items가 빈 문자열("")인 경우 처리 (공공데이터포털 결과 없을 때)
+  const bodyItems = json.response.body.items;
+  if (!bodyItems || typeof bodyItems !== "object") return [];
+
+  const rawItems = (bodyItems as { item: AptItem | AptItem[] }).item ?? [];
   const items: AptItem[] = Array.isArray(rawItems) ? rawItems : [rawItems];
 
   return items.slice(0, 10).map((item, i) => {
     const startDate = parseDateStr(item.SUBSCRPT_RCEPT_BGNDE);
     const endDate = parseDateStr(item.SUBSCRPT_RCEPT_ENDDE);
     const announceDate = parseDateStr(item.PRZWNER_PRESNATN_DE);
+    const name = item.HOUSE_NM ?? "아파트";
+    const region = item.SUBSCRPT_AREA_CODE_NM ?? item.HSSPLY_ADRES?.slice(0, 12) ?? "";
     return {
       id: `sub-live-${i}`,
-      name: item.HOUSE_NM ?? "아파트",
-      region: item.SUBSCRPT_AREA_CODE_NM ?? item.HSSPLY_ADRES?.slice(0, 10) ?? "",
+      name,
+      region,
       type: item.HOUSE_SECD_NM?.includes("공공") ? "공공" : "민영",
       totalUnits: parseInt(item.TOT_SUPLY_HSHLDCO ?? "0", 10) || 0,
       startDate,
@@ -153,9 +178,7 @@ async function fetchRealSubscriptions(apiKey: string): Promise<SubscriptionItem[
       announceDate,
       minPrice: 0,
       maxPrice: 0,
-      detailUrl: item.PBLANC_NO
-        ? `https://www.applyhome.co.kr/ai/aia/selectAPTLttotPblancDetail.do?houseManageNo=${item.PBLANC_NO}&pblancNo=${item.PBLANC_NO}`
-        : "https://www.applyhome.co.kr",
+      detailUrl: applyHomeDetailUrl(item.HOUSE_MANAGE_NO, item.PBLANC_NO),
     };
   });
 }
@@ -164,13 +187,18 @@ export async function GET() {
   const apiKey = process.env.REALESTATE_API_KEY?.trim();
 
   let subscriptions: SubscriptionItem[] = MOCK_SUBSCRIPTIONS;
+  let isMock = true;
+  let apiError: string | null = null;
 
   if (apiKey) {
     try {
-      subscriptions = await fetchRealSubscriptions(apiKey);
-    } catch {
-      // 실 API 실패 시 Mock으로 폴백
-      subscriptions = MOCK_SUBSCRIPTIONS;
+      const live = await fetchRealSubscriptions(apiKey);
+      if (live.length > 0) {
+        subscriptions = live;
+        isMock = false;
+      }
+    } catch (e) {
+      apiError = e instanceof Error ? e.message : "청약 API 오류";
     }
   }
 
@@ -179,5 +207,9 @@ export async function GET() {
     dday: getDday(s.startDate),
   }));
 
-  return NextResponse.json({ subscriptions: items });
+  return NextResponse.json({
+    subscriptions: items,
+    isMock,
+    ...(apiError ? { apiError } : {}),
+  });
 }
