@@ -1,6 +1,36 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 
+// profiles 테이블에서 user_id 목록의 닉네임을 한 번에 조회
+async function buildNicknameMap(userIds: string[]): Promise<Record<string, string>> {
+  if (userIds.length === 0) return {};
+  const admin = createAdminClient();
+
+  // profiles 테이블 배치 조회 (display_name)
+  const { data: profileRows } = await admin
+    .from("profiles")
+    .select("id, display_name")
+    .in("id", userIds);
+
+  const map: Record<string, string> = {};
+  for (const row of profileRows ?? []) {
+    if (row.display_name) {
+      map[row.id] = row.display_name;
+    }
+  }
+
+  // display_name 없는 유저는 이메일 앞부분으로 폴백
+  const missing = userIds.filter((id) => !map[id]);
+  await Promise.all(
+    missing.map(async (uid) => {
+      const { data } = await admin.auth.admin.getUserById(uid);
+      if (data?.user?.email) map[uid] = data.user.email.split("@")[0];
+    }),
+  );
+
+  return map;
+}
+
 // GET /api/transactions?month=YYYY-MM&limit=N — 전체 거래 목록 (공유 가계부)
 export async function GET(request: NextRequest) {
   const supabase = await createClient();
@@ -13,14 +43,13 @@ export async function GET(request: NextRequest) {
 
   let query = supabase
     .from("transactions")
-    .select("id, user_id, type, category, buyer, merchant_name, location, receipt_image_url, amount, note, date, profiles(display_name)")
+    .select("id, user_id, type, category, buyer, merchant_name, location, receipt_image_url, amount, note, date")
     .order("date", { ascending: false })
     .order("created_at", { ascending: false });
 
   if (month && /^\d{4}-\d{2}$/.test(month)) {
     const [y, m] = month.split("-").map(Number);
     const startDate = `${month}-01`;
-    // 해당 월의 마지막 날 계산
     const lastDay = new Date(y, m, 0).getDate();
     const endDate = `${month}-${String(lastDay).padStart(2, "0")}`;
     query = query.gte("date", startDate).lte("date", endDate);
@@ -34,23 +63,13 @@ export async function GET(request: NextRequest) {
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // 등록자 이름 확정: display_name 없는 유저는 email 앞부분으로 폴백
   const rows = data ?? [];
   const uniqueUserIds = [...new Set(rows.map((r) => r.user_id))];
-  const adminClient = createAdminClient();
-  const emailMap: Record<string, string> = {};
-  await Promise.all(
-    uniqueUserIds.map(async (uid) => {
-      const { data: u } = await adminClient.auth.admin.getUserById(uid);
-      if (u?.user?.email) emailMap[uid] = u.user.email;
-    }),
-  );
+  const nicknameMap = await buildNicknameMap(uniqueUserIds);
 
   const enriched = rows.map((r) => ({
     ...r,
-    author_display:
-      (r.profiles as unknown as { display_name: string | null } | null)?.display_name ||
-      (emailMap[r.user_id] ? emailMap[r.user_id].split("@")[0] : "사용자"),
+    author_display: nicknameMap[r.user_id] ?? "사용자",
   }));
 
   return NextResponse.json(enriched);
@@ -74,7 +93,6 @@ export async function POST(request: NextRequest) {
     date?: string;
   };
 
-  // 입력값 검증
   if (!body.amount || body.amount <= 0) {
     return NextResponse.json({ error: "금액은 0보다 커야 합니다." }, { status: 400 });
   }
@@ -99,20 +117,15 @@ export async function POST(request: NextRequest) {
       note: body.note ?? "",
       date: body.date ?? new Date().toISOString().slice(0, 10),
     })
-    .select("id, user_id, type, category, buyer, merchant_name, location, receipt_image_url, amount, note, date, profiles(display_name)")
+    .select("id, user_id, type, category, buyer, merchant_name, location, receipt_image_url, amount, note, date")
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // 새로 등록한 거래의 등록자 이름 확정
-  const adminClient2 = createAdminClient();
-  const { data: newUser } = await adminClient2.auth.admin.getUserById(user.id);
-  const profileName = (data!.profiles as unknown as { display_name: string | null } | null)?.display_name;
-  const emailFallback = newUser?.user?.email ? newUser.user.email.split("@")[0] : "사용자";
-  const enrichedNew = {
-    ...data!,
-    author_display: profileName || emailFallback,
-  };
+  const nicknameMap = await buildNicknameMap([user.id]);
 
-  return NextResponse.json(enrichedNew, { status: 201 });
+  return NextResponse.json(
+    { ...data!, author_display: nicknameMap[user.id] ?? "사용자" },
+    { status: 201 },
+  );
 }
