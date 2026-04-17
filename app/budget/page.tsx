@@ -6,8 +6,8 @@ import { sendNativeNotification } from "@/lib/notifications";
 import { analyzeReceiptImage } from "@/lib/receipt-ocr";
 import {
   ArrowLeft, ArrowRight, CheckCircle2, ChevronDown, ChevronUp,
-  ImagePlus, LoaderCircle, Pencil, ReceiptText, Trash2, TrendingDown,
-  TrendingUp, Users, Wallet, X, XCircle,
+  ImagePlus, LoaderCircle, MapPin, Pencil, ReceiptText, Store, Trash2, TrendingDown,
+  TrendingUp, User, Users, Wallet, X, XCircle,
 } from "lucide-react";
 import OcrScanModal from "@/components/OcrScanModal";
 import { preprocessReceiptImage } from "@/lib/image-preprocess";
@@ -77,7 +77,7 @@ function normalizeTransaction(t: TransactionApiResponse): Transaction {
   return {
     id: t.id,
     userId: t.user_id,
-    authorName: t.profiles?.display_name ?? "알 수 없음",
+    authorName: t.profiles?.display_name ?? t.merchant_name ?? "알 수 없음",
     type: t.type,
     category: t.category,
     buyer: t.buyer ?? "공동",
@@ -180,6 +180,8 @@ export default function BudgetPage() {
 
   // 영수증 이미지 뷰어
   const [viewingReceiptTx, setViewingReceiptTx] = useState<Transaction | null>(null);
+  // 내역 상세 뷰어
+  const [viewingDetailTx, setViewingDetailTx] = useState<Transaction | null>(null);
 
   useEffect(() => { void loadCurrentUser(); }, [loadCurrentUser]);
   useEffect(() => { void loadSettings(); }, [loadSettings]);
@@ -381,6 +383,16 @@ export default function BudgetPage() {
         />
       )}
 
+      {viewingDetailTx && (
+        <TransactionDetailModal
+          tx={viewingDetailTx}
+          isOwner={currentUserId === viewingDetailTx.userId}
+          onClose={() => setViewingDetailTx(null)}
+          onEdit={() => { setViewingDetailTx(null); startEdit(viewingDetailTx); }}
+          onViewReceipt={viewingDetailTx.receiptImageUrl ? () => { setViewingDetailTx(null); setViewingReceiptTx(viewingDetailTx); } : undefined}
+        />
+      )}
+
       <div className="max-w-[1100px] mx-auto px-4 sm:px-6 pb-16">
         <PageHeader title="가계부" subtitle="내역 입력 및 소비 분석" accentColor={ACCENT} />
 
@@ -474,8 +486,8 @@ export default function BudgetPage() {
               </div>
 
               {/* 금액 + 날짜 */}
-              <div className="flex flex-col gap-3">
-                <div className="flex flex-col gap-1.5">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5 min-w-0">
                   <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>금액 (원)</label>
                   <input
                     type="number"
@@ -485,11 +497,11 @@ export default function BudgetPage() {
                     style={inputStyle}
                   />
                 </div>
-                <div className="flex flex-col gap-1.5">
+                <div className="flex flex-col gap-1.5 min-w-0 overflow-hidden">
                   <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>날짜</label>
                   <input type="date" value={form.date}
                     onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
-                    style={inputStyle} />
+                    style={{ ...inputStyle, minWidth: 0 }} />
                 </div>
               </div>
 
@@ -563,6 +575,7 @@ export default function BudgetPage() {
                     onEdit={() => startEdit(tx)}
                     onDelete={() => handleDelete(tx.id)}
                     onViewReceipt={tx.receiptImageUrl ? () => setViewingReceiptTx(tx) : undefined}
+                    onView={() => setViewingDetailTx(tx)}
                   />
                 ))
               )}
@@ -752,7 +765,7 @@ function OcrUploader({
 
 // ── 거래 행 ────────────────────────────────────────────────────
 function TransactionRow({
-  tx, isEditing, isOwner, onEdit, onDelete, onViewReceipt,
+  tx, isEditing, isOwner, onEdit, onDelete, onViewReceipt, onView,
 }: {
   tx: Transaction;
   isEditing: boolean;
@@ -760,6 +773,7 @@ function TransactionRow({
   onEdit?: () => void;
   onDelete?: () => void;
   onViewReceipt?: () => void;
+  onView?: () => void;
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -782,9 +796,9 @@ function TransactionRow({
       }}
     >
       <div
-        className={`flex items-center gap-2.5 flex-1 min-w-0 text-left ${isOwner ? "cursor-pointer" : ""}`}
-        onClick={isOwner && onEdit ? onEdit : undefined}
-        role={isOwner && onEdit ? "button" : undefined}
+        className={`flex items-center gap-2.5 flex-1 min-w-0 text-left ${onView ? "cursor-pointer" : ""}`}
+        onClick={onView}
+        role={onView ? "button" : undefined}
       >
         <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-xs font-bold"
           style={{
@@ -1400,6 +1414,157 @@ function ReceiptViewerModal({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// ── 내역 상세 뷰어 모달 ─────────────────────────────────────────
+function TransactionDetailModal({
+  tx,
+  isOwner,
+  onClose,
+  onEdit,
+  onViewReceipt,
+}: {
+  tx: Transaction;
+  isOwner: boolean;
+  onClose: () => void;
+  onEdit?: () => void;
+  onViewReceipt?: () => void;
+}) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  const catColor = CATEGORY_COLORS[tx.category] ?? "#8B8BA7";
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      style={{ background: "rgba(0,0,0,0.82)", backdropFilter: "blur(8px)" }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        className="relative flex flex-col rounded-2xl overflow-hidden"
+        style={{
+          width: "min(420px, 94vw)",
+          background: "var(--bg-card)",
+          border: "1px solid var(--border)",
+          boxShadow: "0 24px 80px rgba(0,0,0,0.7)",
+        }}
+      >
+        {/* 헤더 */}
+        <div
+          className="flex items-center justify-between px-4 py-3 shrink-0"
+          style={{ borderBottom: "1px solid var(--border)" }}
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div
+              className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 text-sm font-bold"
+              style={{ background: `${catColor}22`, color: catColor }}
+            >
+              {tx.category.slice(0, 1)}
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-bold truncate" style={{ color: "var(--text-primary)" }}>
+                {tx.note || tx.merchantName || tx.category}
+              </p>
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>{tx.category}</p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="닫기"
+            className="p-1.5 rounded-lg hover:opacity-70 transition-opacity shrink-0 ml-3"
+            style={{ background: "rgba(255,255,255,0.06)", border: "1px solid var(--border)" }}
+          >
+            <X size={14} style={{ color: "var(--text-muted)" }} />
+          </button>
+        </div>
+
+        {/* 금액 */}
+        <div
+          className="px-4 py-4 flex items-center justify-between"
+          style={{ borderBottom: "1px solid var(--border)" }}
+        >
+          <span className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>
+            {tx.type === "income" ? "수입" : "지출"} 금액
+          </span>
+          <span
+            className="text-xl font-black"
+            style={{ color: tx.type === "income" ? "#10B981" : "#F43F5E" }}
+          >
+            {tx.type === "income" ? "+" : "-"}{tx.amount.toLocaleString()}원
+          </span>
+        </div>
+
+        {/* 상세 정보 */}
+        <div className="px-4 py-3 flex flex-col gap-3">
+          <DetailRow icon={<User size={13} />} label="구매자" value={tx.buyer} />
+          <DetailRow icon={<User size={13} />} label="등록자" value={tx.authorName} />
+          {tx.merchantName && (
+            <DetailRow icon={<Store size={13} />} label="매장명" value={tx.merchantName} />
+          )}
+          {tx.location && (
+            <DetailRow icon={<MapPin size={13} />} label="위치" value={tx.location} />
+          )}
+          <DetailRow icon={<span className="text-[11px]">📅</span>} label="날짜" value={tx.date} />
+          {tx.note && (
+            <DetailRow icon={<span className="text-[11px]">📝</span>} label="메모" value={tx.note} />
+          )}
+        </div>
+
+        {/* 액션 버튼 */}
+        {(isOwner || onViewReceipt) && (
+          <div
+            className="px-4 py-3 flex gap-2"
+            style={{ borderTop: "1px solid var(--border)" }}
+          >
+            {onViewReceipt && (
+              <button
+                onClick={onViewReceipt}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-opacity hover:opacity-80"
+                style={{ background: `${ACCENT}18`, color: ACCENT, border: `1px solid ${ACCENT}33` }}
+              >
+                <ReceiptText size={13} />
+                영수증 보기
+              </button>
+            )}
+            {isOwner && onEdit && (
+              <button
+                onClick={onEdit}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-opacity hover:opacity-80"
+                style={{ background: "rgba(255,255,255,0.06)", color: "var(--text-primary)", border: "1px solid var(--border)" }}
+              >
+                <Pencil size={13} />
+                수정하기
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DetailRow({
+  icon, label, value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center gap-1.5 shrink-0" style={{ color: "var(--text-muted)" }}>
+        {icon}
+        <span className="text-xs">{label}</span>
+      </div>
+      <span className="text-xs font-semibold text-right truncate" style={{ color: "var(--text-primary)" }}>
+        {value}
+      </span>
     </div>
   );
 }
