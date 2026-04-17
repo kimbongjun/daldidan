@@ -130,17 +130,17 @@ function BentoGrid({
 
       {/* 태블릿 */}
       <div className="bento-tablet">
-        <div style={{ minWidth: 0, height: 420 }}>{blog}</div>
-        <div style={{ minWidth: 0, height: 460 }}><ErrorBoundary><BudgetWidget /></ErrorBoundary></div>
+        <div style={{ minWidth: 0, height: '' }}>{blog}</div>
+        <div style={{ minWidth: 0, height: '' }}><ErrorBoundary><BudgetWidget /></ErrorBoundary></div>
         <div style={{ minWidth: 0, height: 300, gridColumn: "1 / -1" }}><FestivalWidget /></div>
         <div style={{ minWidth: 0, height: 300, gridColumn: "1 / -1" }}><RestaurantWidget /></div>
-        <div style={{ minWidth: 0, height: 340, gridColumn: "1 / -1" }}><RealEstateWidget /></div>
+        <div style={{ minWidth: 0, height: '', gridColumn: "1 / -1" }}><RealEstateWidget /></div>
       </div>
 
       {/* 모바일 */}
       <div className="bento-mobile">
-        <div style={{ minWidth: 0, height: 360 }}>{blog}</div>
-        <div style={{ minWidth: 0, height: 460 }}><ErrorBoundary><BudgetWidget /></ErrorBoundary></div>
+        <div style={{ minWidth: 0, height: '' }}>{blog}</div>
+        <div style={{ minWidth: 0, height: '' }}><ErrorBoundary><BudgetWidget /></ErrorBoundary></div>
         <div style={{ minWidth: 0, height: 300 }}><FestivalWidget /></div>
         <div style={{ minWidth: 0, height: 300 }}><RestaurantWidget /></div>
         <div style={{ minWidth: 0, height: '' }}><RealEstateWidget /></div>
