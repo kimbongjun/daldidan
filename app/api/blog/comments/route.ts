@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
   const supabase = createPublicClient();
   const { data, error } = await supabase
     .from("blog_comments")
-    .select("id, user_id, author_name, content, created_at, updated_at, parent_id")
+    .select("id, user_id, author_name, content, image_urls, created_at, updated_at, parent_id")
     .eq("post_id", postId)
     .order("created_at", { ascending: true });
 
@@ -34,11 +34,13 @@ export async function POST(request: NextRequest) {
     password?: string;
     content?: string;
     parent_id?: string;
+    image_urls?: string[];
   };
 
   const postId = body.post_id?.trim() ?? "";
   const content = body.content?.trim() ?? "";
   const parentId = body.parent_id?.trim() || null;
+  const imageUrls = Array.isArray(body.image_urls) ? body.image_urls.filter((u) => typeof u === "string").slice(0, 3) : [];
 
   if (!postId || !content) {
     return NextResponse.json({ error: "post_id와 내용을 입력해주세요." }, { status: 400 });
@@ -65,8 +67,8 @@ export async function POST(request: NextRequest) {
 
     const { data, error } = await admin
       .from("blog_comments")
-      .insert({ post_id: postId, user_id: user.id, author_name: authorName, content, parent_id: parentId })
-      .select("id, user_id, author_name, content, created_at, updated_at, parent_id")
+      .insert({ post_id: postId, user_id: user.id, author_name: authorName, content, image_urls: imageUrls, parent_id: parentId })
+      .select("id, user_id, author_name, content, image_urls, created_at, updated_at, parent_id")
       .single();
 
     if (error) {
@@ -107,8 +109,8 @@ export async function POST(request: NextRequest) {
 
   const { data, error } = await admin
     .from("blog_comments")
-    .insert({ post_id: postId, author_name: authorName, password_hash: passwordHash, content, parent_id: parentId })
-    .select("id, user_id, author_name, content, created_at, updated_at, parent_id")
+    .insert({ post_id: postId, author_name: authorName, password_hash: passwordHash, content, image_urls: imageUrls, parent_id: parentId })
+    .select("id, user_id, author_name, content, image_urls, created_at, updated_at, parent_id")
     .single();
 
   if (error) {

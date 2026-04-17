@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { LoaderCircle, MessageCircle, Pencil, Trash2, X, Check, CornerDownRight } from "lucide-react";
+import { LoaderCircle, MessageCircle, Pencil, Trash2, X, Check, CornerDownRight, Image as ImageIcon } from "lucide-react";
 import { formatBlogDate } from "@/lib/blog-shared";
 import { createClient } from "@/lib/supabase/client";
 import type { AuthUser } from "@supabase/supabase-js";
@@ -11,10 +11,26 @@ interface Comment {
   user_id: string | null;
   author_name: string;
   content: string;
+  image_urls: string[];
   created_at: string;
   updated_at: string;
   parent_id: string | null;
 }
+
+type ReactionType = "like" | "sad" | "best" | "check";
+
+interface ReactionSummary {
+  comment_id: string;
+  counts: Record<string, number>;
+  mine: string[];
+}
+
+const REACTIONS: { type: ReactionType; emoji: string; label: string }[] = [
+  { type: "like", emoji: "👍", label: "좋아요" },
+  { type: "sad", emoji: "😢", label: "슬퍼요" },
+  { type: "best", emoji: "⭐", label: "최고예요" },
+  { type: "check", emoji: "✅", label: "확인했어요" },
+];
 
 const ACCENT = "#EA580C";
 
@@ -29,8 +45,76 @@ const inputStyle: React.CSSProperties = {
   width: "100%",
 };
 
+function getBrowserId(): string {
+  if (typeof window === "undefined") return "";
+  let id = localStorage.getItem("daldidan_browser_id");
+  if (!id) {
+    id = crypto.randomUUID();
+    localStorage.setItem("daldidan_browser_id", id);
+  }
+  return id;
+}
+
 // ─────────────────────────────────────────────────────────────
-// 댓글 카드 (본댓글 + 대댓글 공통 사용)
+// 이미지 업로드 UI
+// ─────────────────────────────────────────────────────────────
+interface ImageUploadProps {
+  images: string[];
+  uploading: boolean;
+  onUpload: (files: FileList | null) => void;
+  onRemove: (index: number) => void;
+}
+
+function ImageUploadArea({ images, uploading, onUpload, onRemove }: ImageUploadProps) {
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      {images.map((url, i) => (
+        <div
+          key={url}
+          className="relative w-16 h-16 rounded-xl overflow-hidden shrink-0"
+          style={{ border: "1px solid var(--border)" }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={url} alt={`첨부 이미지 ${i + 1}`} className="w-full h-full object-cover" />
+          <button
+            type="button"
+            onClick={() => onRemove(i)}
+            className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full flex items-center justify-center text-white"
+            style={{ background: "rgba(0,0,0,0.7)", fontSize: "10px", lineHeight: 1 }}
+          >
+            ×
+          </button>
+        </div>
+      ))}
+      {images.length < 3 && (
+        <label
+          className="pressable w-16 h-16 rounded-xl flex flex-col items-center justify-center cursor-pointer gap-1 shrink-0"
+          style={{ border: "1px dashed var(--border)", color: "var(--text-muted)" }}
+        >
+          {uploading ? (
+            <LoaderCircle size={16} className="animate-spin" />
+          ) : (
+            <>
+              <ImageIcon size={16} />
+              <span style={{ fontSize: "10px" }}>사진</span>
+            </>
+          )}
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            disabled={uploading}
+            onChange={(e) => onUpload(e.target.files)}
+          />
+        </label>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// 댓글 카드
 // ─────────────────────────────────────────────────────────────
 interface CommentCardProps {
   comment: Comment;
@@ -40,9 +124,23 @@ interface CommentCardProps {
   onDelete: () => void;
   onReply?: () => void;
   replyCount?: number;
+  reactionSummary?: ReactionSummary;
+  onReact?: (reaction: ReactionType) => void;
+  reactionLoadingKey: string;
 }
 
-function CommentCard({ comment, isReply, canManage, onEdit, onDelete, onReply, replyCount }: CommentCardProps) {
+function CommentCard({
+  comment,
+  isReply,
+  canManage,
+  onEdit,
+  onDelete,
+  onReply,
+  replyCount,
+  reactionSummary,
+  onReact,
+  reactionLoadingKey,
+}: CommentCardProps) {
   return (
     <div
       className="rounded-2xl p-4 flex flex-col gap-2"
@@ -101,12 +199,64 @@ function CommentCard({ comment, isReply, canManage, onEdit, onDelete, onReply, r
           )}
         </div>
       </div>
+
       <p
         className="text-sm leading-relaxed whitespace-pre-wrap"
         style={{ color: "var(--text-primary)", paddingLeft: "2.25rem" }}
       >
         {comment.content}
       </p>
+
+      {/* 첨부 이미지 */}
+      {comment.image_urls && comment.image_urls.length > 0 && (
+        <div className="flex flex-wrap gap-2" style={{ paddingLeft: "2.25rem" }}>
+          {comment.image_urls.map((url, i) => (
+            <a
+              key={url}
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-20 h-20 rounded-xl overflow-hidden block"
+              style={{ border: "1px solid var(--border)" }}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={url}
+                alt={`이미지 ${i + 1}`}
+                className="w-full h-full object-cover hover:opacity-80 transition-opacity"
+              />
+            </a>
+          ))}
+        </div>
+      )}
+
+      {/* 공감 버튼 */}
+      {onReact && (
+        <div className="flex items-center gap-1.5 flex-wrap" style={{ paddingLeft: "2.25rem" }}>
+          {REACTIONS.map(({ type, emoji, label }) => {
+            const count = reactionSummary?.counts[type] ?? 0;
+            const isMine = reactionSummary?.mine.includes(type) ?? false;
+            const isLoading = reactionLoadingKey === `${comment.id}:${type}`;
+            return (
+              <button
+                key={type}
+                onClick={() => onReact(type)}
+                disabled={isLoading}
+                title={label}
+                className="pressable flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold transition-all disabled:opacity-50"
+                style={{
+                  background: isMine ? "rgba(234,88,12,0.18)" : "rgba(255,255,255,0.05)",
+                  color: isMine ? ACCENT : "var(--text-muted)",
+                  border: `1px solid ${isMine ? "rgba(234,88,12,0.35)" : "var(--border)"}`,
+                }}
+              >
+                <span>{emoji}</span>
+                {count > 0 && <span>{count}</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -117,6 +267,8 @@ function CommentCard({ comment, isReply, canManage, onEdit, onDelete, onReply, r
 export default function BlogComments({ postId }: { postId: string }) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [reactions, setReactions] = useState<ReactionSummary[]>([]);
+  const [reactionLoadingKey, setReactionLoadingKey] = useState("");
 
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
@@ -125,6 +277,8 @@ export default function BlogComments({ postId }: { postId: string }) {
   const [authorName, setAuthorName] = useState("");
   const [password, setPassword] = useState("");
   const [content, setContent] = useState("");
+  const [images, setImages] = useState<string[]>([]);
+  const [imageUploading, setImageUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
 
@@ -133,6 +287,8 @@ export default function BlogComments({ postId }: { postId: string }) {
   const [replyAuthorName, setReplyAuthorName] = useState("");
   const [replyPassword, setReplyPassword] = useState("");
   const [replyContent, setReplyContent] = useState("");
+  const [replyImages, setReplyImages] = useState<string[]>([]);
+  const [replyImageUploading, setReplyImageUploading] = useState(false);
   const [replySubmitting, setReplySubmitting] = useState(false);
   const [replyError, setReplyError] = useState("");
 
@@ -144,6 +300,8 @@ export default function BlogComments({ postId }: { postId: string }) {
   } | null>(null);
   const [actionPassword, setActionPassword] = useState("");
   const [editContent, setEditContent] = useState("");
+  const [editImages, setEditImages] = useState<string[]>([]);
+  const [editImageUploading, setEditImageUploading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState("");
 
@@ -166,8 +324,18 @@ export default function BlogComments({ postId }: { postId: string }) {
     setLoading(false);
   };
 
+  const fetchReactions = async () => {
+    const browserId = getBrowserId();
+    const res = await fetch(
+      `/api/blog/comments/reactions?post_id=${encodeURIComponent(postId)}&browser_id=${encodeURIComponent(browserId)}`
+    );
+    const data = await res.json();
+    setReactions(Array.isArray(data) ? data : []);
+  };
+
   useEffect(() => {
     fetchComments();
+    fetchReactions();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [postId]);
 
@@ -175,6 +343,75 @@ export default function BlogComments({ postId }: { postId: string }) {
     if (comment.user_id && currentUser) return comment.user_id === currentUser.id;
     if (!comment.user_id && !currentUser) return true;
     return false;
+  };
+
+  // ─── 이미지 업로드 핸들러 ───
+  const uploadImages = async (
+    files: FileList | null,
+    currentImages: string[],
+    setImgUrls: React.Dispatch<React.SetStateAction<string[]>>,
+    setUploading: React.Dispatch<React.SetStateAction<boolean>>,
+  ) => {
+    if (!files || files.length === 0) return;
+    if (currentImages.length >= 3) return;
+    setUploading(true);
+    try {
+      const remaining = 3 - currentImages.length;
+      const toUpload = Array.from(files).slice(0, remaining);
+      const uploaded: string[] = [];
+      for (const file of toUpload) {
+        const formData = new FormData();
+        formData.append("file", file);
+        const res = await fetch("/api/blog/comments/upload", { method: "POST", body: formData });
+        const data = await res.json() as { url?: string; error?: string };
+        if (res.ok && data.url) uploaded.push(data.url);
+      }
+      setImgUrls((prev) => [...prev, ...uploaded].slice(0, 3));
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // ─── 공감 토글 ───
+  const handleReaction = async (commentId: string, reaction: ReactionType) => {
+    const key = `${commentId}:${reaction}`;
+    if (reactionLoadingKey === key) return;
+    setReactionLoadingKey(key);
+    try {
+      const browserId = getBrowserId();
+      const res = await fetch(`/api/blog/comments/${commentId}/reactions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reaction, browser_id: browserId }),
+      });
+      const data = await res.json() as { action?: string };
+      if (!res.ok) return;
+
+      setReactions((prev) => {
+        const existing = prev.find((r) => r.comment_id === commentId);
+        if (!existing) {
+          return [...prev, { comment_id: commentId, counts: { [reaction]: 1 }, mine: [reaction] }];
+        }
+        const newCounts = { ...existing.counts };
+        const newMine = [...existing.mine];
+        if (data.action === "removed") {
+          newCounts[reaction] = Math.max(0, (newCounts[reaction] ?? 1) - 1);
+          return prev.map((r) =>
+            r.comment_id === commentId
+              ? { ...r, counts: newCounts, mine: newMine.filter((m) => m !== reaction) }
+              : r
+          );
+        } else {
+          newCounts[reaction] = (newCounts[reaction] ?? 0) + 1;
+          if (!newMine.includes(reaction)) newMine.push(reaction);
+          return prev.map((r) =>
+            r.comment_id === commentId ? { ...r, counts: newCounts, mine: newMine } : r
+          );
+        }
+      });
+    } finally {
+      setReactionLoadingKey("");
+    }
   };
 
   // ─── 본댓글 제출 ───
@@ -186,7 +423,7 @@ export default function BlogComments({ postId }: { postId: string }) {
     setSubmitting(true);
     setSubmitError("");
     try {
-      const body: Record<string, string> = { post_id: postId, content };
+      const body: Record<string, unknown> = { post_id: postId, content, image_urls: images };
       if (!currentUser) { body.author_name = authorName; body.password = password; }
 
       const res = await fetch("/api/blog/comments", {
@@ -197,7 +434,7 @@ export default function BlogComments({ postId }: { postId: string }) {
       const data = await res.json() as Comment & { error?: string };
       if (!res.ok) throw new Error(data.error ?? "댓글 작성에 실패했습니다.");
       setComments((prev) => [...prev, data]);
-      setContent(""); setAuthorName(""); setPassword("");
+      setContent(""); setAuthorName(""); setPassword(""); setImages([]);
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "댓글 작성에 실패했습니다.");
     } finally {
@@ -213,7 +450,7 @@ export default function BlogComments({ postId }: { postId: string }) {
     setReplySubmitting(true);
     setReplyError("");
     try {
-      const body: Record<string, string> = { post_id: postId, content: replyContent, parent_id: parentId };
+      const body: Record<string, unknown> = { post_id: postId, content: replyContent, parent_id: parentId, image_urls: replyImages };
       if (!currentUser) { body.author_name = replyAuthorName; body.password = replyPassword; }
 
       const res = await fetch("/api/blog/comments", {
@@ -225,7 +462,7 @@ export default function BlogComments({ postId }: { postId: string }) {
       if (!res.ok) throw new Error(data.error ?? "답글 작성에 실패했습니다.");
       setComments((prev) => [...prev, data]);
       setReplyingTo(null);
-      setReplyContent(""); setReplyAuthorName(""); setReplyPassword("");
+      setReplyContent(""); setReplyAuthorName(""); setReplyPassword(""); setReplyImages([]);
     } catch (err) {
       setReplyError(err instanceof Error ? err.message : "답글 작성에 실패했습니다.");
     } finally {
@@ -236,6 +473,7 @@ export default function BlogComments({ postId }: { postId: string }) {
   const openEdit = (comment: Comment) => {
     setActionTarget({ id: comment.id, type: "edit", isLoginComment: !!comment.user_id });
     setEditContent(comment.content);
+    setEditImages(comment.image_urls ?? []);
     setActionPassword(""); setActionError("");
   };
   const openDelete = (comment: Comment) => {
@@ -243,14 +481,14 @@ export default function BlogComments({ postId }: { postId: string }) {
     setActionPassword(""); setActionError("");
   };
   const closeAction = () => {
-    setActionTarget(null); setActionPassword(""); setEditContent(""); setActionError("");
+    setActionTarget(null); setActionPassword(""); setEditContent(""); setEditImages([]); setActionError("");
   };
 
   const handleEdit = async () => {
     if (!actionTarget || actionLoading) return;
     setActionLoading(true); setActionError("");
     try {
-      const body: Record<string, string> = { content: editContent };
+      const body: Record<string, unknown> = { content: editContent, image_urls: editImages };
       if (!actionTarget.isLoginComment) body.password = actionPassword;
       const res = await fetch(`/api/blog/comments/${actionTarget.id}`, {
         method: "PATCH",
@@ -272,7 +510,7 @@ export default function BlogComments({ postId }: { postId: string }) {
     if (!actionTarget || actionLoading) return;
     setActionLoading(true); setActionError("");
     try {
-      const body: Record<string, string> = {};
+      const body: Record<string, unknown> = {};
       if (!actionTarget.isLoginComment) body.password = actionPassword;
       const res = await fetch(`/api/blog/comments/${actionTarget.id}`, {
         method: "DELETE",
@@ -281,7 +519,6 @@ export default function BlogComments({ postId }: { postId: string }) {
       });
       const data = await res.json() as { ok?: boolean; error?: string };
       if (!res.ok) throw new Error(data.error ?? "삭제에 실패했습니다.");
-      // 본댓글 삭제 시 해당 대댓글도 함께 제거
       setComments((prev) => prev.filter((c) => c.id !== actionTarget.id && c.parent_id !== actionTarget.id));
       closeAction();
     } catch (err) {
@@ -347,10 +584,13 @@ export default function BlogComments({ postId }: { postId: string }) {
                       setReplyingTo(null);
                     } else {
                       setReplyingTo(comment.id);
-                      setReplyContent(""); setReplyAuthorName(""); setReplyPassword(""); setReplyError("");
+                      setReplyContent(""); setReplyAuthorName(""); setReplyPassword(""); setReplyImages([]); setReplyError("");
                     }
                   }}
                   replyCount={replies.length}
+                  reactionSummary={reactions.find((r) => r.comment_id === comment.id)}
+                  onReact={(reaction) => handleReaction(comment.id, reaction)}
+                  reactionLoadingKey={reactionLoadingKey}
                 />
 
                 {/* 대댓글 목록 */}
@@ -364,6 +604,9 @@ export default function BlogComments({ postId }: { postId: string }) {
                         canManage={canManage(reply)}
                         onEdit={() => openEdit(reply)}
                         onDelete={() => openDelete(reply)}
+                        reactionSummary={reactions.find((r) => r.comment_id === reply.id)}
+                        onReact={(reaction) => handleReaction(reply.id, reaction)}
+                        reactionLoadingKey={reactionLoadingKey}
                       />
                     ))}
                   </div>
@@ -413,6 +656,13 @@ export default function BlogComments({ postId }: { postId: string }) {
                         rows={2}
                         maxLength={1000}
                         style={{ ...inputStyle, resize: "vertical" }}
+                      />
+
+                      <ImageUploadArea
+                        images={replyImages}
+                        uploading={replyImageUploading}
+                        onUpload={(files) => uploadImages(files, replyImages, setReplyImages, setReplyImageUploading)}
+                        onRemove={(i) => setReplyImages((prev) => prev.filter((_, idx) => idx !== i))}
                       />
 
                       {replyError && (
@@ -468,13 +718,21 @@ export default function BlogComments({ postId }: { postId: string }) {
             </div>
 
             {actionTarget.type === "edit" && (
-              <textarea
-                value={editContent}
-                onChange={(e) => setEditContent(e.target.value)}
-                rows={4}
-                placeholder="수정할 내용을 입력해주세요."
-                style={{ ...inputStyle, resize: "vertical" }}
-              />
+              <>
+                <textarea
+                  value={editContent}
+                  onChange={(e) => setEditContent(e.target.value)}
+                  rows={4}
+                  placeholder="수정할 내용을 입력해주세요."
+                  style={{ ...inputStyle, resize: "vertical" }}
+                />
+                <ImageUploadArea
+                  images={editImages}
+                  uploading={editImageUploading}
+                  onUpload={(files) => uploadImages(files, editImages, setEditImages, setEditImageUploading)}
+                  onRemove={(i) => setEditImages((prev) => prev.filter((_, idx) => idx !== i))}
+                />
+              </>
             )}
 
             {!actionTarget.isLoginComment && (
@@ -562,6 +820,13 @@ export default function BlogComments({ postId }: { postId: string }) {
             rows={3}
             maxLength={1000}
             style={{ ...inputStyle, resize: "vertical" }}
+          />
+
+          <ImageUploadArea
+            images={images}
+            uploading={imageUploading}
+            onUpload={(files) => uploadImages(files, images, setImages, setImageUploading)}
+            onRemove={(i) => setImages((prev) => prev.filter((_, idx) => idx !== i))}
           />
 
           {submitError && (

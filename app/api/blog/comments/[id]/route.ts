@@ -18,7 +18,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const body = await request.json() as { password?: string; content?: string };
+  const body = await request.json() as { password?: string; content?: string; image_urls?: string[] };
 
   const content = body.content?.trim() ?? "";
 
@@ -55,12 +55,17 @@ export async function PATCH(
     }
   }
 
+  const imageUrls = Array.isArray(body.image_urls) ? body.image_urls.filter((u) => typeof u === "string").slice(0, 3) : undefined;
+
   const admin = createAdminClient();
+  const updateData: { content: string; updated_at: string; image_urls?: string[] } = { content, updated_at: new Date().toISOString() };
+  if (imageUrls !== undefined) updateData.image_urls = imageUrls;
+
   const { data, error } = await admin
     .from("blog_comments")
-    .update({ content, updated_at: new Date().toISOString() })
+    .update(updateData)
     .eq("id", id)
-    .select("id, user_id, author_name, content, created_at, updated_at")
+    .select("id, user_id, author_name, content, image_urls, created_at, updated_at, parent_id")
     .single();
 
   if (error) {

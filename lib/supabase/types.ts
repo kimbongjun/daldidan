@@ -9,6 +9,56 @@ type Json =
 export type Database = {
   public: {
     Tables: {
+      blog_comments: {
+        Row: {
+          id: string;
+          post_id: string;
+          user_id: string | null;
+          author_name: string;
+          password_hash: string | null;
+          content: string;
+          image_urls: string[];
+          parent_id: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          post_id: string;
+          user_id?: string | null;
+          author_name: string;
+          password_hash?: string | null;
+          content: string;
+          image_urls?: string[];
+          parent_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          content?: string;
+          image_urls?: string[];
+          updated_at?: string;
+        };
+      };
+      blog_comment_reactions: {
+        Row: {
+          id: string;
+          comment_id: string;
+          user_id: string | null;
+          browser_id: string | null;
+          reaction: 'like' | 'sad' | 'best' | 'check';
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          comment_id: string;
+          user_id?: string | null;
+          browser_id?: string | null;
+          reaction: 'like' | 'sad' | 'best' | 'check';
+          created_at?: string;
+        };
+        Update: Record<string, never>;
+      };
       blog_posts: {
         Row: {
           id: string;
