@@ -800,15 +800,15 @@ function TransactionRow({
         onClick={onView}
         role={onView ? "button" : undefined}
       >
-        <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-xs font-bold"
+        {/* <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-xs font-bold"
           style={{
             background: `${CATEGORY_COLORS[tx.category] ?? "#8B8BA7"}22`,
             color: CATEGORY_COLORS[tx.category] ?? "#8B8BA7",
           }}>
           {tx.category.slice(0, 1)}
-        </div>
+        </div> */}
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold truncate" style={{ color: "var(--text-primary)" }}>
+          <p className="text-sm font-semibold truncate" style={{ color: "var(--text-primary)", maxWidth: "10rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap"}}>
             {tx.note || tx.category}
           </p>
           <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
