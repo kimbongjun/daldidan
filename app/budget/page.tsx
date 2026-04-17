@@ -812,24 +812,27 @@ function TransactionRow({
             {tx.note || tx.category}
           </p>
           <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
-            <span className="text-[11px] px-1.5 py-0.5 rounded-md"
+            <span className="text-[11px] px-1.5 py-0.5 rounded-md max-w-[5rem] truncate"
               style={{ color: "#6366F1", background: "#6366F122" }}>
               {tx.buyer}
             </span>
-            <span className="text-[11px] px-1.5 py-0.5 rounded-md"
+            <span className="text-[11px] px-1.5 py-0.5 rounded-md max-w-[5rem] truncate"
               style={{ color: "var(--text-muted)", background: "rgba(255,255,255,0.06)" }}>
               {tx.authorName}
             </span>
             {tx.merchantName && (
-              <span className="text-xs" style={{ color: "var(--text-muted)" }}>{tx.merchantName}</span>
+              <span className="text-xs max-w-[6rem] truncate" style={{ color: "var(--text-muted)" }}>{tx.merchantName}</span>
             )}
-            <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+            <span className="text-xs truncate" style={{ color: "var(--text-muted)", maxWidth: "9rem" }}>
               {tx.category} · {tx.date}
             </span>
           </div>
         </div>
       </div>
-      <span className={`text-sm font-bold shrink-0 ${tx.type === "income" ? "text-emerald-400" : "text-rose-400"}`}>
+      <span
+        className={`text-sm font-bold shrink-0 text-right ${tx.type === "income" ? "text-emerald-400" : "text-rose-400"}`}
+        style={{ maxWidth: "7rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+      >
         {tx.type === "income" ? "+" : "-"}{tx.amount.toLocaleString()}원
       </span>
       {onViewReceipt && (

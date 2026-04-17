@@ -2,100 +2,23 @@ import { NextRequest, NextResponse } from "next/server";
 
 type RestaurantCategory = "한식" | "중식" | "양식" | "아시안" | "분식" | "주점" | "카페" | "퓨전";
 
-interface GooglePlacesTextSearchResponse {
-  places?: Array<{
-    currentOpeningHours?: { openNow?: boolean };
-    regularOpeningHours?: { openNow?: boolean };
-    rating?: number;
-    userRatingCount?: number;
-    photos?: Array<{ name?: string }>;
-  }>;
+// Google Places API v1 response types
+interface GooglePlace {
+  id?: string;
+  displayName?: { text?: string; languageCode?: string };
+  formattedAddress?: string;
+  rating?: number;
+  userRatingCount?: number;
+  currentOpeningHours?: { openNow?: boolean };
+  regularOpeningHours?: { openNow?: boolean };
+  photos?: Array<{ name?: string }>;
+  location?: { latitude?: number; longitude?: number };
+  primaryTypeDisplayName?: { text?: string };
+  types?: string[];
 }
 
-async function enrichWithGooglePlaces(
-  name: string,
-  address: string,
-  apiKey: string,
-): Promise<{ isOpen: boolean | null; rating: number; reviewCount: number; photoRef: string | null }> {
-  try {
-    const response = await fetch("https://places.googleapis.com/v1/places:searchText", {
-      method: "POST",
-      cache: "no-store",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Goog-Api-Key": apiKey,
-        "X-Goog-FieldMask":
-          "places.currentOpeningHours.openNow,places.regularOpeningHours.openNow,places.rating,places.userRatingCount,places.photos",
-      },
-      body: JSON.stringify({
-        textQuery: `${name} ${address}`,
-        languageCode: "ko",
-        maxResultCount: 1,
-      }),
-    });
-
-    if (!response.ok) return { isOpen: null, rating: 0, reviewCount: 0, photoRef: null };
-
-    const data = (await response.json()) as GooglePlacesTextSearchResponse;
-    const place = data.places?.[0];
-    if (!place) return { isOpen: null, rating: 0, reviewCount: 0, photoRef: null };
-
-    return {
-      isOpen: place.currentOpeningHours?.openNow ?? place.regularOpeningHours?.openNow ?? null,
-      rating: place.rating ?? 0,
-      reviewCount: place.userRatingCount ?? 0,
-      photoRef: place.photos?.[0]?.name ?? null,
-    };
-  } catch {
-    return { isOpen: null, rating: 0, reviewCount: 0, photoRef: null };
-  }
-}
-
-function calcDistance(lat1: number, lng1: number, lat2: number, lng2: number): string {
-  const R = 6371;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLng = ((lng2 - lng1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLng / 2) ** 2;
-  const d = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return d < 1 ? `${Math.round(d * 1000)}m` : `${d.toFixed(1)}km`;
-}
-
-interface NaverReverseGeocodeResponse {
-  results?: Array<{
-    region?: {
-      area1?: { name?: string };
-      area2?: { name?: string };
-      area3?: { name?: string };
-    };
-  }>;
-}
-
-interface NaverLocalItem {
-  title?: string;
-  link?: string;
-  category?: string;
-  description?: string;
-  telephone?: string;
-  address?: string;
-  roadAddress?: string;
-}
-
-interface NaverLocalResponse {
-  items?: NaverLocalItem[];
-}
-
-interface NaverGeocodeResponse {
-  addresses?: Array<{
-    x?: string;
-    y?: string;
-    distance?: number;
-    roadAddress?: string;
-    jibunAddress?: string;
-  }>;
+interface GoogleNearbySearchResponse {
+  places?: GooglePlace[];
 }
 
 type NearbyRestaurant = {
@@ -112,110 +35,157 @@ type NearbyRestaurant = {
   sourceCategory: string;
 };
 
-const CATEGORY_HINTS: Array<{ category: RestaurantCategory; keywords: string[] }> = [
-  { category: "카페", keywords: ["카페", "커피", "베이커리", "디저트", "도넛"] },
-  { category: "주점", keywords: ["술집", "포차", "이자카야", "호프", "맥주", "와인", "바", "펍"] },
-  { category: "분식", keywords: ["분식", "떡볶이", "김밥", "순대", "라면", "오뎅"] },
-  { category: "중식", keywords: ["중식", "중국", "짜장면", "짬뽕", "마라", "양꼬치"] },
-  { category: "한식", keywords: ["한식", "국밥", "백반", "고기", "냉면", "찌개"] },
-  { category: "아시안", keywords: ["아시아", "일식", "일본", "쌀국수", "베트남", "태국", "인도", "스시", "라멘"] },
-  { category: "양식", keywords: ["양식", "이탈리아", "파스타", "피자", "프렌치", "햄버거", "스테이크", "브런치"] },
-  { category: "퓨전", keywords: ["퓨전", "오마카세", "다이닝", "코스"] },
+// Google Places type → 우리 카테고리 매핑
+const TYPE_TO_CATEGORY: Array<{ types: string[]; category: RestaurantCategory }> = [
+  { types: ["cafe", "coffee_shop", "bakery", "dessert_shop", "donut_shop"], category: "카페" },
+  { types: ["bar", "pub", "wine_bar", "night_club"], category: "주점" },
+  { types: ["ramen_restaurant", "sushi_restaurant", "japanese_restaurant"], category: "아시안" },
+  { types: ["chinese_restaurant", "dim_sum_restaurant"], category: "중식" },
+  { types: ["korean_restaurant"], category: "한식" },
+  {
+    types: [
+      "vietnamese_restaurant", "thai_restaurant", "indian_restaurant",
+      "asian_restaurant", "indonesian_restaurant",
+    ],
+    category: "아시안",
+  },
+  {
+    types: [
+      "italian_restaurant", "french_restaurant", "american_restaurant",
+      "hamburger_restaurant", "pizza_restaurant", "steak_house", "sandwich_shop",
+      "fast_food_restaurant",
+    ],
+    category: "양식",
+  },
+  { types: ["meal_takeaway", "meal_delivery"], category: "분식" },
 ];
 
-function stripMarkup(value: string) {
-  return value
-    .replace(/<[^>]+>/g, "")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, "\"")
-    .trim();
+const KEYWORD_HINTS: Array<{ keywords: string[]; category: RestaurantCategory }> = [
+  { keywords: ["카페", "커피", "베이커리", "디저트", "도넛"], category: "카페" },
+  { keywords: ["술집", "포차", "이자카야", "호프", "맥주", "와인", "바", "펍"], category: "주점" },
+  { keywords: ["분식", "떡볶이", "김밥", "순대", "라면"], category: "분식" },
+  { keywords: ["중식", "중국", "짜장", "짬뽕", "마라", "양꼬치"], category: "중식" },
+  { keywords: ["일식", "일본", "쌀국수", "베트남", "태국", "인도", "스시", "라멘"], category: "아시안" },
+  { keywords: ["양식", "파스타", "피자", "프렌치", "햄버거", "스테이크", "브런치"], category: "양식" },
+  { keywords: ["퓨전", "오마카세", "다이닝", "코스"], category: "퓨전" },
+  { keywords: ["한식", "국밥", "백반", "고기", "냉면", "찌개", "삼겹살"], category: "한식" },
+];
+
+function inferCategory(types: string[], displayName: string, primaryTypeDisplay: string): RestaurantCategory {
+  // 1. Google type으로 카테고리 추론
+  for (const { types: matchTypes, category } of TYPE_TO_CATEGORY) {
+    if (types.some((t) => matchTypes.includes(t))) return category;
+  }
+  // 2. 이름/타입 텍스트 키워드로 추론
+  const source = `${displayName} ${primaryTypeDisplay}`.toLowerCase();
+  for (const { keywords, category } of KEYWORD_HINTS) {
+    if (keywords.some((kw) => source.includes(kw))) return category;
+  }
+  return "한식"; // 기본값
 }
 
-function inferCategory(title: string, categoryText: string, fallback: RestaurantCategory): RestaurantCategory {
-  const source = `${title} ${categoryText}`.toLowerCase();
-  const matched = CATEGORY_HINTS.find(({ keywords }) =>
-    keywords.some((keyword) => source.includes(keyword.toLowerCase())),
-  );
-  return matched?.category ?? fallback;
+function calcDistance(lat1: number, lng1: number, lat2: number, lng2: number): string {
+  const R = 6371000; // meters
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLng / 2) ** 2;
+  const d = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return d < 1000 ? `${Math.round(d)}m` : `${(d / 1000).toFixed(1)}km`;
 }
 
-function formatDistanceFromMeters(meters?: number | null) {
-  if (typeof meters !== "number" || !Number.isFinite(meters)) return "";
-  return meters < 1000 ? `${Math.round(meters)}m` : `${(meters / 1000).toFixed(1)}km`;
-}
-
-function distanceToMeters(distance: string) {
-  if (distance.endsWith("m")) return parseFloat(distance);
+function distanceToMeters(distance: string): number {
   if (distance.endsWith("km")) return parseFloat(distance) * 1000;
+  if (distance.endsWith("m")) return parseFloat(distance);
   return Number.POSITIVE_INFINITY;
 }
 
-function buildNaverMapUrl(name: string, address: string) {
-  return `https://map.naver.com/p/search/${encodeURIComponent(`${name} ${address}`.trim())}`;
-}
+// restaurant 타입 포함 Google Places 타입들
+const FOOD_TYPES = [
+  "restaurant",
+  "food",
+  "cafe",
+  "coffee_shop",
+  "bakery",
+  "bar",
+  "pub",
+  "meal_takeaway",
+  "meal_delivery",
+  "korean_restaurant",
+  "japanese_restaurant",
+  "chinese_restaurant",
+  "italian_restaurant",
+  "american_restaurant",
+  "fast_food_restaurant",
+  "ramen_restaurant",
+  "sushi_restaurant",
+  "pizza_restaurant",
+  "hamburger_restaurant",
+  "steak_house",
+  "dim_sum_restaurant",
+  "vietnamese_restaurant",
+  "thai_restaurant",
+  "indian_restaurant",
+  "asian_restaurant",
+  "french_restaurant",
+  "sandwich_shop",
+  "dessert_shop",
+  "donut_shop",
+  "night_club",
+  "wine_bar",
+];
 
-async function reverseRegion(lat: number, lng: number, clientId: string, clientSecret: string) {
-  const url = new URL("https://naveropenapi.apigw-pub.fin-ntruss.com/map-reversegeocode/v2/gc");
-  url.searchParams.set("coords", `${lng},${lat}`);
-  url.searchParams.set("sourcecrs", "epsg:4326");
-  url.searchParams.set("orders", "legalcode,admcode");
-  url.searchParams.set("output", "json");
-
-  const response = await fetch(url, {
-    cache: "no-store",
+async function searchNearbyPlaces(
+  lat: number,
+  lng: number,
+  apiKey: string,
+  includedTypes: string[],
+): Promise<GooglePlace[]> {
+  const res = await fetch("https://places.googleapis.com/v1/places:searchNearby", {
+    method: "POST",
     headers: {
-      "X-NCP-APIGW-API-KEY-ID": clientId,
-      "X-NCP-APIGW-API-KEY": clientSecret,
+      "Content-Type": "application/json",
+      "X-Goog-Api-Key": apiKey,
+      "X-Goog-FieldMask": [
+        "places.id",
+        "places.displayName",
+        "places.formattedAddress",
+        "places.rating",
+        "places.userRatingCount",
+        "places.currentOpeningHours.openNow",
+        "places.regularOpeningHours.openNow",
+        "places.photos",
+        "places.location",
+        "places.primaryTypeDisplayName",
+        "places.types",
+      ].join(","),
     },
+    body: JSON.stringify({
+      includedTypes,
+      maxResultCount: 20,
+      locationRestriction: {
+        circle: {
+          center: { latitude: lat, longitude: lng },
+          radius: 1500, // 1.5km
+        },
+      },
+      languageCode: "ko",
+      rankPreference: "POPULARITY",
+    }),
+    signal: AbortSignal.timeout(8000),
   });
 
-  if (!response.ok) return null;
-  const data = await response.json() as NaverReverseGeocodeResponse;
-  const region = data.results?.[0]?.region;
-  const area1 = region?.area1?.name ?? "";
-  const area2 = region?.area2?.name ?? "";
-  const area3 = region?.area3?.name ?? "";
-  return { area1, area2, area3 };
-}
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    console.error("[places/nearby] Google API error:", res.status, text.slice(0, 300));
+    return [];
+  }
 
-async function searchLocal(query: string, clientId: string, clientSecret: string, start = 1) {
-  const url = new URL("https://openapi.naver.com/v1/search/local.json");
-  url.searchParams.set("query", query);
-  url.searchParams.set("display", "5");
-  url.searchParams.set("start", String(start));
-  url.searchParams.set("sort", "comment");
-
-  const response = await fetch(url, {
-    cache: "no-store",
-    headers: {
-      "X-Naver-Client-Id": clientId,
-      "X-Naver-Client-Secret": clientSecret,
-    },
-  });
-
-  if (!response.ok) return [];
-  const data = await response.json() as NaverLocalResponse;
-  return data.items ?? [];
-}
-
-async function geocodeAddress(address: string, lng: number, lat: number, clientId: string, clientSecret: string) {
-  const url = new URL("https://naveropenapi.apigw-pub.fin-ntruss.com/map-geocode/v2/geocode");
-  url.searchParams.set("query", address);
-  url.searchParams.set("coordinate", `${lng},${lat}`);
-
-  const response = await fetch(url, {
-    cache: "no-store",
-    headers: {
-      "X-NCP-APIGW-API-KEY-ID": clientId,
-      "X-NCP-APIGW-API-KEY": clientSecret,
-    },
-  });
-
-  if (!response.ok) return null;
-  const data = await response.json() as NaverGeocodeResponse;
-  return data.addresses?.[0] ?? null;
+  const data = (await res.json()) as GoogleNearbySearchResponse;
+  return data.places ?? [];
 }
 
 export async function GET(request: NextRequest) {
@@ -227,95 +197,69 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "lat, lng 파라미터가 필요합니다." }, { status: 400 });
   }
 
-  const clientId = process.env.NAVER_CLIENT_ID?.trim();
-  const clientSecret = process.env.NAVER_CLIENT_SECRET?.trim();
-  const googleApiKey = process.env.GOOGLE_MAPS_API_KEY?.trim();
-
-  if (!clientId || !clientSecret) {
-    return NextResponse.json({ error: "NAVER_CLIENT_ID / NAVER_CLIENT_SECRET가 설정되지 않았습니다." }, { status: 500 });
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY?.trim();
+  if (!apiKey) {
+    return NextResponse.json({ error: "GOOGLE_MAPS_API_KEY가 설정되지 않았습니다." }, { status: 500 });
   }
 
-  const region = await reverseRegion(lat, lng, clientId, clientSecret);
-  const areaQuery = [region?.area2, region?.area3].filter(Boolean).join(" ").trim()
-    || region?.area2
-    || region?.area1
-    || "현재 위치";
+  // 음식 관련 타입을 두 배치로 나눠 요청 (API maxResultCount=20 제한 우회)
+  const [batch1, batch2] = await Promise.allSettled([
+    searchNearbyPlaces(lat, lng, apiKey, ["restaurant", "cafe", "bar", "meal_takeaway"]),
+    searchNearbyPlaces(lat, lng, apiKey, [
+      "korean_restaurant", "japanese_restaurant", "chinese_restaurant",
+      "italian_restaurant", "fast_food_restaurant", "bakery", "coffee_shop",
+    ]),
+  ]);
 
-  const pagedResults = await Promise.all(
-    Array.from({ length: 6 }, (_, i) =>
-      searchLocal(`${areaQuery} 맛집`, clientId, clientSecret, i * 5 + 1),
-    ),
-  );
+  const allPlaces = [
+    ...(batch1.status === "fulfilled" ? batch1.value : []),
+    ...(batch2.status === "fulfilled" ? batch2.value : []),
+  ];
 
-  const uniqueMap = new Map<string, { item: NaverLocalItem; fallbackCategory: RestaurantCategory }>();
-  for (const item of pagedResults.flat()) {
-    const title = stripMarkup(item.title ?? "");
-    const address = item.roadAddress || item.address || "";
-    if (!title || !address) continue;
-    const key = `${title}::${address}`;
-    if (!uniqueMap.has(key)) {
-      uniqueMap.set(key, { item, fallbackCategory: "한식" });
-    }
-  }
-
-  const restaurants = (await Promise.all(
-    Array.from(uniqueMap.values()).map(async ({ item, fallbackCategory }) => {
-      const name = stripMarkup(item.title ?? "");
-      const sourceCategory = item.category ?? "";
-      const category = inferCategory(name, sourceCategory, fallbackCategory);
-      const address = item.roadAddress || item.address || "";
-      const geocoded = address
-        ? await geocodeAddress(address, lng, lat, clientId, clientSecret)
-        : null;
-      const targetLng = geocoded?.x ? parseFloat(geocoded.x) : NaN;
-      const targetLat = geocoded?.y ? parseFloat(geocoded.y) : NaN;
-      const geocodeDistance = formatDistanceFromMeters(geocoded?.distance);
-      const fallbackDistance =
-        Number.isFinite(targetLat) && Number.isFinite(targetLng)
-          ? calcDistance(lat, lng, targetLat, targetLng)
-          : "";
-
-      const roadAddress = geocoded?.roadAddress || item.roadAddress || item.address || "";
-
-      const restaurant: NearbyRestaurant = {
-        id: `${category}-${name}-${roadAddress}`.replace(/\s+/g, "-"),
-        name,
-        address: roadAddress,
-        rating: 0,
-        reviewCount: 0,
-        isOpen: null,
-        photoRef: null,
-        mapUrl: buildNaverMapUrl(name, roadAddress),
-        category,
-        distance: geocodeDistance || fallbackDistance || "근처",
-        sourceCategory,
-      };
-
-      return restaurant;
-    }),
-  ))
-    .filter((restaurant) => !!restaurant.name && !!restaurant.address)
-    .sort((a, b) => {
-      return distanceToMeters(a.distance) - distanceToMeters(b.distance);
-    })
-    .slice(0, 30);
-
-  // Google Places로 실시간 영업 상태·평점·사진 enrichment
-  const enrichResults = await Promise.allSettled(
-    restaurants.map((r) =>
-      googleApiKey
-        ? enrichWithGooglePlaces(r.name, r.address, googleApiKey)
-        : Promise.resolve({ isOpen: null as boolean | null, rating: 0, reviewCount: 0, photoRef: null as string | null }),
-    ),
-  );
-
-  const enriched = restaurants.map((r, i) => {
-    const result = enrichResults[i];
-    if (result.status === "fulfilled") {
-      return { ...r, ...result.value };
-    }
-    return r;
+  // 중복 제거 (place id 기준)
+  const seen = new Set<string>();
+  const unique = allPlaces.filter((p) => {
+    const key = p.id ?? `${p.displayName?.text}-${p.formattedAddress}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
   });
 
-  return NextResponse.json({ restaurants: enriched });
+  // 음식점이 아닌 타입 필터링 (병원, 주유소 등)
+  const foodPlaces = unique.filter((p) => {
+    if (!p.types || p.types.length === 0) return true;
+    return p.types.some((t) => FOOD_TYPES.includes(t));
+  });
+
+  const restaurants: NearbyRestaurant[] = foodPlaces
+    .map((p): NearbyRestaurant | null => {
+      const name = p.displayName?.text ?? "";
+      if (!name) return null;
+
+      const placeLat = p.location?.latitude ?? lat;
+      const placeLng = p.location?.longitude ?? lng;
+      const distance = calcDistance(lat, lng, placeLat, placeLng);
+      const types = p.types ?? [];
+      const primaryTypeDisplay = p.primaryTypeDisplayName?.text ?? "";
+      const category = inferCategory(types, name, primaryTypeDisplay);
+
+      return {
+        id: p.id ?? `${name}-${p.formattedAddress}`,
+        name,
+        address: p.formattedAddress ?? "",
+        rating: p.rating ?? 0,
+        reviewCount: p.userRatingCount ?? 0,
+        isOpen: p.currentOpeningHours?.openNow ?? p.regularOpeningHours?.openNow ?? null,
+        photoRef: p.photos?.[0]?.name ?? null,
+        mapUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name)}&query_place_id=${p.id ?? ""}`,
+        category,
+        distance,
+        sourceCategory: primaryTypeDisplay,
+      };
+    })
+    .filter((r): r is NearbyRestaurant => r !== null)
+    .sort((a, b) => distanceToMeters(a.distance) - distanceToMeters(b.distance))
+    .slice(0, 30);
+
+  return NextResponse.json({ restaurants });
 }
