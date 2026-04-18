@@ -453,4 +453,48 @@ create policy "push_subscriptions_delete" on public.push_subscriptions
 
 create trigger set_updated_at_push_subscriptions
   before update on public.push_subscriptions
+
+
+-- ══════════════════════════════════════════════════════════════
+-- 13. 캘린더 일정 (Calendar Events)
+-- ══════════════════════════════════════════════════════════════
+create table if not exists public.calendar_events (
+  id            uuid primary key default uuid_generate_v4(),
+  user_id       uuid references public.profiles(id) on delete cascade,
+  title         text not null,
+  event_type    text not null default 'schedule'
+                  check (event_type in ('schedule', 'appointment', 'anniversary')),
+  start_date    date not null,
+  start_time    time,
+  end_date      date,
+  end_time      time,
+  location      text not null default '',
+  description   text not null default '',
+  is_recurring  boolean not null default false,
+  recurrence    text check (recurrence in ('daily', 'weekly', 'monthly', 'yearly')),
+  remind_sent   boolean not null default false,  -- D-1 알림 발송 여부
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now()
+);
+
+create index if not exists idx_calendar_events_start
+  on public.calendar_events (start_date asc);
+
+create index if not exists idx_calendar_events_user
+  on public.calendar_events (user_id, start_date asc);
+
+-- RLS: 로그인한 사용자 모두가 공유 캘린더 조회 가능, 자신 일정만 수정/삭제
+alter table public.calendar_events enable row level security;
+create policy "calendar_events_select" on public.calendar_events
+  for select using (auth.role() = 'authenticated');
+create policy "calendar_events_insert" on public.calendar_events
+  for insert with check (auth.uid() = user_id);
+create policy "calendar_events_update" on public.calendar_events
+  for update using (auth.uid() = user_id);
+create policy "calendar_events_delete" on public.calendar_events
+  for delete using (auth.uid() = user_id);
+
+create trigger set_updated_at_calendar_events
+  before update on public.calendar_events
+  for each row execute procedure public.set_updated_at();
   for each row execute procedure public.set_updated_at();
