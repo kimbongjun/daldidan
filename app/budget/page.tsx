@@ -634,8 +634,8 @@ export default function BudgetPage() {
               )}
             </div>
 
-            {/* 구매자 정산 */}
-            <SettlementPanel transactions={transactions} members={members} displayMonth={displayMonth} />
+            {/* 구매자별 지출 */}
+            <SettlementPanel transactions={transactions} displayMonth={displayMonth} />
 
             {/* 카테고리 예산 한도 */}
             <BudgetLimitsPanel
@@ -864,127 +864,50 @@ function TransactionRow({
   );
 }
 
-// ── 구매자 정산 패널 ────────────────────────────────────────────
+// ── 구매자별 지출 패널 ─────────────────────────────────────────
 function SettlementPanel({
-  transactions, members, displayMonth,
+  transactions, displayMonth,
 }: {
   transactions: Transaction[];
-  members: string[];
   displayMonth: string;
 }) {
-  const personalMembers = useMemo(() => members.filter((m) => m !== "공동"), [members]);
-
-  const data = useMemo(() => {
-    const direct: Record<string, number> = {};
-    personalMembers.forEach((m) => { direct[m] = 0; });
-    let sharedTotal = 0;
-
+  const buyerTotals = useMemo(() => {
+    const map: Record<string, number> = {};
     transactions.filter((t) => t.type === "expense").forEach((t) => {
-      if (t.buyer === "공동") {
-        sharedTotal += t.amount;
-      } else if (direct[t.buyer] !== undefined) {
-        direct[t.buyer] += t.amount;
-      }
+      map[t.buyer] = (map[t.buyer] ?? 0) + t.amount;
     });
+    return Object.entries(map)
+      .filter(([, amount]) => amount > 0)
+      .sort((a, b) => b[1] - a[1]);
+  }, [transactions]);
 
-    const splitShared = personalMembers.length > 0
-      ? Math.round(sharedTotal / personalMembers.length)
-      : 0;
-
-    const totals = personalMembers.map((m) => ({
-      name: m,
-      direct: direct[m] ?? 0,
-      shared: splitShared,
-      total: (direct[m] ?? 0) + splitShared,
-    }));
-
-    // 정산: 가장 많이 낸 사람 - 가장 적게 낸 사람, 차액의 절반
-    if (totals.length < 2) return { totals, sharedTotal, settlement: null };
-    const sorted = [...totals].sort((a, b) => b.total - a.total);
-    const overpayer = sorted[0];
-    const underpayer = sorted[sorted.length - 1];
-    const diff = overpayer.total - underpayer.total;
-    const settlement = diff > 100 ? {
-      from: underpayer.name,
-      to: overpayer.name,
-      amount: Math.round(diff / 2),
-    } : null;
-
-    return { totals, sharedTotal, settlement };
-  }, [transactions, personalMembers]);
-
-  if (personalMembers.length === 0) return null;
-  const hasActivity = data.totals.some((t) => t.total > 0) || data.sharedTotal > 0;
-  if (!hasActivity) return null;
+  if (buyerTotals.length === 0) return null;
 
   return (
     <div className="bento-card p-4 flex flex-col gap-3">
       <div className="flex items-center gap-2">
         <Users size={13} style={{ color: ACCENT }} />
         <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
-          {displayMonth} 정산
+          {displayMonth} 구매자별 지출
         </p>
       </div>
-
-      {/* 구성원별 지출 (공동 포함 전체) */}
       <div className="flex flex-col gap-2">
-        {data.sharedTotal > 0 && (
-          <div className="flex items-center justify-between rounded-xl px-3 py-2"
+        {buyerTotals.map(([buyer, amount]) => (
+          <div key={buyer} className="flex items-center justify-between rounded-xl px-3 py-2"
             style={{ background: "rgba(255,255,255,0.03)", border: "1px solid var(--border)" }}>
             <div className="flex items-center gap-2">
               <div className="w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-black"
                 style={{ background: `${ACCENT}22`, color: ACCENT }}>
-                공
+                {buyer[0]}
               </div>
-              <div>
-                <p className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>공동</p>
-                {personalMembers.length > 0 && (
-                  <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>
-                    인당 {Math.round(data.sharedTotal / personalMembers.length).toLocaleString()}원 분담
-                  </p>
-                )}
-              </div>
+              <p className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>{buyer}</p>
             </div>
             <p className="text-sm font-black" style={{ color: "#F43F5E" }}>
-              {data.sharedTotal.toLocaleString()}원
-            </p>
-          </div>
-        )}
-        {data.totals.map((item) => (
-          <div key={item.name} className="flex items-center justify-between rounded-xl px-3 py-2"
-            style={{ background: "rgba(255,255,255,0.03)", border: "1px solid var(--border)" }}>
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-black"
-                style={{ background: `${ACCENT}22`, color: ACCENT }}>
-                {item.name[0]}
-              </div>
-              <div>
-                <p className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>{item.name}</p>
-                {item.direct > 0 && item.shared > 0 && (
-                  <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>
-                    직접 {item.direct.toLocaleString()} + 공동분담 {item.shared.toLocaleString()}
-                  </p>
-                )}
-              </div>
-            </div>
-            <p className="text-sm font-black" style={{ color: item.total > 0 ? "#F43F5E" : "var(--text-muted)" }}>
-              {item.total.toLocaleString()}원
+              {amount.toLocaleString()}원
             </p>
           </div>
         ))}
       </div>
-
-      {/* 정산 결과 */}
-      {data.settlement && (
-        <div className="flex items-center gap-2 rounded-xl px-3 py-2.5"
-          style={{ background: "rgba(99,102,241,0.08)", border: "1px solid rgba(99,102,241,0.2)" }}>
-          <ReceiptText size={13} style={{ color: ACCENT, flexShrink: 0 }} />
-          <p className="text-xs font-semibold" style={{ color: ACCENT }}>
-            {data.settlement.from} → {data.settlement.to}:{" "}
-            <span className="font-black">{data.settlement.amount.toLocaleString()}원</span>
-          </p>
-        </div>
-      )}
     </div>
   );
 }
