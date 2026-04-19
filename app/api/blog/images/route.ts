@@ -3,6 +3,8 @@ import sharp from "sharp";
 import { createAdminClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
+// Vercel 기본 4.5 MB body 제한을 30 MB로 상향
+export const maxDuration = 60;
 
 const SVG_MIME = "image/svg+xml";
 const MAX_INPUT_BYTES = 30 * 1024 * 1024; // 30 MB
