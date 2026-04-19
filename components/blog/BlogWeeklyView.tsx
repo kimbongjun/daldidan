@@ -2,7 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { getWeekOfMonth } from "date-fns";
 import type { BlogPostSummary } from "@/lib/blog-shared";
-import { formatBlogDate } from "@/lib/blog-shared";
+import { formatBlogDateTime } from "@/lib/blog-shared";
 
 const ACCENT = "#EA580C";
 
@@ -125,7 +125,7 @@ export default function BlogWeeklyView({ posts }: { posts: BlogPostSummary[] }) 
                       {post.description}
                     </p>
                     <div className="flex items-center gap-2 text-xs" style={{ color: "var(--text-muted)" }}>
-                      <span>{formatBlogDate(post.publishedAt)}</span>
+                      <span>{formatBlogDateTime(post.publishedAt)}</span>
                       <span>·</span>
                       <span>{post.authorName}</span>
                     </div>

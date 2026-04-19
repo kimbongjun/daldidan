@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { LoaderCircle, MessageCircle, Pencil, Trash2, X, Check, CornerDownRight, Image as ImageIcon } from "lucide-react";
 import ImageLightbox from "@/components/blog/ImageLightbox";
-import { formatBlogDate } from "@/lib/blog-shared";
+import { formatBlogDateTime } from "@/lib/blog-shared";
 import { createClient } from "@/lib/supabase/client";
 import type { AuthUser } from "@supabase/supabase-js";
 
@@ -143,7 +143,7 @@ function CommentCard({
             {comment.author_name}
           </span>
           <span className="text-xs shrink-0" style={{ color: "var(--text-muted)" }}>
-            {formatBlogDate(comment.updated_at !== comment.created_at ? comment.updated_at : comment.created_at)}
+            {formatBlogDateTime(comment.updated_at !== comment.created_at ? comment.updated_at : comment.created_at)}
             {comment.updated_at !== comment.created_at ? " (수정됨)" : ""}
           </span>
         </div>

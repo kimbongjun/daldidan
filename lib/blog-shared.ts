@@ -39,3 +39,13 @@ export function formatBlogDate(value: string) {
     day: "numeric",
   }).format(new Date(value));
 }
+
+export function formatBlogDateTime(value: string) {
+  return new Intl.DateTimeFormat("ko-KR", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}

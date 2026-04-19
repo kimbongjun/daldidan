@@ -9,7 +9,7 @@ import BlogNotifyButton from "@/components/blog/BlogNotifyButton";
 import BlogShareBar from "@/components/blog/BlogShareBar";
 import BlogViewCounter from "@/components/blog/BlogViewCounter";
 import { canEditBlogPost, getBlogPostBySlug } from "@/lib/blog";
-import { formatBlogDate } from "@/lib/blog-shared";
+import { formatBlogDate, formatBlogDateTime } from "@/lib/blog-shared";
 
 const ACCENT = "#EA580C";
 
@@ -73,7 +73,7 @@ export default async function BlogDetailPage({ params }: { params: Promise<{ slu
       <div className="max-w-[1100px] mx-auto px-4 sm:px-6 pb-12">
         <PageHeader
           title={post.title}
-          subtitle={`${formatBlogDate(post.publishedAt)} · ${post.authorName}`}
+          subtitle={`${formatBlogDateTime(post.publishedAt)} · ${post.authorName}`}
           accentColor={ACCENT}
           actions={
             editable ? (
@@ -118,9 +118,9 @@ export default async function BlogDetailPage({ params }: { params: Promise<{ slu
                 </div>
               )}
               <p className="text-sm" style={{ color: "var(--text-primary)" }}>작성자: {post.authorName}</p>
-              <p className="text-sm" style={{ color: "var(--text-primary)" }}>발행일: {formatBlogDate(post.publishedAt)}</p>
+              <p className="text-sm" style={{ color: "var(--text-primary)" }}>발행일: {formatBlogDateTime(post.publishedAt)}</p>
               {post.updatedAt && (
-                <p className="text-sm" style={{ color: "var(--text-muted)" }}>수정일: {formatBlogDate(post.updatedAt)}</p>
+                <p className="text-sm" style={{ color: "var(--text-muted)" }}>수정일: {formatBlogDateTime(post.updatedAt)}</p>
               )}
             </div>
 
