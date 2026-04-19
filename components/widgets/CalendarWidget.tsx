@@ -288,7 +288,7 @@ function EventFormModal({
               <select
                 value={form.recurrence}
                 onChange={(e) => set("recurrence", e.target.value as Recurrence | "")}
-                className="w-full px-3 py-2 rounded-lg text-sm outline-none"
+                className="w-full px-3 py-2 pr-8 rounded-lg text-sm outline-none"
                 style={{ background: "var(--bg-input)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
               >
                 {(Object.keys(RECURRENCE_LABELS) as (Recurrence | "")[]).filter((k) => k !== "").map((k) => (

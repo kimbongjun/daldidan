@@ -471,6 +471,7 @@ export default function BudgetPage() {
                   <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>카테고리</label>
                   <select value={form.category}
                     onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
+                    className="pr-8"
                     style={inputStyle}>
                     {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
                   </select>
@@ -479,6 +480,7 @@ export default function BudgetPage() {
                   <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>구매자</label>
                   <select value={form.buyer}
                     onChange={(e) => setForm((f) => ({ ...f, buyer: e.target.value }))}
+                    className="pr-8"
                     style={inputStyle}>
                     {members.map((o) => <option key={o} value={o}>{o}</option>)}
                   </select>
