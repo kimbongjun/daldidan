@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 
 const ACCENT = "#EA580C";
@@ -13,7 +14,14 @@ export interface ImageLightboxProps {
   onNext: () => void;
 }
 
-export default function ImageLightbox({ urls, index, onClose, onPrev, onNext }: ImageLightboxProps) {
+export default function ImageLightbox(props: ImageLightboxProps) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+  if (!mounted) return null;
+  return createPortal(<LightboxContent {...props} />, document.body);
+}
+
+function LightboxContent({ urls, index, onClose, onPrev, onNext }: ImageLightboxProps) {
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -33,9 +41,12 @@ export default function ImageLightbox({ urls, index, onClose, onPrev, onNext }: 
   return (
     <div
       style={{
-        position: "fixed", inset: 0, zIndex: 60,
+        position: "fixed", inset: 0, zIndex: 9999,
         background: "rgba(0,0,0,0.92)", backdropFilter: "blur(12px)",
-        display: "flex", alignItems: "center", justifyContent: "center",
+        display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center",
+        padding: "3.5rem 1rem 2.5rem",  /* 상단: 닫기버튼, 하단: 인디케이터 여백 */
+        boxSizing: "border-box",
       }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
@@ -48,7 +59,7 @@ export default function ImageLightbox({ urls, index, onClose, onPrev, onNext }: 
           width: 36, height: 36, borderRadius: "50%",
           background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.18)",
           display: "flex", alignItems: "center", justifyContent: "center",
-          color: "#fff", zIndex: 1,
+          color: "#fff",
         }}
       >
         <X size={18} />
@@ -60,7 +71,7 @@ export default function ImageLightbox({ urls, index, onClose, onPrev, onNext }: 
           onClick={onPrev}
           className="pressable"
           style={{
-            position: "absolute", left: "1rem",
+            position: "absolute", left: "1rem", top: "50%", transform: "translateY(-50%)",
             width: 40, height: 40, borderRadius: "50%",
             background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.18)",
             display: "flex", alignItems: "center", justifyContent: "center",
@@ -71,32 +82,24 @@ export default function ImageLightbox({ urls, index, onClose, onPrev, onNext }: 
         </button>
       )}
 
-      {/* 이미지 */}
-      <div
-        style={{
-          display: "flex", alignItems: "center", justifyContent: "center",
-          width: "90vw", maxWidth: 1200,
-          height: "82vh",           /* 뷰포트 높이 고정 — 닫기 버튼·인디케이터 여백 확보 */
-          overflow: "hidden",
-        }}
+      {/* 이미지 — 남은 공간을 flex로 채우고 그 안에서 contain */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        key={urls[index]}
+        src={urls[index]}
+        alt={`이미지 ${index + 1}`}
         onClick={(e) => e.stopPropagation()}
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          key={urls[index]}
-          src={urls[index]}
-          alt={`이미지 ${index + 1}`}
-          style={{
-            maxWidth: "100%",
-            maxHeight: "100%",
-            width: "auto",
-            height: "auto",
-            objectFit: "contain",
-            borderRadius: "0.75rem",
-            display: "block",
-          }}
-        />
-      </div>
+        style={{
+          display: "block",
+          maxWidth: "min(90vw, 1200px)",
+          maxHeight: "100%",
+          width: "auto",
+          height: "auto",
+          objectFit: "contain",
+          borderRadius: "0.75rem",
+          flexShrink: 0,
+        }}
+      />
 
       {/* 다음 */}
       {urls.length > 1 && (
@@ -104,7 +107,7 @@ export default function ImageLightbox({ urls, index, onClose, onPrev, onNext }: 
           onClick={onNext}
           className="pressable"
           style={{
-            position: "absolute", right: "1rem",
+            position: "absolute", right: "1rem", top: "50%", transform: "translateY(-50%)",
             width: 40, height: 40, borderRadius: "50%",
             background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.18)",
             display: "flex", alignItems: "center", justifyContent: "center",
@@ -117,7 +120,7 @@ export default function ImageLightbox({ urls, index, onClose, onPrev, onNext }: 
 
       {/* 페이지 인디케이터 */}
       {urls.length > 1 && (
-        <div style={{ position: "absolute", bottom: "1.25rem", display: "flex", gap: "0.375rem", alignItems: "center" }}>
+        <div style={{ position: "absolute", bottom: "1rem", display: "flex", gap: "0.375rem", alignItems: "center" }}>
           {urls.map((_, i) => (
             <button
               key={i}
