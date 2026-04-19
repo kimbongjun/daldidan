@@ -300,9 +300,13 @@ input[type="reset"]:not(:disabled):active,
 }
 
 .blog-prose img {
-  cursor: pointer;
+  cursor: zoom-in;
   touch-action: manipulation;
-  transition: opacity 0.15s ease;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.blog-prose img:active {
+  transform: scale(0.98);
 }
 
 @media (hover: hover) {
