@@ -4,8 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft, ChevronDown, ChevronUp, Image as ImageIcon,
-  LoaderCircle, Plus, Save, Settings, Smartphone, Trash2, Users,
+  LoaderCircle, Moon, Plus, Save, Settings, Smartphone, Sun, Trash2, Users,
 } from "lucide-react";
+import { useThemeStore } from "@/store/useThemeStore";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 
@@ -55,6 +56,7 @@ export default function MyPage() {
     meta_title: "", meta_description: "", meta_og_image: "", favicon_url: "", logo_url: "", custom_greeting: "",
     pwa_icon_url: "", pwa_splash_url: "", budget_members: '["공동","봉준","달희"]',
   });
+  const { theme, toggle: toggleTheme } = useThemeStore();
   const [newMemberInput, setNewMemberInput] = useState("");
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settingsSuccess, setSettingsSuccess] = useState(false);
@@ -231,6 +233,48 @@ export default function MyPage() {
         {optionsOpen && (
           <div className="flex flex-col gap-5 px-5 pb-6 pt-1">
             <hr style={{ border: "none", borderTop: "1px solid var(--border)", marginTop: 0 }} />
+
+            {/* 화면 테마 */}
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex flex-col gap-0.5">
+                <div className="flex items-center gap-1.5">
+                  {theme === "dark"
+                    ? <Moon size={14} style={{ color: ACCENT }} />
+                    : <Sun size={14} style={{ color: ACCENT }} />
+                  }
+                  <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>화면 테마</p>
+                </div>
+                <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                  {theme === "dark" ? "다크 모드" : "라이트 모드"}
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={theme === "dark"}
+                onClick={toggleTheme}
+                style={{
+                  width: 52, height: 28, borderRadius: 999, border: "none", cursor: "pointer",
+                  flexShrink: 0, position: "relative", transition: "background 0.2s",
+                  background: theme === "dark" ? "#312E81" : "#FDE68A",
+                }}
+              >
+                <span style={{
+                  position: "absolute", top: 4, width: 20, height: 20, borderRadius: "50%",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  background: theme === "dark" ? "#A5B4FC" : "#D97706",
+                  transition: "left 0.2s",
+                  left: theme === "dark" ? 28 : 4,
+                }}>
+                  {theme === "dark"
+                    ? <Moon size={11} style={{ color: "#1E1B4B" }} />
+                    : <Sun size={11} style={{ color: "#fff" }} />
+                  }
+                </span>
+              </button>
+            </div>
+
+            <hr style={{ border: "none", borderTop: "1px solid var(--border)" }} />
 
             {/* 가계부 구성원 관리 */}
             <div className="flex flex-col gap-3">

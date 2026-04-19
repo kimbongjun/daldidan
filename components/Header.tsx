@@ -1,10 +1,11 @@
 "use client";
 
 import { startTransition, useEffect, useRef, useState } from "react";
-import { Bell, BellOff, Check, LoaderCircle, LogOut, Pencil, RefreshCw, Settings, Share, Sparkles, Trash2, User, Moon, Sun, UserCircle, X } from "lucide-react";
+import { Bell, BellOff, Check, Cloud, CloudFog, CloudLightning, CloudRain, LoaderCircle, LogOut, MapPin, Pencil, RefreshCw, Settings, Share, Snowflake, Sparkles, Sun, Thermometer, Trash2, User, UserCircle, Wind, X } from "lucide-react";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 import { useThemeStore } from "@/store/useThemeStore";
+import { useWeatherStore, type WeatherCondition } from "@/store/useWeatherStore";
 import { useNotificationStore } from "@/store/useNotificationStore";
 import { createClient } from "@/lib/supabase/client";
 import { getFirebaseMessaging } from "@/lib/firebase-client";
@@ -99,7 +100,8 @@ export default function Header() {
   const notificationRef = useRef<HTMLDivElement>(null);
   const greetingInputRef = useRef<HTMLInputElement>(null);
 
-  const { theme, toggle } = useThemeStore();
+  const { theme } = useThemeStore();
+  const { condition: weatherCondition, temp: weatherTemp, fetchWeather, isLoading: weatherLoading } = useWeatherStore();
   const inbox = useNotificationStore((state) => state.inbox);
   const notifyNewPost = useNotificationStore((state) => state.notifyNewPost);
   const notifyComment = useNotificationStore((state) => state.notifyComment);
@@ -115,6 +117,12 @@ export default function Header() {
     setNow(new Date());
     const id = setInterval(() => setNow(new Date()), 60000);
     return () => clearInterval(id);
+  }, []);
+
+  // 날씨 초기 로드
+  useEffect(() => {
+    fetchWeather();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // 저장된 커스텀 인사말 + 로고 로드 (site_settings API)
@@ -224,6 +232,19 @@ export default function Header() {
 
   const greeting = customGreeting || (now ? getDefaultGreeting(now.getHours()) : "");
   const isLight = theme === "light";
+
+  const WEATHER_ICON_MAP: Record<WeatherCondition, { icon: React.ReactNode; color: string; bg: string }> = {
+    clear:   { icon: <Sun size={14} />,           color: "#F59E0B", bg: "linear-gradient(135deg, #FEF3C7, #FDE68A)" },
+    cloudy:  { icon: <Cloud size={14} />,          color: "#94A3B8", bg: "linear-gradient(135deg, #CBD5E1, #94A3B8)" },
+    rain:    { icon: <CloudRain size={14} />,       color: "#38BDF8", bg: "linear-gradient(135deg, #0EA5E930, #38BDF830)" },
+    snow:    { icon: <Snowflake size={14} />,       color: "#BAE6FD", bg: "linear-gradient(135deg, #E0F2FE30, #BAE6FD30)" },
+    hot:     { icon: <Thermometer size={14} />,     color: "#F97316", bg: "linear-gradient(135deg, #FFEDD5, #FB923C)" },
+    cold:    { icon: <Thermometer size={14} />,     color: "#818CF8", bg: "linear-gradient(135deg, #1E1B4B, #312E81)" },
+    windy:   { icon: <Wind size={14} />,            color: "#34D399", bg: "linear-gradient(135deg, #D1FAE530, #34D39930)" },
+    storm:   { icon: <CloudLightning size={14} />,  color: "#C084FC", bg: "linear-gradient(135deg, #2E1065, #4C1D95)" },
+    foggy:   { icon: <CloudFog size={14} />,        color: "#A8A29E", bg: "linear-gradient(135deg, #1C1917, #292524)" },
+  };
+  const weatherDisplay = weatherCondition ? WEATHER_ICON_MAP[weatherCondition] : null;
   const avatarLetter = user?.email?.[0]?.toUpperCase() ?? "U";
   const firebaseConfigured = Boolean(process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID);
   const pushSupported = firebaseConfigured && typeof window !== "undefined" && "Notification" in window && "serviceWorker" in navigator;
@@ -504,21 +525,33 @@ export default function Header() {
           />
         </button>
 
+        {/* 날씨 아이콘 + 온도 버튼 */}
         <button
-          onClick={toggle}
-          aria-label={isLight ? "다크 모드로 전환" : "라이트 모드로 전환"}
-          className="w-9 h-9 rounded-xl flex items-center justify-center transition-all hover:opacity-80"
+          onClick={fetchWeather}
+          aria-label="날씨 새로고침"
+          title={weatherCondition ? `${weatherCondition} · 클릭해서 새로고침` : "위치 기반 날씨 불러오는 중"}
+          className="h-9 px-2.5 rounded-xl flex items-center gap-1.5 transition-all hover:opacity-80"
           style={{
-            background: isLight
-              ? "linear-gradient(135deg, #FEF3C7, #FDE68A)"
-              : "linear-gradient(135deg, #1E1B4B, #312E81)",
+            background: weatherDisplay
+              ? isLight
+                ? "var(--bg-card)"
+                : weatherDisplay.bg
+              : "var(--bg-card)",
             border: "1px solid var(--border)",
+            minWidth: 36,
           }}
         >
-          {isLight
-            ? <Sun  size={15} style={{ color: "#D97706" }} />
-            : <Moon size={15} style={{ color: "#A5B4FC" }} />
+          {weatherLoading
+            ? <LoaderCircle size={14} style={{ color: "var(--text-muted)", animation: "spin 0.8s linear infinite" }} />
+            : weatherDisplay
+              ? <span style={{ color: weatherDisplay.color, display: "flex", alignItems: "center" }}>{weatherDisplay.icon}</span>
+              : <MapPin size={14} style={{ color: "var(--text-muted)" }} />
           }
+          {weatherTemp !== null && (
+            <span className="text-xs font-bold" style={{ color: weatherDisplay ? weatherDisplay.color : "var(--text-muted)" }}>
+              {weatherTemp}°
+            </span>
+          )}
         </button>
 
         {firebaseConfigured && (

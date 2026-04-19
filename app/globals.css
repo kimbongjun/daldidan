@@ -50,6 +50,89 @@
   --shadow-card:    0 8px 28px rgba(15,23,42,0.08);
 }
 
+/* ── Weather themes ───────────────────────────────────────────────────────── */
+[data-weather="clear"] {
+  --weather-primary: #F59E0B;
+  --weather-secondary: #FDE68A;
+  --weather-bg-tint: rgba(245,158,11,0.06);
+  --bg-base: #0F1014;
+}
+[data-weather="cloudy"] {
+  --weather-primary: #94A3B8;
+  --weather-secondary: #CBD5E1;
+  --weather-bg-tint: rgba(148,163,184,0.06);
+  --bg-base: #0D0F12;
+  --bg-card: #14161C;
+  --border: #25293A;
+}
+[data-weather="rain"] {
+  --weather-primary: #38BDF8;
+  --weather-secondary: #7DD3FC;
+  --weather-bg-tint: rgba(56,189,248,0.06);
+  --bg-base: #080E14;
+  --bg-card: #0E1620;
+  --border: #1E2D40;
+}
+[data-weather="snow"] {
+  --weather-primary: #BAE6FD;
+  --weather-secondary: #E0F2FE;
+  --weather-bg-tint: rgba(186,230,253,0.06);
+  --bg-base: #0A0C10;
+  --bg-card: #131620;
+  --border: #222840;
+}
+[data-weather="hot"] {
+  --weather-primary: #F97316;
+  --weather-secondary: #FB923C;
+  --weather-bg-tint: rgba(249,115,22,0.07);
+  --bg-base: #130D08;
+  --bg-card: #1C1208;
+  --border: #332010;
+}
+[data-weather="cold"] {
+  --weather-primary: #818CF8;
+  --weather-secondary: #A5B4FC;
+  --weather-bg-tint: rgba(129,140,248,0.06);
+  --bg-base: #080A14;
+  --bg-card: #0C0E1C;
+  --border: #1A1E36;
+}
+[data-weather="windy"] {
+  --weather-primary: #34D399;
+  --weather-secondary: #6EE7B7;
+  --weather-bg-tint: rgba(52,211,153,0.06);
+  --bg-base: #080F0C;
+  --bg-card: #0C1610;
+  --border: #182A20;
+}
+[data-weather="storm"] {
+  --weather-primary: #C084FC;
+  --weather-secondary: #E879F9;
+  --weather-bg-tint: rgba(192,132,252,0.07);
+  --bg-base: #0A080E;
+  --bg-card: #120E1C;
+  --border: #231A38;
+}
+[data-weather="foggy"] {
+  --weather-primary: #A8A29E;
+  --weather-secondary: #D6D3D1;
+  --weather-bg-tint: rgba(168,162,158,0.06);
+  --bg-base: #0C0C0C;
+  --bg-card: #161616;
+  --border: #2A2A2A;
+}
+
+/* 라이트 모드 날씨 — bg 오버라이드 없이 tint만 */
+[data-theme="light"][data-weather="clear"]  { --weather-primary: #D97706; --weather-secondary: #FDE68A; --weather-bg-tint: rgba(217,119,6,0.06); }
+[data-theme="light"][data-weather="cloudy"] { --weather-primary: #64748B; --weather-secondary: #94A3B8; --weather-bg-tint: rgba(100,116,139,0.05); }
+[data-theme="light"][data-weather="rain"]   { --weather-primary: #0284C7; --weather-secondary: #38BDF8; --weather-bg-tint: rgba(2,132,199,0.06); }
+[data-theme="light"][data-weather="snow"]   { --weather-primary: #0369A1; --weather-secondary: #BAE6FD; --weather-bg-tint: rgba(3,105,161,0.05); }
+[data-theme="light"][data-weather="hot"]    { --weather-primary: #EA580C; --weather-secondary: #FB923C; --weather-bg-tint: rgba(234,88,12,0.06); }
+[data-theme="light"][data-weather="cold"]   { --weather-primary: #4F46E5; --weather-secondary: #818CF8; --weather-bg-tint: rgba(79,70,229,0.05); }
+[data-theme="light"][data-weather="windy"]  { --weather-primary: #059669; --weather-secondary: #34D399; --weather-bg-tint: rgba(5,150,105,0.05); }
+[data-theme="light"][data-weather="storm"]  { --weather-primary: #7C3AED; --weather-secondary: #C084FC; --weather-bg-tint: rgba(124,58,237,0.06); }
+[data-theme="light"][data-weather="foggy"]  { --weather-primary: #78716C; --weather-secondary: #A8A29E; --weather-bg-tint: rgba(120,113,108,0.05); }
+
 /* ── Base ─────────────────────────────────────────────────────────────────── */
 *, *::before, *::after {
   box-sizing: border-box;
