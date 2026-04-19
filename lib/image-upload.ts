@@ -1,11 +1,3 @@
-/**
- * 이미지를 Supabase Storage에 업로드하여 URL을 반환합니다.
- * - 모든 이미지 확장자 지원 (JPEG, PNG, GIF, HEIC, HEIF, AVIF, TIFF, BMP, WebP, SVG 등)
- * - WebP 변환은 서버(sharp)에서 처리하므로 클라이언트는 원본 파일을 그대로 전송
- * - FormData로 전송하므로 JSON body 크기 제한과 무관
- * - 업로드 완료 시 영구 URL을 반환하여 에디터에 <img src="url"> 로 삽입
- */
-
 export async function uploadImagesToStorage(
   files: FileList | File[],
   onProgress?: (current: number, total: number) => void,
@@ -23,17 +15,31 @@ export async function uploadImagesToStorage(
     const form = new FormData();
     form.append("image", file, file.name);
 
-    const res = await fetch(endpoint, {
-      method: "POST",
-      body: form,
-    });
-
-    if (!res.ok) {
-      const json = await res.json().catch(() => ({})) as { error?: string };
-      throw new Error(`"${file.name}" 업로드 실패: ${json.error ?? "서버 오류"}`);
+    let res: Response;
+    try {
+      res = await fetch(endpoint, { method: "POST", body: form });
+    } catch {
+      throw new Error(`"${file.name}" 업로드 실패: 네트워크 오류`);
     }
 
-    const { url } = await res.json() as { url: string };
+    // Content-Type이 JSON이 아니면 서버가 HTML 에러 페이지를 반환한 것
+    const ct = res.headers.get("content-type") ?? "";
+    if (!ct.includes("application/json")) {
+      throw new Error(
+        `"${file.name}" 업로드 실패: 서버 오류 (HTTP ${res.status})`,
+      );
+    }
+
+    const json = await res.json().catch(() => ({}) as Record<string, unknown>);
+
+    if (!res.ok) {
+      const msg = (json as { error?: string }).error ?? "서버 오류";
+      throw new Error(`"${file.name}" 업로드 실패: ${msg}`);
+    }
+
+    const { url } = json as { url: string };
+    if (!url) throw new Error(`"${file.name}" 업로드 실패: URL을 받지 못했습니다.`);
+
     results.push({ url, name: file.name });
     onProgress?.(i + 1, imageFiles.length);
   }

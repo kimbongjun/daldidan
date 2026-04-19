@@ -4,11 +4,23 @@ import { createAdminClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
-// SVG는 벡터 보존을 위해 변환 없이 그대로 업로드
 const SVG_MIME = "image/svg+xml";
 const MAX_INPUT_BYTES = 30 * 1024 * 1024; // 30 MB
 
 export async function POST(request: NextRequest) {
+  try {
+    return await handleUpload(request);
+  } catch (err) {
+    // sharp 크래시, OOM, 예상치 못한 예외 등 → 항상 JSON 반환 보장
+    console.error("[blog/images] unhandled error:", err);
+    return NextResponse.json(
+      { error: "이미지 업로드 중 서버 오류가 발생했습니다." },
+      { status: 500 },
+    );
+  }
+}
+
+async function handleUpload(request: NextRequest): Promise<NextResponse> {
   let formData: FormData;
   try {
     formData = await request.formData();
@@ -22,7 +34,10 @@ export async function POST(request: NextRequest) {
   }
 
   if (file.size > MAX_INPUT_BYTES) {
-    return NextResponse.json({ error: "파일 크기가 너무 큽니다. 30 MB 이하 이미지를 사용해 주세요." }, { status: 413 });
+    return NextResponse.json(
+      { error: "파일 크기가 너무 큽니다. 30 MB 이하 이미지를 사용해 주세요." },
+      { status: 413 },
+    );
   }
 
   const inputBuffer = Buffer.from(await file.arrayBuffer());
@@ -33,12 +48,10 @@ export async function POST(request: NextRequest) {
   let ext: string;
 
   if (isSvg) {
-    // SVG는 변환 없이 그대로 사용
     outputBuffer = inputBuffer;
     contentType = SVG_MIME;
     ext = "svg";
   } else {
-    // 모든 래스터 이미지 (JPEG, PNG, GIF, HEIC, HEIF, AVIF, TIFF, BMP, WebP 등)를 WebP로 변환
     try {
       outputBuffer = await sharp(inputBuffer, { animated: true })
         .rotate()
@@ -46,11 +59,19 @@ export async function POST(request: NextRequest) {
         .toBuffer();
       contentType = "image/webp";
       ext = "webp";
-    } catch {
-      return NextResponse.json(
-        { error: "이미지 변환에 실패했습니다. 지원하지 않는 파일 형식입니다." },
-        { status: 400 },
-      );
+    } catch (err) {
+      console.error("[blog/images] sharp 변환 실패:", err);
+      // sharp 실패 시 원본 그대로 업로드 (폴백)
+      outputBuffer = inputBuffer;
+      const mimeToExt: Record<string, string> = {
+        "image/jpeg": "jpg",
+        "image/png": "png",
+        "image/gif": "gif",
+        "image/webp": "webp",
+        "image/avif": "avif",
+      };
+      ext = mimeToExt[file.type] ?? "bin";
+      contentType = file.type || "application/octet-stream";
     }
   }
 
@@ -61,12 +82,10 @@ export async function POST(request: NextRequest) {
 
   const { error: uploadError } = await supabase.storage
     .from("blog-images")
-    .upload(storagePath, outputBuffer, {
-      contentType,
-      upsert: false,
-    });
+    .upload(storagePath, outputBuffer, { contentType, upsert: false });
 
   if (uploadError) {
+    console.error("[blog/images] Supabase 업로드 실패:", uploadError);
     return NextResponse.json(
       { error: `스토리지 업로드 실패: ${uploadError.message}` },
       { status: 500 },
