@@ -346,9 +346,11 @@ function EventDetailModal({
   onDeleted: () => void;
 }) {
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
   async function handleDelete(id: string) {
     setDeleting(id);
+    setConfirmingId(null);
     try {
       await fetch(`/api/calendar/${id}`, { method: "DELETE" });
       onDeleted();
@@ -421,14 +423,37 @@ function EventDetailModal({
                     <p className="text-xs" style={{ color: "var(--text-muted)" }}>등록: {ev.author_name}</p>
                   </div>
                   {ev.is_mine && (
-                    <button
-                      onClick={() => handleDelete(ev.id)}
-                      disabled={deleting === ev.id}
-                      className="p-1.5 rounded-lg shrink-0"
-                      style={{ color: "#F43F5E", background: "rgba(244,63,94,0.1)" }}
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    confirmingId === ev.id ? (
+                      <div className="flex flex-col items-end gap-1 shrink-0">
+                        <span className="text-xs" style={{ color: "var(--text-muted)" }}>삭제할까요?</span>
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => setConfirmingId(null)}
+                            className="px-2 py-1 rounded-lg text-xs"
+                            style={{ color: "var(--text-muted)", background: "var(--bg-input)", border: "1px solid var(--border)" }}
+                          >
+                            취소
+                          </button>
+                          <button
+                            onClick={() => handleDelete(ev.id)}
+                            disabled={deleting === ev.id}
+                            className="px-2 py-1 rounded-lg text-xs font-medium"
+                            style={{ color: "#fff", background: "#F43F5E", opacity: deleting === ev.id ? 0.6 : 1 }}
+                          >
+                            삭제
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setConfirmingId(ev.id)}
+                        disabled={deleting === ev.id}
+                        className="p-1.5 rounded-lg shrink-0"
+                        style={{ color: "#F43F5E", background: "rgba(244,63,94,0.1)" }}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )
                   )}
                 </div>
               </div>
