@@ -35,6 +35,7 @@ interface CalendarEvent {
   recurrence: Recurrence | null;
   author_name: string;
   is_mine: boolean;
+  is_shared: boolean;
 }
 
 type NewEvent = {
@@ -48,6 +49,7 @@ type NewEvent = {
   description: string;
   is_recurring: boolean;
   recurrence: Recurrence | "";
+  is_shared: boolean;
 };
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -77,6 +79,7 @@ const DEFAULT_NEW_EVENT: NewEvent = {
   description: "",
   is_recurring: false,
   recurrence: "",
+  is_shared: false,
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -93,6 +96,30 @@ function dDayLabel(startDate: string): string {
   if (diff === 0) return "D-Day";
   if (diff > 0) return `D-${diff}`;
   return `D+${Math.abs(diff)}`;
+}
+
+function toLunarDate(year: number, month: number, day: number): string {
+  try {
+    const date = new Date(year, month - 1, day);
+    const fmt = new Intl.DateTimeFormat("ko-u-ca-chinese", { month: "numeric", day: "numeric" });
+    const parts = fmt.formatToParts(date);
+    const m = parts.find((p) => p.type === "month")?.value ?? "";
+    const d = parts.find((p) => p.type === "day")?.value ?? "";
+    return m && d ? `${m}/${d}` : "";
+  } catch {
+    return "";
+  }
+}
+
+const AUTHOR_COLORS = ["#10B981", "#F59E0B", "#8B5CF6", "#EC4899", "#14B8A6", "#F97316", "#6366F1", "#84CC16"];
+
+function getAuthorColor(userId: string): string {
+  let hash = 0;
+  for (let i = 0; i < userId.length; i++) {
+    hash = ((hash << 5) - hash) + userId.charCodeAt(i);
+    hash |= 0;
+  }
+  return AUTHOR_COLORS[Math.abs(hash) % AUTHOR_COLORS.length];
 }
 
 // ─── EventFormModal ───────────────────────────────────────────────────────────
@@ -135,6 +162,7 @@ function EventFormModal({
           description: form.description.trim(),
           is_recurring: form.is_recurring,
           recurrence: form.is_recurring && form.recurrence ? form.recurrence : null,
+          is_shared: form.is_shared,
         }),
       });
       if (!res.ok) {
@@ -298,6 +326,37 @@ function EventFormModal({
             )}
           </div>
 
+          {/* 공동 일정 */}
+          <div
+            className="flex flex-col gap-2 p-3 rounded-xl"
+            style={{ background: form.is_shared ? "rgba(99,102,241,0.1)" : "var(--bg-input)", border: `1px solid ${form.is_shared ? "#6366F1" : "var(--border)"}`, transition: "all 0.2s" }}
+          >
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.is_shared}
+                onChange={(e) => set("is_shared", e.target.checked)}
+                className="w-4 h-4 accent-[#6366F1]"
+              />
+              <span className="text-sm font-medium" style={{ color: form.is_shared ? "#6366F1" : "var(--text-primary)" }}>
+                공동 일정
+              </span>
+              {form.is_shared && (
+                <span
+                  className="tag text-xs ml-auto"
+                  style={{ background: "rgba(99,102,241,0.2)", color: "#6366F1", border: "1px solid rgba(99,102,241,0.4)" }}
+                >
+                  공동
+                </span>
+              )}
+            </label>
+            {form.is_shared && (
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                공동 일정으로 등록되어 등록자 표시 없이 공유됩니다.
+              </p>
+            )}
+          </div>
+
           {error && <p className="text-xs" style={{ color: "#F43F5E" }}>{error}</p>}
 
           <button
@@ -377,6 +436,29 @@ function EventDetailModal({
                       >
                         {meta.label}
                       </span>
+                      {ev.is_shared ? (
+                        <span
+                          className="text-xs px-1.5 py-0.5 rounded font-medium"
+                          style={{ background: "rgba(99,102,241,0.15)", color: "#6366F1", border: "1px solid rgba(99,102,241,0.35)" }}
+                        >
+                          공동
+                        </span>
+                      ) : (
+                        <span
+                          className="text-xs px-1.5 py-0.5 rounded font-medium flex items-center gap-1"
+                          style={{
+                            background: `${getAuthorColor(ev.user_id)}18`,
+                            color: getAuthorColor(ev.user_id),
+                            border: `1px solid ${getAuthorColor(ev.user_id)}35`,
+                          }}
+                        >
+                          <span
+                            className="w-1.5 h-1.5 rounded-full inline-block"
+                            style={{ background: getAuthorColor(ev.user_id) }}
+                          />
+                          {ev.author_name}
+                        </span>
+                      )}
                       {ev.is_recurring && ev.recurrence && (
                         <span className="text-xs" style={{ color: "var(--text-muted)" }}>
                           <Repeat size={10} className="inline mr-0.5" />{RECURRENCE_LABELS[ev.recurrence]}
@@ -401,7 +483,6 @@ function EventDetailModal({
                     {ev.description && (
                       <p className="text-xs" style={{ color: "var(--text-muted)" }}>{ev.description}</p>
                     )}
-                    <p className="text-xs" style={{ color: "var(--text-muted)" }}>등록: {ev.author_name}</p>
                   </div>
                   {ev.is_mine && (
                     confirmingId === ev.id ? (
@@ -635,6 +716,7 @@ export default function CalendarWidget() {
             const isSun = weekday === 0;
             const isSat = weekday === 6;
 
+            const lunarLabel = toLunarDate(viewYear, viewMonth, dayNum);
             return (
               <button
                 key={idx}
@@ -643,7 +725,7 @@ export default function CalendarWidget() {
                 style={{
                   background: isToday ? "rgba(14,165,233,0.2)" : "transparent",
                   opacity: isPast ? 0.5 : 1,
-                  minHeight: 36,
+                  minHeight: 44,
                 }}
               >
                 <span
@@ -661,12 +743,20 @@ export default function CalendarWidget() {
                 >
                   {dayNum}
                 </span>
+                {lunarLabel && (
+                  <span
+                    className="leading-none"
+                    style={{ fontSize: 7, color: "var(--text-muted)", letterSpacing: "-0.02em" }}
+                  >
+                    {lunarLabel}
+                  </span>
+                )}
                 <div className="flex gap-0.5 flex-wrap justify-center">
                   {dayEvents.slice(0, 3).map((ev) => (
                     <span
                       key={ev.id}
                       className="w-1.5 h-1.5 rounded-full"
-                      style={{ background: EVENT_TYPE_META[ev.event_type].color }}
+                      style={{ background: ev.is_shared ? "#6366F1" : getAuthorColor(ev.user_id) }}
                     />
                   ))}
                 </div>
@@ -684,6 +774,7 @@ export default function CalendarWidget() {
             <div className="flex flex-col gap-2 overflow-y-auto scrollbar-hide">
               {upcoming.map((ev) => {
                 const meta = EVENT_TYPE_META[ev.event_type];
+                const authorColor = ev.is_shared ? "#6366F1" : getAuthorColor(ev.user_id);
                 const [, em, ed] = ev.start_date.split("-").map(Number);
                 const dateLabel = `${em}/${ed}`;
                 const dday = dDayLabel(ev.start_date);
@@ -697,12 +788,30 @@ export default function CalendarWidget() {
                   >
                     <div
                       className="w-1 self-stretch rounded-full shrink-0"
-                      style={{ background: meta.color }}
+                      style={{ background: authorColor }}
                     />
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium truncate" style={{ color: "var(--text-primary)" }}>
-                        {ev.title}
-                      </p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-xs font-medium truncate" style={{ color: "var(--text-primary)" }}>
+                          {ev.title}
+                        </p>
+                        {ev.is_shared ? (
+                          <span
+                            className="text-xs px-1 py-0.5 rounded shrink-0"
+                            style={{ fontSize: 9, background: "rgba(99,102,241,0.15)", color: "#6366F1" }}
+                          >
+                            공동
+                          </span>
+                        ) : (
+                          <span
+                            className="text-xs px-1 py-0.5 rounded shrink-0 flex items-center gap-0.5"
+                            style={{ fontSize: 9, background: `${authorColor}15`, color: authorColor }}
+                          >
+                            <span className="w-1 h-1 rounded-full inline-block shrink-0" style={{ background: authorColor }} />
+                            {ev.author_name}
+                          </span>
+                        )}
+                      </div>
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-xs" style={{ color: "var(--text-muted)" }}>{dateLabel}</span>
                         {ev.start_time && (

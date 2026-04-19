@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
 
   let query = supabase
     .from("calendar_events")
-    .select("id, user_id, title, event_type, start_date, start_time, end_date, end_time, location, description, is_recurring, recurrence, created_at")
+    .select("id, user_id, title, event_type, start_date, start_time, end_date, end_time, location, description, is_recurring, recurrence, is_shared, created_at")
     .order("start_date", { ascending: true })
     .order("start_time", { ascending: true, nullsFirst: true });
 
@@ -48,6 +48,7 @@ export async function GET(request: NextRequest) {
     ...e,
     author_name: nameMap[e.user_id] ?? "익명",
     is_mine: e.user_id === user.id,
+    is_shared: e.is_shared ?? false,
   }));
 
   return NextResponse.json(events);
@@ -70,6 +71,7 @@ export async function POST(request: NextRequest) {
     description?: string;
     is_recurring?: boolean;
     recurrence?: string;
+    is_shared?: boolean;
   };
 
   const title = body.title?.trim();
@@ -100,6 +102,7 @@ export async function POST(request: NextRequest) {
       description: body.description?.trim() ?? "",
       is_recurring: body.is_recurring ?? false,
       recurrence,
+      is_shared: body.is_shared ?? false,
     })
     .select()
     .single();
