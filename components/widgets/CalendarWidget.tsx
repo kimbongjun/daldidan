@@ -17,7 +17,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { AuthUser as User } from "@supabase/supabase-js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type EventType = "schedule" | "appointment" | "anniversary";
+type EventType = "schedule" | "anniversary";
 type Recurrence = "daily" | "weekly" | "monthly" | "yearly";
 
 interface CalendarEvent {
@@ -53,7 +53,6 @@ type NewEvent = {
 // ─── Constants ────────────────────────────────────────────────────────────────
 const EVENT_TYPE_META: Record<EventType, { label: string; color: string; bg: string }> = {
   schedule:    { label: "일정",   color: "#0EA5E9", bg: "rgba(14,165,233,0.15)" },
-  appointment: { label: "약속",   color: "#10B981", bg: "rgba(16,185,129,0.15)" },
   anniversary: { label: "기념일", color: "#F43F5E", bg: "rgba(244,63,94,0.15)" },
 };
 
@@ -217,49 +216,31 @@ function EventFormModal({
             </div>
           </div>
 
-          {/* 날짜/시간 */}
+          {/* 날짜/시간 — min-w-0으로 grid 셀 넘침 방지, boxSizing border-box */}
           <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1">
-              <label className="text-xs" style={{ color: "var(--text-muted)" }}>시작 날짜 *</label>
-              <input
-                type="date"
-                value={form.start_date}
-                onChange={(e) => set("start_date", e.target.value)}
-                className="w-full px-3 py-2 rounded-lg text-sm outline-none"
-                style={{ background: "var(--bg-input)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs" style={{ color: "var(--text-muted)" }}>시작 시간</label>
-              <input
-                type="time"
-                value={form.start_time}
-                onChange={(e) => set("start_time", e.target.value)}
-                className="w-full px-3 py-2 rounded-lg text-sm outline-none"
-                style={{ background: "var(--bg-input)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs" style={{ color: "var(--text-muted)" }}>종료 날짜</label>
-              <input
-                type="date"
-                value={form.end_date}
-                onChange={(e) => set("end_date", e.target.value)}
-                min={form.start_date}
-                className="w-full px-3 py-2 rounded-lg text-sm outline-none"
-                style={{ background: "var(--bg-input)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs" style={{ color: "var(--text-muted)" }}>종료 시간</label>
-              <input
-                type="time"
-                value={form.end_time}
-                onChange={(e) => set("end_time", e.target.value)}
-                className="w-full px-3 py-2 rounded-lg text-sm outline-none"
-                style={{ background: "var(--bg-input)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
-              />
-            </div>
+            {[
+              { label: "시작 날짜 *", type: "date", value: form.start_date, key: "start_date", min: undefined },
+              { label: "시작 시간",   type: "time", value: form.start_time, key: "start_time", min: undefined },
+              { label: "종료 날짜",   type: "date", value: form.end_date,   key: "end_date",   min: form.start_date },
+              { label: "종료 시간",   type: "time", value: form.end_time,   key: "end_time",   min: undefined },
+            ].map(({ label, type, value, key, min }) => (
+              <div key={key} className="flex flex-col gap-1 min-w-0">
+                <label className="text-xs" style={{ color: "var(--text-muted)" }}>{label}</label>
+                <input
+                  type={type}
+                  value={value}
+                  min={min}
+                  onChange={(e) => set(key as keyof NewEvent, e.target.value)}
+                  className="w-full min-w-0 px-2 py-2 rounded-lg text-xs outline-none"
+                  style={{
+                    background: "var(--bg-input)",
+                    border: "1px solid var(--border)",
+                    color: "var(--text-primary)",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
+            ))}
           </div>
 
           {/* 장소 */}
