@@ -73,6 +73,6 @@ NEXT_PUBLIC_FIREBASE_*       FCM 클라이언트
 
 ## 참고 파일
 
-- `.claude/ENGINEERING.md` §8 API 엔드포인트, §11 DB 스키마, §14 외부 API 통합
+- `.claude/docs/api.md`, `.claude/docs/database.md`, `.claude/docs/external-apis.md`
 - `app/api/places/nearby/route.ts` — Google Places 최신 구현 패턴
 - `app/api/transactions/route.ts` — Supabase 쿼리 패턴

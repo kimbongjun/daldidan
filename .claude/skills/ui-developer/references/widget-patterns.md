@@ -7,7 +7,6 @@
 | 블로그 | `--accent-purple` | `#7C3AED` | `gradient-violet` |
 | 가계부 | `--accent-indigo` | `#6366F1` | `gradient-indigo` |
 | 축제 | `--accent-amber` | `#F59E0B` | `gradient-amber` |
-| 맛집 | `--accent-orange` | `#EA580C` | `gradient-orange` |
 | 여행 | `--accent-emerald` | `#10B981` | `gradient-emerald` |
 | 주식 | `--accent-violet` | `#7C3AED` | `gradient-violet` |
 | 날씨 | `--accent-cyan` | `#06B6D4` | `gradient-cyan` |
@@ -28,7 +27,6 @@ style={{
   gridTemplateAreas: `
     "blog blog budget"
     "festival festival festival"
-    "restaurant restaurant restaurant"
     "newwidget newwidget newwidget"  ← 추가
   `,
   gridTemplateColumns: "1fr 1fr 1fr",

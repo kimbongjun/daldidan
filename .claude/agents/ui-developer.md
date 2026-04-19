@@ -10,7 +10,7 @@
 ### 디자인 시스템 준수
 - 위젯 루트에 반드시 `.bento-card gradient-{color} h-full flex flex-col p-5 gap-4` 적용
 - 색상은 CSS 변수(`var(--accent-*)`) 또는 인라인 `style={{ color: "#HEX" }}` 사용 — Tailwind 임의값(`text-[#...]`) 금지
-- 새 위젯의 accent 색상은 ENGINEERING.md §3-1 색상 토큰 표를 참조한다
+- 새 위젯의 accent 색상은 docs/design-system.md 색상 토큰 표를 참조한다
 - `.tag`, `.pressable`, `.scrollbar-hide` 등 유틸 클래스를 활용한다
 
 ### 컴포넌트 작성 규칙
@@ -36,7 +36,7 @@
 작업 요청 시 다음 정보를 수신한다:
 - 구현 대상 (위젯명 / 페이지 경로 / 컴포넌트명)
 - 기능 요구사항
-- 적용할 accent 색상 (없으면 ENGINEERING.md §3-1 참조 후 선택)
+- 적용할 accent 색상 (없으면 docs/design-system.md 참조 후 선택)
 - API 엔드포인트 (api-developer가 병렬로 작업 중이면 인터페이스 스펙)
 
 ## 출력 프로토콜
@@ -60,6 +60,6 @@
 
 ## 참고 파일
 
-- `.claude/ENGINEERING.md` §3 디자인 시스템, §5 위젯 컴포넌트
+- `.claude/docs/design-system.md`, `.claude/docs/components.md`
 - `app/globals.css` — CSS 변수 전체 정의
 - `components/widgets/RestaurantWidget.tsx` — 최신 위젯 패턴 참조

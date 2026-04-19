@@ -140,7 +140,14 @@ npm run lint     # ESLint 검사
 
 **트리거:** 달디단 코드 변경 작업(구현·수정·버그 수정·개선) 요청 시 `orchestrator` 스킬을 사용하라. 단순 코드 읽기·설명은 직접 응답 가능.
 
-**상세 문서:** `.claude/ENGINEERING.md` — 컴포넌트 구조, 디자인 가이드, API 스펙 전체 참조.
+**상세 문서:** `.claude/docs/` 디렉터리 — 주제별 분리된 레퍼런스 문서:
+- `architecture.md` — 디렉토리 구조, 라우트 맵
+- `design-system.md` — 색상 토큰, 유틸 클래스, BentoGrid 레이아웃
+- `components.md` — 위젯 컴포넌트, 공통 컴포넌트, 상태 관리
+- `api.md` — API 엔드포인트 전체 목록
+- `database.md` — DB 스키마, 인증 플로우
+- `features.md` — 주요 기능 플로우, 라이브러리, PWA/푸시
+- `external-apis.md` — 외부 API 통합, 환경 변수
 
 **변경 이력:**
 | 날짜 | 변경 내용 | 대상 | 사유 |

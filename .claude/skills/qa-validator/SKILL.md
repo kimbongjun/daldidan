@@ -44,7 +44,7 @@ npm run lint 2>&1
 ```
 
 **Supabase 스키마 ↔ 쿼리 비교:**
-1. ENGINEERING.md §11 스키마 또는 마이그레이션 파일 확인
+1. docs/database.md 스키마 또는 마이그레이션 파일 확인
 2. 실제 쿼리에서 참조하는 컬럼명 비교
 3. null 가능 컬럼에 null 처리 누락 시 버그 등록
 

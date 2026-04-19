@@ -40,28 +40,6 @@ interface TransactionApiResponse {
 }
 ```
 
-### GET /api/places/nearby?lat=&lng=
-```typescript
-// 응답
-interface NearbyResponse {
-  restaurants: NearbyRestaurant[];
-}
-
-interface NearbyRestaurant {
-  id: string;
-  name: string;
-  address: string;
-  rating: number;
-  reviewCount: number;
-  isOpen: boolean | null;
-  photoRef: string | null;
-  mapUrl: string;
-  category: RestaurantCategory;
-  distance: string;
-  sourceCategory: string;
-}
-```
-
 ### GET /api/festival
 ```typescript
 interface FestivalItem {
@@ -96,19 +74,3 @@ headers: {
 > ⚠️ Naver Cloud Platform(NCP) 엔드포인트(`naveropenapi.apigw-pub.fin-ntruss.com`)는
 > 별도 NCP 키가 필요하다. 현재 `.env.local`에는 NCP 키 미설정 — 사용 금지.
 
----
-
-## Google Places Photo 프록시 패턴
-
-```typescript
-// photoRef 형식: "places/PLACE_ID/photos/PHOTO_ID"
-// 프록시 URL: /api/places/photo?name=places/...
-
-// 실제 Google API 호출
-const metaRes = await fetch(
-  `https://places.googleapis.com/v1/${photoRef}/media?key=${apiKey}&maxWidthPx=400&skipHttpRedirect=true`,
-  { next: { revalidate: 86400 }, signal: AbortSignal.timeout(5000) }
-);
-// skipHttpRedirect=true → JSON { photoUri: "https://..." } 반환
-// → NextResponse.redirect(photoUri)
-```

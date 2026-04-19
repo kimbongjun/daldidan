@@ -26,7 +26,7 @@ UI 구현과 API 구현이 완료된 후 통합 정합성을 검증하는 에이
 
 **Supabase 스키마 ↔ 쿼리 경계:**
 ```
-1. DB 스키마(ENGINEERING.md §11 또는 마이그레이션 파일)를 읽는다
+1. DB 스키마(docs/database.md 또는 마이그레이션 파일)를 읽는다
 2. 실제 쿼리에서 참조하는 컬럼명과 비교한다
 3. null 가능 컬럼에 null 처리가 없으면 버그로 보고한다
 ```
@@ -77,5 +77,5 @@ ui-developer와 api-developer로부터 다음을 수신한다:
 
 ## 참고 파일
 
-- `.claude/ENGINEERING.md` §3 디자인 시스템, §8 API 엔드포인트, §11 DB 스키마
+- `.claude/docs/design-system.md`, `.claude/docs/api.md`, `.claude/docs/database.md`
 - `app/globals.css` — 유틸 클래스 전체 목록

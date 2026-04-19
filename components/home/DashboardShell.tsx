@@ -7,7 +7,6 @@ import Header from "@/components/Header";
 import BudgetWidget from "@/components/widgets/BudgetWidget";
 import BlogWidget from "@/components/widgets/BlogWidget";
 import FestivalWidget from "@/components/widgets/FestivalWidget";
-import RestaurantWidget from "@/components/widgets/RestaurantWidget";
 import RealEstateWidget from "@/components/widgets/RealEstateWidget";
 import CalendarWidget from "@/components/widgets/CalendarWidget";
 import ErrorBoundary from "@/components/ErrorBoundary";
@@ -115,7 +114,6 @@ function BentoGrid({
               "blog    budget"
               "blog    calendar"
               "festival festival"
-              "restaurant  restaurant"
               "realestate realestate";
           }
         }
@@ -127,7 +125,6 @@ function BentoGrid({
         <div style={{ gridArea: "budget",     minWidth: 0, minHeight: 460 }}><ErrorBoundary><BudgetWidget /></ErrorBoundary></div>
         <div style={{ gridArea: "calendar",   minWidth: 0, minHeight: 520 }}><ErrorBoundary><CalendarWidget /></ErrorBoundary></div>
         <div style={{ gridArea: "festival",   minWidth: 0, height: 300 }}><FestivalWidget /></div>
-        <div style={{ gridArea: "restaurant", minWidth: 0, height: 300 }}><RestaurantWidget /></div>
         <div style={{ gridArea: "realestate", minWidth: 0, height: 340 }}><RealEstateWidget /></div>
       </div>
 
@@ -137,7 +134,6 @@ function BentoGrid({
         <div style={{ minWidth: 0 }}><ErrorBoundary><BudgetWidget /></ErrorBoundary></div>
         <div style={{ minWidth: 0, gridColumn: "1 / -1", minHeight: 520 }}><ErrorBoundary><CalendarWidget /></ErrorBoundary></div>
         <div style={{ minWidth: 0, height: 300, gridColumn: "1 / -1" }}><FestivalWidget /></div>
-        <div style={{ minWidth: 0, height: 300, gridColumn: "1 / -1" }}><RestaurantWidget /></div>
         <div style={{ minWidth: 0, gridColumn: "1 / -1" }}><RealEstateWidget /></div>
       </div>
 
@@ -147,7 +143,6 @@ function BentoGrid({
         <div style={{ minWidth: 0 }}><ErrorBoundary><BudgetWidget /></ErrorBoundary></div>
         <div style={{ minWidth: 0, minHeight: 520 }}><ErrorBoundary><CalendarWidget /></ErrorBoundary></div>
         <div style={{ minWidth: 0, height: 300 }}><FestivalWidget /></div>
-        <div style={{ minWidth: 0, height: 300 }}><RestaurantWidget /></div>
         <div style={{ minWidth: 0 }}><RealEstateWidget /></div>
       </div>
     </div>

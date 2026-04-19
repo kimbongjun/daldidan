@@ -49,7 +49,7 @@ _workspace/ 없음                 → 초기 실행
    - 풀스택: 새 기능(위젯+API) → 두 에이전트 병렬 투입
 
 2. **관련 파일 목록 작성**
-   - ENGINEERING.md §5 위젯 컴포넌트, §8 API 엔드포인트 참조
+   - docs/components.md 위젯, docs/api.md 엔드포인트 참조
    - 수정 대상 파일 경로 확정
 
 3. **의존성 파악**

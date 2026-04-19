@@ -19,7 +19,7 @@ description: >
 ## 실행 전 필수 확인
 
 작업 시작 전 다음 파일을 반드시 읽는다:
-1. `.claude/ENGINEERING.md` §3 디자인 시스템 — 색상 토큰, 유틸 클래스 확인
+1. `.claude/docs/design-system.md` — 색상 토큰, 유틸 클래스 확인
 2. 수정 대상 파일 — 기존 코드 패턴 파악 후 일관성 유지
 
 ---
@@ -31,7 +31,7 @@ description: >
 ```tsx
 "use client";
 
-const ACCENT = "#HEXCOLOR"; // ENGINEERING.md §3-1 색상 토큰 참조
+const ACCENT = "#HEXCOLOR"; // docs/design-system.md 색상 토큰 참조
 
 export default function XxxWidget() {
   return (

@@ -19,8 +19,8 @@ description: >
 ## 실행 전 필수 확인
 
 작업 시작 전:
-1. `.claude/ENGINEERING.md` §8 API 엔드포인트 — 기존 패턴 파악
-2. `.claude/ENGINEERING.md` §11 DB 스키마 — 관련 테이블 구조 확인
+1. `.claude/docs/api.md` — 기존 API 패턴 파악
+2. `.claude/docs/database.md` — 관련 테이블 구조 확인
 3. `.env.local` — 사용 가능한 환경 변수 확인
 
 ---
@@ -156,42 +156,6 @@ interface TransactionWithProfile {
   amount: number;
   profiles: { display_name: string | null } | null;
 }
-```
-
----
-
-## Google Places API v1 패턴
-
-```typescript
-// Nearby Search
-const res = await fetch("https://places.googleapis.com/v1/places:searchNearby", {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-    "X-Goog-Api-Key": apiKey,
-    "X-Goog-FieldMask": "places.id,places.displayName,places.rating,...",
-  },
-  body: JSON.stringify({
-    includedTypes: ["restaurant"],
-    maxResultCount: 20,
-    locationRestriction: {
-      circle: { center: { latitude: lat, longitude: lng }, radius: 1500 },
-    },
-    languageCode: "ko",
-  }),
-  signal: AbortSignal.timeout(8000),
-});
-
-// Text Search
-const res = await fetch("https://places.googleapis.com/v1/places:searchText", {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-    "X-Goog-Api-Key": apiKey,
-    "X-Goog-FieldMask": "places.rating,places.currentOpeningHours,places.photos",
-  },
-  body: JSON.stringify({ textQuery: `${name} ${address}`, maxResultCount: 1, languageCode: "ko" }),
-});
 ```
 
 ---
