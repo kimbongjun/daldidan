@@ -121,17 +121,28 @@ export default function BlogWriteForm({
     setError("");
 
     try {
+      const kstToday = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
+      let resolvedPublishedAt: string;
+      if (isEditMode && initialPost?.publishedAt) {
+        const origKstDate = new Date(new Date(initialPost.publishedAt).getTime() + 9 * 3600_000).toISOString().slice(0, 10);
+        resolvedPublishedAt = publishedDate === origKstDate
+          ? initialPost.publishedAt
+          : `${publishedDate}T12:00:00+09:00`;
+      } else {
+        resolvedPublishedAt = publishedDate === kstToday
+          ? new Date().toISOString()
+          : `${publishedDate}T12:00:00+09:00`;
+      }
+
       const response = await fetch("/api/blog/posts", {
         method: isEditMode ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
-        // content_json 제외 — payload 크기 최소화
         body: JSON.stringify({
           id: initialPost?.id,
           title,
           contentHtml: content.html,
           category: category || null,
-          // "YYYY-MM-DD" → 한국 시간 기준 정오 (타임존 오프셋 명시)
-          publishedAt: `${publishedDate}T12:00:00+09:00`,
+          publishedAt: resolvedPublishedAt,
         }),
       });
 
