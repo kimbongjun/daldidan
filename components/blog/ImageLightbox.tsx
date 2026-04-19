@@ -73,7 +73,12 @@ export default function ImageLightbox({ urls, index, onClose, onPrev, onNext }: 
 
       {/* 이미지 */}
       <div
-        style={{ maxWidth: "min(90vw, 1200px)", maxHeight: "88vh", display: "flex", alignItems: "center", justifyContent: "center" }}
+        style={{
+          display: "flex", alignItems: "center", justifyContent: "center",
+          width: "90vw", maxWidth: 1200,
+          height: "82vh",           /* 뷰포트 높이 고정 — 닫기 버튼·인디케이터 여백 확보 */
+          overflow: "hidden",
+        }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -81,7 +86,15 @@ export default function ImageLightbox({ urls, index, onClose, onPrev, onNext }: 
           key={urls[index]}
           src={urls[index]}
           alt={`이미지 ${index + 1}`}
-          style={{ maxWidth: "100%", maxHeight: "88vh", objectFit: "contain", borderRadius: "0.75rem" }}
+          style={{
+            maxWidth: "100%",
+            maxHeight: "100%",
+            width: "auto",
+            height: "auto",
+            objectFit: "contain",
+            borderRadius: "0.75rem",
+            display: "block",
+          }}
         />
       </div>
 
