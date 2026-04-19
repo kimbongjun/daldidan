@@ -37,6 +37,7 @@ export function formatBlogDate(value: string) {
     year: "numeric",
     month: "long",
     day: "numeric",
+    timeZone: "Asia/Seoul",
   }).format(new Date(value));
 }
 
@@ -47,5 +48,6 @@ export function formatBlogDateTime(value: string) {
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: "Asia/Seoul",
   }).format(new Date(value));
 }

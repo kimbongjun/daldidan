@@ -3,8 +3,9 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ArrowRight, BookOpenText, Lock, MessageCircle, PenLine, User } from "lucide-react";
+import { ArrowRight, BookOpenText, Calendar, Lock, MessageCircle, PenLine, User } from "lucide-react";
 import type { BlogPostSummary } from "@/lib/blog-shared";
+import { formatBlogDate } from "@/lib/blog-shared";
 import { createClient } from "@/lib/supabase/client";
 import type { AuthUser } from "@supabase/supabase-js";
 
@@ -167,6 +168,10 @@ export default function BlogWidget({ initialPosts }: BlogWidgetProps) {
                   <span className="flex items-center gap-1 text-xs" style={{ color: "var(--text-muted)" }}>
                     <User size={11} />
                     {post.authorName}
+                  </span>
+                  <span className="flex items-center gap-1 text-xs" style={{ color: "var(--text-muted)" }}>
+                    <Calendar size={11} />
+                    {formatBlogDate(post.updatedAt ?? post.publishedAt)}
                   </span>
                   <span className="relative flex items-center gap-1 text-xs" style={{ color: "var(--text-muted)" }}>
                     <span className="relative inline-flex items-center">
