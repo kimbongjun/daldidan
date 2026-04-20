@@ -7,6 +7,7 @@ import {
   ChevronRight,
   Clock,
   MapPin,
+  Pencil,
   Plus,
   RefreshCw,
   Repeat,
@@ -113,6 +114,9 @@ function toLunarDate(year: number, month: number, day: number): string {
 
 const AUTHOR_COLORS = ["#10B981", "#F59E0B", "#8B5CF6", "#EC4899", "#14B8A6", "#F97316", "#6366F1", "#84CC16"];
 
+const SHARED_COLOR = "#F97316";
+const sharedBg = (alpha: number) => `rgba(249,115,22,${alpha})`;
+
 function getAuthorColor(userId: string): string {
   let hash = 0;
   for (let i = 0; i < userId.length; i++) {
@@ -120,6 +124,221 @@ function getAuthorColor(userId: string): string {
     hash |= 0;
   }
   return AUTHOR_COLORS[Math.abs(hash) % AUTHOR_COLORS.length];
+}
+
+// ─── EventEditModal ───────────────────────────────────────────────────────────
+function EventEditModal({
+  event,
+  onClose,
+  onSaved,
+}: {
+  event: CalendarEvent;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [form, setForm] = useState<NewEvent>({
+    title: event.title,
+    event_type: event.event_type,
+    start_date: event.start_date,
+    start_time: event.start_time ?? "",
+    end_date: event.end_date ?? "",
+    end_time: event.end_time ?? "",
+    location: event.location,
+    description: event.description,
+    is_recurring: event.is_recurring,
+    recurrence: event.recurrence ?? "",
+    is_shared: event.is_shared,
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  function set<K extends keyof NewEvent>(key: K, value: NewEvent[K]) {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!form.title.trim()) { setError("제목을 입력해주세요."); return; }
+    if (!form.start_date) { setError("시작 날짜를 선택해주세요."); return; }
+
+    setSaving(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/calendar/${event.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: form.title.trim(),
+          event_type: form.event_type,
+          start_date: form.start_date,
+          start_time: form.start_time || null,
+          end_date: form.end_date || null,
+          end_time: form.end_time || null,
+          location: form.location.trim(),
+          description: form.description.trim(),
+          is_recurring: form.is_recurring,
+          recurrence: form.is_recurring && form.recurrence ? form.recurrence : null,
+        }),
+      });
+      if (!res.ok) {
+        const d = await res.json() as { error?: string };
+        throw new Error(d.error ?? "수정 실패");
+      }
+      onSaved();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "수정 중 오류가 발생했습니다.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)" }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        className="bento-card w-full max-w-md overflow-y-auto"
+        style={{ maxHeight: "90vh", background: "var(--bg-card)", border: "1px solid var(--border)" }}
+      >
+        <div className="flex items-center justify-between p-5 pb-0">
+          <div className="flex items-center gap-2">
+            <Pencil size={18} style={{ color: "#0EA5E9" }} />
+            <span className="font-semibold" style={{ color: "var(--text-primary)" }}>일정 편집</span>
+          </div>
+          <button onClick={onClose} className="p-1 rounded-lg" style={{ color: "var(--text-muted)" }}>
+            <X size={18} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-5 flex flex-col gap-4">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs" style={{ color: "var(--text-muted)" }}>제목 *</label>
+            <input
+              type="text"
+              value={form.title}
+              onChange={(e) => set("title", e.target.value)}
+              placeholder="일정 제목"
+              className="w-full px-3 py-2 rounded-lg text-sm outline-none"
+              style={{ background: "var(--bg-input)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
+              autoFocus
+            />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-xs" style={{ color: "var(--text-muted)" }}>유형</label>
+            <div className="flex gap-2">
+              {(Object.keys(EVENT_TYPE_META) as EventType[]).map((type) => {
+                const meta = EVENT_TYPE_META[type];
+                const selected = form.event_type === type;
+                return (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => set("event_type", type)}
+                    className="flex-1 py-1.5 rounded-lg text-xs font-medium transition-opacity"
+                    style={{
+                      background: selected ? meta.bg : "var(--bg-input)",
+                      color: selected ? meta.color : "var(--text-muted)",
+                      border: `1px solid ${selected ? meta.color : "var(--border)"}`,
+                    }}
+                  >
+                    {meta.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { label: "시작 날짜 *", type: "date", value: form.start_date, key: "start_date", min: undefined },
+              { label: "시작 시간",   type: "time", value: form.start_time, key: "start_time", min: undefined },
+              { label: "종료 날짜",   type: "date", value: form.end_date,   key: "end_date",   min: form.start_date },
+              { label: "종료 시간",   type: "time", value: form.end_time,   key: "end_time",   min: undefined },
+            ].map(({ label, type, value, key, min }) => (
+              <div key={key} className="flex flex-col gap-1 min-w-0">
+                <label className="text-xs" style={{ color: "var(--text-muted)" }}>{label}</label>
+                <input
+                  type={type}
+                  value={value}
+                  min={min}
+                  onChange={(e) => set(key as keyof NewEvent, e.target.value)}
+                  className="w-full min-w-0 px-2 py-2 rounded-lg text-xs outline-none"
+                  style={{ background: "var(--bg-input)", border: "1px solid var(--border)", color: "var(--text-primary)", boxSizing: "border-box" }}
+                />
+              </div>
+            ))}
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-xs flex items-center gap-1" style={{ color: "var(--text-muted)" }}>
+              <MapPin size={11} /> 장소
+            </label>
+            <input
+              type="text"
+              value={form.location}
+              onChange={(e) => set("location", e.target.value)}
+              placeholder="장소 또는 링크"
+              className="w-full px-3 py-2 rounded-lg text-sm outline-none"
+              style={{ background: "var(--bg-input)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
+            />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-xs" style={{ color: "var(--text-muted)" }}>메모</label>
+            <textarea
+              value={form.description}
+              onChange={(e) => set("description", e.target.value)}
+              placeholder="추가 메모"
+              rows={2}
+              className="w-full px-3 py-2 rounded-lg text-sm outline-none resize-none"
+              style={{ background: "var(--bg-input)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
+            />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.is_recurring}
+                onChange={(e) => set("is_recurring", e.target.checked)}
+                className="w-4 h-4 accent-[#0EA5E9]"
+              />
+              <span className="text-sm flex items-center gap-1" style={{ color: "var(--text-primary)" }}>
+                <Repeat size={13} /> 반복 일정
+              </span>
+            </label>
+            {form.is_recurring && (
+              <select
+                value={form.recurrence}
+                onChange={(e) => set("recurrence", e.target.value as Recurrence | "")}
+                className="w-full px-3 py-2 pr-8 rounded-lg text-sm outline-none"
+                style={{ background: "var(--bg-input)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
+              >
+                {(Object.keys(RECURRENCE_LABELS) as (Recurrence | "")[]).filter((k) => k !== "").map((k) => (
+                  <option key={k} value={k}>{RECURRENCE_LABELS[k]}</option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          {error && <p className="text-xs" style={{ color: "#F43F5E" }}>{error}</p>}
+
+          <button
+            type="submit"
+            disabled={saving}
+            className="w-full py-2.5 rounded-xl text-sm font-semibold transition-opacity"
+            style={{ background: "#0EA5E9", color: "#fff", opacity: saving ? 0.6 : 1 }}
+          >
+            {saving ? "저장 중…" : "변경 사항 저장"}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
 }
 
 // ─── EventFormModal ───────────────────────────────────────────────────────────
@@ -329,22 +548,23 @@ function EventFormModal({
           {/* 공동 일정 */}
           <div
             className="flex flex-col gap-2 p-3 rounded-xl"
-            style={{ background: form.is_shared ? "rgba(99,102,241,0.1)" : "var(--bg-input)", border: `1px solid ${form.is_shared ? "#6366F1" : "var(--border)"}`, transition: "all 0.2s" }}
+            style={{ background: form.is_shared ? sharedBg(0.1) : "var(--bg-input)", border: `1px solid ${form.is_shared ? SHARED_COLOR : "var(--border)"}`, transition: "all 0.2s" }}
           >
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
                 checked={form.is_shared}
                 onChange={(e) => set("is_shared", e.target.checked)}
-                className="w-4 h-4 accent-[#6366F1]"
+                className="w-4 h-4"
+                style={{ accentColor: SHARED_COLOR }}
               />
-              <span className="text-sm font-medium" style={{ color: form.is_shared ? "#6366F1" : "var(--text-primary)" }}>
+              <span className="text-sm font-medium" style={{ color: form.is_shared ? SHARED_COLOR : "var(--text-primary)" }}>
                 공동 일정
               </span>
               {form.is_shared && (
                 <span
-                  className="tag text-xs ml-auto"
-                  style={{ background: "rgba(99,102,241,0.2)", color: "#6366F1", border: "1px solid rgba(99,102,241,0.4)" }}
+                  className="tag text-xs ml-auto font-bold"
+                  style={{ background: sharedBg(0.2), color: SHARED_COLOR, border: `1px solid ${sharedBg(0.6)}` }}
                 >
                   공동
                 </span>
@@ -380,12 +600,14 @@ function EventDetailModal({
   onClose,
   onDeleted,
   onError,
+  onEdit,
 }: {
   events: CalendarEvent[];
   date: string;
   onClose: () => void;
   onDeleted: () => void;
   onError: (message: string) => void;
+  onEdit: (ev: CalendarEvent) => void;
 }) {
   const [deleting, setDeleting] = useState<string | null>(null);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
@@ -445,8 +667,8 @@ function EventDetailModal({
                       </span>
                       {ev.is_shared ? (
                         <span
-                          className="text-xs px-1.5 py-0.5 rounded font-medium"
-                          style={{ background: "rgba(99,102,241,0.15)", color: "#6366F1", border: "1px solid rgba(99,102,241,0.35)" }}
+                          className="text-xs px-1.5 py-0.5 rounded font-bold"
+                          style={{ background: sharedBg(0.18), color: SHARED_COLOR, border: `1px solid ${sharedBg(0.5)}` }}
                         >
                           공동
                         </span>
@@ -514,14 +736,25 @@ function EventDetailModal({
                         </div>
                       </div>
                     ) : (
-                      <button
-                        onClick={() => setConfirmingId(ev.id)}
-                        disabled={deleting === ev.id}
-                        className="p-1.5 rounded-lg shrink-0"
-                        style={{ color: "#F43F5E", background: "rgba(244,63,94,0.1)" }}
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                      <div className="flex gap-1 shrink-0">
+                        <button
+                          onClick={() => { onEdit(ev); onClose(); }}
+                          className="p-1.5 rounded-lg"
+                          style={{ color: "#0EA5E9", background: "rgba(14,165,233,0.1)" }}
+                          title="편집"
+                        >
+                          <Pencil size={14} />
+                        </button>
+                        <button
+                          onClick={() => setConfirmingId(ev.id)}
+                          disabled={deleting === ev.id}
+                          className="p-1.5 rounded-lg"
+                          style={{ color: "#F43F5E", background: "rgba(244,63,94,0.1)" }}
+                          title="삭제"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     )
                   )}
                 </div>
@@ -545,6 +778,7 @@ export default function CalendarWidget() {
   const [showForm, setShowForm] = useState(false);
   const [formDate, setFormDate] = useState("");
   const [detailDate, setDetailDate] = useState<string | null>(null);
+  const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
 
   useEffect(() => {
     const supabase = createClient();
@@ -801,7 +1035,7 @@ export default function CalendarWidget() {
                     <span
                       key={ev.id}
                       className="w-1.5 h-1.5 rounded-full"
-                      style={{ background: ev.is_shared ? "#6366F1" : getAuthorColor(ev.user_id) }}
+                      style={{ background: ev.is_shared ? SHARED_COLOR : getAuthorColor(ev.user_id) }}
                     />
                   ))}
                 </div>
@@ -819,7 +1053,7 @@ export default function CalendarWidget() {
             <div className="flex flex-col gap-2 overflow-y-auto scrollbar-hide">
               {upcoming.map((ev) => {
                 const meta = EVENT_TYPE_META[ev.event_type];
-                const authorColor = ev.is_shared ? "#6366F1" : getAuthorColor(ev.user_id);
+                const authorColor = ev.is_shared ? SHARED_COLOR : getAuthorColor(ev.user_id);
                 const [, em, ed] = ev.start_date.split("-").map(Number);
                 const dateLabel = `${em}/${ed}`;
                 const dday = dDayLabel(ev.start_date);
@@ -842,8 +1076,8 @@ export default function CalendarWidget() {
                         </p>
                         {ev.is_shared ? (
                           <span
-                            className="text-xs px-1 py-0.5 rounded shrink-0"
-                            style={{ fontSize: 9, background: "rgba(99,102,241,0.15)", color: "#6366F1" }}
+                            className="text-xs px-1 py-0.5 rounded shrink-0 font-bold"
+                            style={{ fontSize: 9, background: sharedBg(0.18), color: SHARED_COLOR, border: `1px solid ${sharedBg(0.45)}` }}
                           >
                             공동
                           </span>
@@ -910,6 +1144,14 @@ export default function CalendarWidget() {
           onClose={() => setDetailDate(null)}
           onError={setFetchError}
           onDeleted={() => { fetchEvents(); setDetailDate(null); }}
+          onEdit={(ev) => setEditingEvent(ev)}
+        />
+      )}
+      {editingEvent && (
+        <EventEditModal
+          event={editingEvent}
+          onClose={() => setEditingEvent(null)}
+          onSaved={() => { fetchEvents(); setEditingEvent(null); }}
         />
       )}
     </>
