@@ -16,6 +16,7 @@ export interface FortuneReading {
   love: string;
   work: string;
   health: string;
+  money: string;
   lucky_color: string;
   lucky_number: number;
 }
@@ -207,6 +208,7 @@ export async function POST(request: NextRequest) {
   "love": "애정운 1~2문장",
   "work": "직업·학업운 1~2문장",
   "health": "건강운 1~2문장",
+  "money": "금전운 1~2문장",
   "lucky_color": "오늘의 행운 색 (한글 1단어)",
   "lucky_number": 1자리 또는 2자리 숫자
 }`;

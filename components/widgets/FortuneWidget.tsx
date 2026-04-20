@@ -32,11 +32,12 @@ function FortuneSection({ reading }: { reading: FortuneReading }) {
         {reading.overall}
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 gap-2">
         {[
           { label: "애정운", value: reading.love },
           { label: "직업운", value: reading.work },
           { label: "건강운", value: reading.health },
+          { label: "금전운", value: reading.money },
         ].map(({ label, value }) => (
           <div
             key={label}
