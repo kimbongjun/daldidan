@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { MapPin } from "lucide-react";
 import Footer from "@/components/Footer";
 import Header from "@/components/Header";
 import BudgetWidget from "@/components/widgets/BudgetWidget";
@@ -51,26 +50,7 @@ export default function DashboardShell({
   return (
     <div style={{ background: "var(--bg-base)", minHeight: "100vh", width: "100%", overflowX: "hidden" }}>
       <div style={{ maxWidth: 1400, margin: "0 auto", padding: "0 1rem 3rem", width: "100%", boxSizing: "border-box" }}>
-        <Header />
-        {locationLoading ? (
-          <div className="flex items-center gap-1.5 px-1 mb-3">
-            <div
-              className="w-3 h-3 rounded-full animate-pulse shrink-0"
-              style={{ background: "var(--border)" }}
-            />
-            <div
-              className="h-3 w-32 rounded animate-pulse"
-              style={{ background: "var(--border)" }}
-            />
-          </div>
-        ) : currentLocation ? (
-          <div className="flex items-center gap-1.5 px-1 mb-3">
-            <MapPin size={12} style={{ color: "var(--text-muted)" }} />
-            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-              {currentLocation}
-            </p>
-          </div>
-        ) : null}
+        <Header currentLocation={currentLocation} locationLoading={locationLoading} />
         <BentoGrid
           blog={<ErrorBoundary><BlogWidget initialPosts={initialBlogPosts} /></ErrorBoundary>}
         />

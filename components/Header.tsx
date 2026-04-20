@@ -73,7 +73,13 @@ function getDefaultGreeting(hour: number): string {
   return "좋은 저녁이에요";
 }
 
-export default function Header() {
+export default function Header({
+  currentLocation,
+  locationLoading = false,
+}: {
+  currentLocation?: string | null;
+  locationLoading?: boolean;
+}) {
   const router = useRouter();
   // now를 null로 초기화해 SSR hydration 불일치 방지
   const [now, setNow] = useState<Date | null>(null);
@@ -408,9 +414,10 @@ export default function Header() {
   };
 
   return (
-    <header className="flex items-center justify-between py-6 px-1">
-      {/* ── 로고 + 인사말 ── */}
-      <div className="flex items-center gap-3">
+    <header className="flex flex-col gap-3 py-6 px-1">
+      <div className="flex items-center justify-between gap-4">
+        {/* ── 로고 + 인사말 ── */}
+        <div className="flex items-center gap-3 min-w-0">
         {/* 로고: 설정 로드 전 skeleton */}
         {!settingsLoaded ? (
           <div
@@ -432,7 +439,7 @@ export default function Header() {
             <Sparkles size={18} className="text-white" />
           </div>
         )}
-        <div>
+        <div className="min-w-0">
           <h1 className="text-xl font-black tracking-tight" style={{ color: "var(--text-primary)" }}>달디단</h1>
 
           {/* 인사말: 설정 로드 전 skeleton */}
@@ -493,12 +500,10 @@ export default function Header() {
             </div>
           )}
         </div>
-      </div>
+        </div>
 
-      {/* ── 우측 컨트롤 ── */}
-      <div className="flex items-center gap-2">
         {/* 날짜/시간 — hydration mismatch 방지 */}
-        <div className="text-right hidden sm:block mr-2" suppressHydrationWarning>
+        <div className="text-right hidden sm:block shrink-0" suppressHydrationWarning>
           {now && (
             <>
               <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
@@ -508,8 +513,33 @@ export default function Header() {
             </>
           )}
         </div>
+      </div>
 
-        {/* 다크/라이트 토글 */}
+      <div className="flex items-center justify-between gap-4">
+        <div className="min-h-[1rem] flex items-center">
+          {locationLoading ? (
+            <div className="flex items-center gap-1.5">
+              <div
+                className="w-3 h-3 rounded-full animate-pulse shrink-0"
+                style={{ background: "var(--border)" }}
+              />
+              <div
+                className="h-3 w-32 rounded animate-pulse"
+                style={{ background: "var(--border)" }}
+              />
+            </div>
+          ) : currentLocation ? (
+            <div className="flex items-center gap-1.5 min-w-0">
+              <MapPin size={12} style={{ color: "var(--text-muted)" }} />
+              <p className="text-xs truncate" style={{ color: "var(--text-muted)" }}>
+                {currentLocation}
+              </p>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="flex items-center gap-1.5 shrink-0">
+        {/* 새로고침 */}
         <button
           onClick={handleRefresh}
           aria-label="최근 정보 새로고침"
@@ -827,6 +857,7 @@ export default function Header() {
             <User size={16} style={{ color: "var(--text-muted)" }} />
           </Link>
         )}
+      </div>
       </div>
     </header>
   );
