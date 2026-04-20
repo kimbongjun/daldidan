@@ -162,33 +162,60 @@ async function dispatchCommentNotification({
 
   if (!post) return;
 
-  const notifyUserIds = new Set<string>();
+  const baseUrl = origin.replace(/\/$/, "");
+  const targetUrl = post.slug ? `/blog/${post.slug}` : "/blog";
+  const isReply = !!parentId;
 
-  // 게시글 작성자 알림 (본인 댓글 제외)
-  if (post.author_id && post.author_id !== commenterId) {
-    notifyUserIds.add(post.author_id);
-  }
-
-  // 대댓글인 경우 부모 댓글 작성자도 알림 (본인 제외, 이미 추가된 경우 중복 제거는 Set이 처리)
-  if (parentId) {
+  // 대댓글인 경우: 글쓴이와 부모 댓글 작성자에게 각각 다른 메시지 발송
+  if (isReply) {
     const { data: parentComment } = await admin
       .from("blog_comments")
       .select("user_id")
       .eq("id", parentId)
       .maybeSingle();
 
-    if (parentComment?.user_id && parentComment.user_id !== commenterId) {
-      notifyUserIds.add(parentComment.user_id);
+    const parentAuthorId = parentComment?.user_id ?? null;
+
+    // 부모 댓글 작성자에게 알림 (본인 제외)
+    if (parentAuthorId && parentAuthorId !== commenterId) {
+      await sendPushToUserIds(
+        [parentAuthorId],
+        {
+          title: `${commentAuthorName}님이 내 댓글에 대댓글을 남겼습니다`,
+          body: content.slice(0, 100),
+          url: targetUrl,
+          origin: baseUrl,
+        },
+        "comment",
+      );
     }
+
+    // 글쓴이에게 알림 (본인 제외, 부모 댓글 작성자와 다른 경우에만 — 중복 방지)
+    if (
+      post.author_id &&
+      post.author_id !== commenterId &&
+      post.author_id !== parentAuthorId
+    ) {
+      await sendPushToUserIds(
+        [post.author_id],
+        {
+          title: `${commentAuthorName}님이 대댓글을 남겼습니다`,
+          body: content.slice(0, 100),
+          url: targetUrl,
+          origin: baseUrl,
+        },
+        "comment",
+      );
+    }
+
+    return;
   }
 
-  if (notifyUserIds.size === 0) return;
-
-  const baseUrl = origin.replace(/\/$/, "");
-  const targetUrl = post.slug ? `/blog/${post.slug}` : "/blog";
+  // 일반 댓글인 경우: 글쓴이에게 알림
+  if (!post.author_id || post.author_id === commenterId) return;
 
   await sendPushToUserIds(
-    [...notifyUserIds],
+    [post.author_id],
     {
       title: `${commentAuthorName}님이 댓글을 남겼습니다`,
       body: content.slice(0, 100),
