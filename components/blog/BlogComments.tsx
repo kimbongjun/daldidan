@@ -183,7 +183,7 @@ function CommentCard({
 
       {/* 첨부 이미지 */}
       {comment.image_urls && comment.image_urls.length > 0 && (
-        <div className="flex flex-wrap gap-2" style={{ paddingLeft: "2.25rem" }}>
+        <div className="flex flex-wrap gap-2 mt-2" style={{ paddingLeft: "2.25rem" }}>
           {comment.image_urls.map((url, i) => (
             <button
               key={url}
