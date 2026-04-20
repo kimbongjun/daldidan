@@ -1,7 +1,7 @@
 "use client";
 
 import { startTransition, useEffect, useRef, useState } from "react";
-import { Bell, BellOff, Check, Cloud, CloudFog, CloudLightning, CloudRain, LoaderCircle, LogOut, MapPin, Pencil, RefreshCw, Settings, Share, Snowflake, Sparkles, Sun, Thermometer, Trash2, User, UserCircle, Wind, X } from "lucide-react";
+import { Bell, BellOff, CalendarDays, Check, Cloud, CloudFog, CloudLightning, CloudRain, LoaderCircle, LogOut, MapPin, Pencil, RefreshCw, Settings, Share, Snowflake, Sparkles, Sun, Thermometer, Trash2, User, UserCircle, Wind, X } from "lucide-react";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 import { useThemeStore } from "@/store/useThemeStore";
@@ -128,6 +128,16 @@ export default function Header({
   // 날씨 초기 로드
   useEffect(() => {
     fetchWeather();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 1시간 단위 자동 갱신
+  useEffect(() => {
+    const id = setInterval(() => {
+      fetchWeather();
+      startTransition(() => { router.refresh(); });
+    }, 3600000);
+    return () => clearInterval(id);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -502,17 +512,33 @@ export default function Header({
         </div>
         </div>
 
-        {/* 날짜/시간 — hydration mismatch 방지 */}
-        <div className="text-right hidden sm:block shrink-0" suppressHydrationWarning>
+        {/* 날짜/시간 — 클릭 시 데이터 갱신, hydration mismatch 방지 */}
+        <button
+          onClick={handleRefresh}
+          aria-label="날짜 데이터 새로고침"
+          title="클릭해서 데이터 갱신 (1시간마다 자동 갱신)"
+          className="text-right hidden sm:flex flex-col items-end shrink-0 transition-opacity hover:opacity-70 active:opacity-50 group"
+          suppressHydrationWarning
+        >
           {now && (
             <>
-              <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                {format(now, "M월 d일 (E)", { locale: ko })}
-              </p>
+              <div className="flex items-center gap-1.5">
+                <CalendarDays
+                  size={13}
+                  style={{
+                    color: refreshing ? "#7C3AED" : "var(--text-muted)",
+                    transition: "color 0.3s",
+                  }}
+                  className="group-hover:opacity-100 opacity-60"
+                />
+                <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                  {format(now, "M월 d일 (E)", { locale: ko })}
+                </p>
+              </div>
               <p className="text-xs" style={{ color: "var(--text-muted)" }}>{format(now, "HH:mm")}</p>
             </>
           )}
-        </div>
+        </button>
       </div>
 
       <div className="flex items-center justify-between gap-4">
