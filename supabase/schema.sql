@@ -16,6 +16,9 @@ create table if not exists public.profiles (
   display_name  text,
   theme         text not null default 'dark' check (theme in ('dark', 'light')),
   home_city     text not null default '서울',
+  birth_year    integer check (birth_year between 1900 and 2100),
+  gender        text    check (gender in ('남성', '여성', '기타')),
+  birth_hour    integer check (birth_hour between 0 and 23),
   created_at    timestamptz not null default now(),
   updated_at    timestamptz not null default now()
 );

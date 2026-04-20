@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft, ChevronDown, ChevronUp, Image as ImageIcon,
-  LoaderCircle, Moon, Plus, Save, Settings, Smartphone, Sun, Trash2, Users,
+  LoaderCircle, Moon, Plus, Save, Settings, Smartphone, Sparkles, Sun, Trash2, Users,
 } from "lucide-react";
 import { useThemeStore } from "@/store/useThemeStore";
 import Link from "next/link";
@@ -45,6 +45,9 @@ export default function MyPage() {
 
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [birthYear, setBirthYear] = useState<string>("");
+  const [gender, setGender] = useState<string>("");
+  const [birthHour, setBirthHour] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -83,8 +86,16 @@ export default function MyPage() {
         fetch("/api/site-settings"),
       ]);
       if (profileRes.ok) {
-        const p = await profileRes.json() as { display_name: string };
+        const p = await profileRes.json() as {
+          display_name: string;
+          birth_year: number | null;
+          gender: string | null;
+          birth_hour: number | null;
+        };
         setDisplayName(p.display_name);
+        if (p.birth_year) setBirthYear(String(p.birth_year));
+        if (p.gender) setGender(p.gender);
+        if (p.birth_hour != null) setBirthHour(String(p.birth_hour));
       }
       if (settingsRes.ok) {
         const s = await settingsRes.json() as SiteSettings;
@@ -98,10 +109,18 @@ export default function MyPage() {
     e.preventDefault();
     setSaving(true); setError(""); setSuccess(false);
     try {
+      const body: Record<string, unknown> = { display_name: displayName };
+      if (birthYear) body.birth_year = Number(birthYear);
+      else body.birth_year = null;
+      if (gender) body.gender = gender;
+      else body.gender = null;
+      if (birthHour !== "") body.birth_hour = Number(birthHour);
+      else body.birth_hour = null;
+
       const res = await fetch("/api/mypage", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ display_name: displayName }),
+        body: JSON.stringify(body),
       });
       const data = await res.json() as { error?: string };
       if (!res.ok) throw new Error(data.error ?? "저장에 실패했습니다.");
@@ -202,8 +221,66 @@ export default function MyPage() {
             <label className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>이메일</label>
             <input value={email} disabled style={{ ...inputStyle, opacity: 0.5, cursor: "not-allowed" }} />
           </div>
+
+          <hr style={{ border: "none", borderTop: "1px solid var(--border)" }} />
+
+          {/* 운세 정보 */}
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-1.5">
+              <Sparkles size={14} style={{ color: ACCENT }} />
+              <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>운세 정보</p>
+            </div>
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+              AI 운세 분석에 사용됩니다. 입력하지 않으면 운세 위젯을 사용할 수 없어요.
+            </p>
+            <div className="flex gap-2">
+              <div className="flex flex-col gap-1.5 flex-1">
+                <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>출생 연도</label>
+                <input
+                  type="number"
+                  value={birthYear}
+                  onChange={(e) => setBirthYear(e.target.value)}
+                  placeholder="예: 1993"
+                  min={1900}
+                  max={2100}
+                  style={inputStyle}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5 flex-1">
+                <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>성별</label>
+                <select
+                  value={gender}
+                  onChange={(e) => setGender(e.target.value)}
+                  style={{ ...inputStyle, appearance: "none" }}
+                >
+                  <option value="">선택</option>
+                  <option value="남성">남성</option>
+                  <option value="여성">여성</option>
+                  <option value="기타">기타</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>
+                태어난 시 (0~23시)
+              </label>
+              <input
+                type="number"
+                value={birthHour}
+                onChange={(e) => setBirthHour(e.target.value)}
+                placeholder="예: 14 (오후 2시)"
+                min={0}
+                max={23}
+                style={inputStyle}
+              />
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                24시간제 기준. 모르는 경우 비워두세요.
+              </p>
+            </div>
+          </div>
+
           {error && <p className="text-sm" style={{ color: "#F43F5E" }}>{error}</p>}
-          {success && <p className="text-sm" style={{ color: "#10B981" }}>닉네임이 저장되었습니다.</p>}
+          {success && <p className="text-sm" style={{ color: "#10B981" }}>저장되었습니다.</p>}
           <button type="submit" disabled={saving || !displayName.trim()}
             className="pressable py-2.5 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 disabled:opacity-45"
             style={{ background: ACCENT }}>
