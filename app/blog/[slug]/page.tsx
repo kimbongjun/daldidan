@@ -9,7 +9,7 @@ import BlogNotifyButton from "@/components/blog/BlogNotifyButton";
 import BlogShareBar from "@/components/blog/BlogShareBar";
 import BlogViewCounter from "@/components/blog/BlogViewCounter";
 import { canEditBlogPost, getBlogPostBySlug } from "@/lib/blog";
-import { formatBlogDate, formatBlogDateTime } from "@/lib/blog-shared";
+import { formatBlogDateTime } from "@/lib/blog-shared";
 
 const ACCENT = "#EA580C";
 

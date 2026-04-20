@@ -51,12 +51,11 @@ export default function BlogWriteForm({
   const [category, setCategory] = useState<string>(initialPost?.category ?? "");
   // 발행일: 기존 글이면 stored publishedAt, 신규 글이면 오늘 날짜 (YYYY-MM-DD)
   const [publishedDate, setPublishedDate] = useState<string>(() => {
+    const toKstDate = (ms: number) => new Date(ms + 9 * 3600_000).toISOString().slice(0, 10);
     if (initialPost?.publishedAt) {
-      const d = new Date(initialPost.publishedAt);
-      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      return toKstDate(new Date(initialPost.publishedAt).getTime());
     }
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    return toKstDate(Date.now());
   });
   const [content, setContent] = useState<EditorValue>({
     html: initialPost?.contentHtml ?? DEFAULT_HTML,
@@ -73,9 +72,10 @@ export default function BlogWriteForm({
     const titleChanged = title.trim() !== (initialPost?.title ?? "").trim();
     const contentChanged = normalize(content.html) !== normalize(initialPost?.contentHtml ?? "");
     const categoryChanged = category !== (initialPost?.category ?? "");
+    const toKstDate = (ms: number) => new Date(ms + 9 * 3600_000).toISOString().slice(0, 10);
     const initialDate = initialPost?.publishedAt
-      ? (() => { const d = new Date(initialPost.publishedAt); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; })()
-      : (() => { const now = new Date(); return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`; })();
+      ? toKstDate(new Date(initialPost.publishedAt).getTime())
+      : toKstDate(Date.now());
     const dateChanged = publishedDate !== initialDate;
     return titleChanged || contentChanged || categoryChanged || dateChanged;
   }, [title, content.html, category, publishedDate, initialPost]);

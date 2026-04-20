@@ -33,22 +33,25 @@ export function extractDescriptionFromHtml(html: string, maxLen = 160): string {
 }
 
 export function formatBlogDate(value: string) {
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return value;
   return new Intl.DateTimeFormat("ko-KR", {
     year: "numeric",
     month: "long",
     day: "numeric",
     timeZone: "Asia/Seoul",
-  }).format(new Date(value));
+  }).format(d);
 }
 
 export function formatBlogDateTime(value: string) {
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return value;
   return new Intl.DateTimeFormat("ko-KR", {
     year: "numeric",
     month: "long",
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-    second: "2-digit",
     timeZone: "Asia/Seoul",
-  }).format(new Date(value));
+  }).format(d);
 }

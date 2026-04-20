@@ -574,7 +574,6 @@ export default function BudgetPage() {
                     tx={tx}
                     isEditing={editingId === tx.id}
                     isOwner={currentUserId === tx.userId}
-                    onEdit={() => startEdit(tx)}
                     onDelete={() => handleDelete(tx.id)}
                     onViewReceipt={tx.receiptImageUrl ? () => setViewingReceiptTx(tx) : undefined}
                     onView={() => setViewingDetailTx(tx)}
@@ -767,12 +766,11 @@ function OcrUploader({
 
 // ── 거래 행 ────────────────────────────────────────────────────
 function TransactionRow({
-  tx, isEditing, isOwner, onEdit, onDelete, onViewReceipt, onView,
+  tx, isEditing, isOwner, onDelete, onViewReceipt, onView,
 }: {
   tx: Transaction;
   isEditing: boolean;
   isOwner: boolean;
-  onEdit?: () => void;
   onDelete?: () => void;
   onViewReceipt?: () => void;
   onView?: () => void;

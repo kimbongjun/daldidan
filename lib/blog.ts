@@ -135,7 +135,7 @@ export async function getEditableBlogPostBySlug(slug: string) {
 
   const { data, error } = await supabase
     .from("blog_posts")
-    .select("id, slug, title, description, thumbnail_url, author_name, published_at, created_at, content_html, content_json, category")
+    .select("id, slug, title, description, thumbnail_url, author_name, published_at, updated_at, created_at, content_html, content_json, category")
     .in("slug", candidates)
     .eq("author_id", user.id)
     .limit(2);

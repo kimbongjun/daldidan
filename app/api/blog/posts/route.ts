@@ -160,6 +160,7 @@ export async function PATCH(request: NextRequest) {
       thumbnail_url: resolvedThumbnail || null,
       content_html: contentHtml,
       category,
+      updated_at: new Date().toISOString(),
       ...(publishedAt ? { published_at: publishedAt } : {}),
     })
     .eq("id", id)

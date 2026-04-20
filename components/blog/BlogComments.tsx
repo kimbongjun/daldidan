@@ -31,15 +31,6 @@ const inputStyle: React.CSSProperties = {
   width: "100%",
 };
 
-function getBrowserId(): string {
-  if (typeof window === "undefined") return "";
-  let id = localStorage.getItem("daldidan_browser_id");
-  if (!id) {
-    id = crypto.randomUUID();
-    localStorage.setItem("daldidan_browser_id", id);
-  }
-  return id;
-}
 
 // ─────────────────────────────────────────────────────────────
 // 이미지 업로드 UI
