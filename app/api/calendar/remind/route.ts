@@ -4,6 +4,10 @@ import { sendPushToAllSubscribers } from "@/lib/push-notification";
 
 export const runtime = "nodejs";
 
+function isMissingColumnError(error: { message?: string } | null, column: string) {
+  return Boolean(error?.message?.includes(`column calendar_events.${column} does not exist`));
+}
+
 /**
  * POST /api/calendar/remind
  * 내일 일정(D-1)에 대한 푸시 알림 발송.
@@ -28,11 +32,21 @@ export async function POST(request: NextRequest) {
   const tomorrowStr = tomorrow.toISOString().slice(0, 10);
 
   // 내일 시작하는 일정 조회 (remind_sent = false)
-  const { data: events, error } = await admin
+  let { data: events, error } = await admin
     .from("calendar_events")
     .select("id, title, event_type, start_date, start_time, location, description")
     .eq("start_date", tomorrowStr)
     .eq("remind_sent", false);
+
+  const supportsRemindSent = !isMissingColumnError(error, "remind_sent");
+  if (!supportsRemindSent) {
+    const fallback = await admin
+      .from("calendar_events")
+      .select("id, title, event_type, start_date, start_time, location, description")
+      .eq("start_date", tomorrowStr);
+    events = fallback.data;
+    error = fallback.error;
+  }
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -70,7 +84,7 @@ export async function POST(request: NextRequest) {
   }
 
   // remind_sent 플래그 업데이트
-  if (sentIds.length > 0) {
+  if (supportsRemindSent && sentIds.length > 0) {
     await admin
       .from("calendar_events")
       .update({ remind_sent: true })

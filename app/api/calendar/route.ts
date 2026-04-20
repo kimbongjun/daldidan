@@ -3,6 +3,27 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
+function isMissingColumnError(error: { message?: string } | null, column: string) {
+  return Boolean(error?.message?.includes(`column calendar_events.${column} does not exist`));
+}
+
+type CalendarEventRow = {
+  id: string;
+  user_id: string;
+  title: string;
+  event_type: string;
+  start_date: string;
+  start_time: string | null;
+  end_date: string | null;
+  end_time: string | null;
+  location: string;
+  description: string;
+  is_recurring: boolean;
+  recurrence: string | null;
+  is_shared?: boolean;
+  created_at: string;
+};
+
 /** GET /api/calendar?year=YYYY&month=MM — 해당 월 일정 조회 (공유) */
 export async function GET(request: NextRequest) {
   const supabase = await createClient();
@@ -13,26 +34,58 @@ export async function GET(request: NextRequest) {
   const year = searchParams.get("year");
   const month = searchParams.get("month");
 
-  let query = supabase
-    .from("calendar_events")
-    .select("id, user_id, title, event_type, start_date, start_time, end_date, end_time, location, description, is_recurring, recurrence, is_shared, created_at")
-    .order("start_date", { ascending: true })
-    .order("start_time", { ascending: true, nullsFirst: true });
+  const buildQuery = (includeIsShared: boolean) => {
+    const select = [
+      "id",
+      "user_id",
+      "title",
+      "event_type",
+      "start_date",
+      "start_time",
+      "end_date",
+      "end_time",
+      "location",
+      "description",
+      "is_recurring",
+      "recurrence",
+      includeIsShared ? "is_shared" : null,
+      "created_at",
+    ].filter(Boolean).join(", ");
 
-  if (year && month) {
-    const y = parseInt(year, 10);
-    const m = parseInt(month, 10);
-    const startDate = `${y}-${String(m).padStart(2, "0")}-01`;
-    const lastDay = new Date(y, m, 0).getDate();
-    const endDate = `${y}-${String(m).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
-    query = query.gte("start_date", startDate).lte("start_date", endDate);
+    let query = supabase
+      .from("calendar_events")
+      .select(select)
+      .order("start_date", { ascending: true })
+      .order("start_time", { ascending: true, nullsFirst: true });
+
+    if (year && month) {
+      const y = parseInt(year, 10);
+      const m = parseInt(month, 10);
+      const startDate = `${y}-${String(m).padStart(2, "0")}-01`;
+      const lastDay = new Date(y, m, 0).getDate();
+      const endDate = `${y}-${String(m).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+      query = query.gte("start_date", startDate).lte("start_date", endDate);
+    }
+
+    return query;
+  };
+
+  let { data, error } = await buildQuery(true);
+  let supportsIsShared = true;
+
+  if (isMissingColumnError(error, "is_shared")) {
+    supportsIsShared = false;
+    const fallback = await buildQuery(false);
+    data = fallback.data;
+    error = fallback.error;
   }
 
-  const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  const rows = (data ?? []) as unknown as CalendarEventRow[];
+
   // display_name 조회
-  const userIds = [...new Set((data ?? []).map((e) => e.user_id).filter(Boolean))] as string[];
+  const userIds = [...new Set(rows.map((e) => e.user_id).filter(Boolean))] as string[];
   const nameMap: Record<string, string> = {};
   if (userIds.length > 0) {
     const admin = createAdminClient();
@@ -46,11 +99,11 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  const events = (data ?? []).map((e) => ({
+  const events = rows.map((e) => ({
     ...e,
     author_name: nameMap[e.user_id] ?? "익명",
     is_mine: e.user_id === user.id,
-    is_shared: e.is_shared ?? false,
+    is_shared: supportsIsShared ? (e.is_shared ?? false) : false,
   }));
 
   return NextResponse.json(events);
@@ -90,24 +143,49 @@ export async function POST(request: NextRequest) {
   const validRecurrences = ["daily", "weekly", "monthly", "yearly"];
   const recurrence = validRecurrences.includes(body.recurrence ?? "") ? body.recurrence : null;
 
-  const { data, error } = await supabase
+  const insertPayload = {
+    user_id: user.id,
+    title,
+    event_type,
+    start_date,
+    start_time: body.start_time?.trim() || null,
+    end_date: body.end_date?.trim() || null,
+    end_time: body.end_time?.trim() || null,
+    location: body.location?.trim() ?? "",
+    description: body.description?.trim() ?? "",
+    is_recurring: body.is_recurring ?? false,
+    recurrence,
+    is_shared: body.is_shared ?? false,
+  };
+
+  let { data, error } = await supabase
     .from("calendar_events")
-    .insert({
-      user_id: user.id,
-      title,
-      event_type,
-      start_date,
-      start_time: body.start_time?.trim() || null,
-      end_date: body.end_date?.trim() || null,
-      end_time: body.end_time?.trim() || null,
-      location: body.location?.trim() ?? "",
-      description: body.description?.trim() ?? "",
-      is_recurring: body.is_recurring ?? false,
-      recurrence,
-      is_shared: body.is_shared ?? false,
-    })
+    .insert(insertPayload)
     .select()
     .single();
+
+  if (isMissingColumnError(error, "is_shared")) {
+    const fallback = await supabase
+      .from("calendar_events")
+      .insert({
+        user_id: insertPayload.user_id,
+        title: insertPayload.title,
+        event_type: insertPayload.event_type,
+        start_date: insertPayload.start_date,
+        start_time: insertPayload.start_time,
+        end_date: insertPayload.end_date,
+        end_time: insertPayload.end_time,
+        location: insertPayload.location,
+        description: insertPayload.description,
+        is_recurring: insertPayload.is_recurring,
+        recurrence: insertPayload.recurrence,
+      })
+      .select()
+      .single();
+
+    data = fallback.data ? { ...fallback.data, is_shared: false } : fallback.data;
+    error = fallback.error;
+  }
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json(data, { status: 201 });

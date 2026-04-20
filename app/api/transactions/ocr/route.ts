@@ -128,27 +128,106 @@ function toNumber(text: string): number {
 }
 
 // ── 금액 파싱 ───────────────────────────────────────────────────
-const AMOUNT_KEYWORDS = [
-  "합계", "총액", "결제금액", "청구금액", "받을금액",
-  "지불금액", "실결제", "최종금액", "total", "sum", "grand total",
+const STRONG_AMOUNT_KEYWORDS = [
+  "합계금액",
+  "총결제금액",
+  "총 결제금액",
+  "결제금액",
+  "총금액",
+  "최종금액",
+  "최종 결제금액",
+  "최종결제금액",
+  "실결제",
+  "실 결제금액",
+  "청구금액",
+  "청구 금액",
+  "총합계",
+  "금액합계",
+  "합계",
+  "총액",
+  "grand total",
+  "payment total",
+  "total amount",
+  "total",
+];
+const WEAK_AMOUNT_KEYWORDS = [
+  "금액",
+  "sum",
+  "amount",
 ];
 const AMOUNT_NOISE = [
   "부가세", "vat", "봉사료", "할인", "쿠폰", "포인트",
+  "적립", "사용", "공급가액", "과세", "면세", "세액",
+  "잔액", "거스름돈", "받은금액", "입금", "출금",
   "단가", "수량", "개수", "ea",
 ];
 
 function parseAmount(fields: PositionedField[]): number {
-  // 1차: 키워드 주변 슬라이딩 윈도우 (전체 텍스트 대상)
   const texts = fields.map((f) => f.text);
-  for (let i = 0; i < texts.length; i++) {
-    const lower = texts[i].toLowerCase();
-    if (AMOUNT_KEYWORDS.some((k) => lower.includes(k))) {
-      // 키워드 포함 텍스트 자체 + 이후 4개 블록 탐색
-      for (let j = i; j <= Math.min(i + 4, texts.length - 1); j++) {
-        const n = toNumber(texts[j]);
-        if (n >= 100) return n;
+  const candidates = fields
+    .map((field, index) => ({
+      index,
+      amount: toNumber(field.text),
+      field,
+    }))
+    .filter((candidate) => candidate.amount >= 100 && !Number.isNaN(candidate.amount));
+
+  const strongestKeywordStrength = (text: string): number => {
+    const lower = text.toLowerCase();
+    if (STRONG_AMOUNT_KEYWORDS.some((keyword) => lower.includes(keyword))) return 3;
+    if (WEAK_AMOUNT_KEYWORDS.some((keyword) => lower.includes(keyword))) return 1;
+    if (AMOUNT_NOISE.some((keyword) => lower.includes(keyword))) return -2;
+    return 0;
+  };
+
+  const scoreCandidate = (candidateIndex: number, amount: number): number => {
+    const candidate = fields[candidateIndex];
+    let score = 0;
+    let strongestKeyword = 0;
+    let noiseHits = 0;
+
+    for (let i = Math.max(0, candidateIndex - 2); i <= Math.min(fields.length - 1, candidateIndex + 2); i++) {
+      const field = fields[i];
+      const keywordStrength = strongestKeywordStrength(field.text);
+      const distance = Math.abs(candidateIndex - i);
+      const distanceWeight = distance === 0 ? 1.3 : distance === 1 ? 1 : 0.7;
+
+      if (keywordStrength > 0) {
+        strongestKeyword = Math.max(strongestKeyword, keywordStrength);
+        score += keywordStrength * 40 * distanceWeight;
+      }
+
+      if (keywordStrength < 0) {
+        noiseHits += 1;
+        score += keywordStrength * 28 * distanceWeight;
       }
     }
+
+    if (candidate.yRatio >= 0.75) score += 35;
+    else if (candidate.yRatio >= 0.6) score += 20;
+    else if (candidate.yRatio <= 0.25) score -= 15;
+
+    score += Math.min(amount / 5000, 30);
+
+    if (strongestKeyword >= 3) score += 70;
+    if (strongestKeyword === 0 && noiseHits > 0) score -= 45;
+
+    return score;
+  };
+
+  const scoredCandidates = candidates
+    .map((candidate) => ({
+      ...candidate,
+      score: scoreCandidate(candidate.index, candidate.amount),
+    }))
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      if (b.field.yRatio !== a.field.yRatio) return b.field.yRatio - a.field.yRatio;
+      return b.amount - a.amount;
+    });
+
+  if (scoredCandidates.length > 0 && scoredCandidates[0].score > 0) {
+    return scoredCandidates[0].amount;
   }
 
   // 2차: 하단 40% 필드에서 가장 큰 숫자 (합계는 보통 영수증 하단)
