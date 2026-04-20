@@ -68,27 +68,27 @@ export default async function BlogPage({
   return (
     <div className="min-h-screen" style={{ background: "var(--bg-base)" }}>
       <div className="max-w-[1200px] mx-auto px-4 sm:px-6 pb-12">
-        <div className="flex items-center justify-between">
-          <PageHeader
-            title="블로그"
-            subtitle={
-              <AiSummarySubtitle
-                target="blog"
-                items={posts.map((p) => p.title)}
-                fallback="달디단의 인생스토리"
-                accentColor={ACCENT}
-              />
-            }
-            accentColor={ACCENT}
-          />
-          <Link
-            href="/blog/write"
-            className="pressable px-4 py-2 rounded-xl text-sm font-semibold transition-opacity hover:opacity-80"
-            style={{ background: ACCENT, color: "#fff" }}
-          >
-            글쓰기
-          </Link>
-        </div>
+        <PageHeader
+          title="블로그"
+          subtitle={
+            <AiSummarySubtitle
+              target="blog"
+              items={posts.map((p) => p.title)}
+              fallback="달디단의 인생스토리"
+              accentColor={ACCENT}
+            />
+          }
+          accentColor={ACCENT}
+          actions={
+            <Link
+              href="/blog/write"
+              className="pressable px-4 py-2 rounded-xl text-sm font-semibold transition-opacity hover:opacity-80"
+              style={{ background: ACCENT, color: "#fff" }}
+            >
+              글쓰기
+            </Link>
+          }
+        />
 
         <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
           <Suspense fallback={<div />}>
