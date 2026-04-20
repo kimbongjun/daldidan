@@ -22,11 +22,11 @@ function mapSummary(post: {
     ? comments.reduce((latest, c) => c.created_at > latest ? c.created_at : latest, comments[0].created_at)
     : null;
 
-  // 발행일 대비 1분 이상 차이날 때만 수정일로 표시
+  const createdAt = post.created_at;
   const publishedAt = post.published_at ?? post.created_at;
   const updatedAt = post.updated_at ?? null;
   const isModified = updatedAt
-    ? Math.abs(new Date(updatedAt).getTime() - new Date(publishedAt).getTime()) > 60_000
+    ? Math.abs(new Date(updatedAt).getTime() - new Date(createdAt).getTime()) > 60_000
     : false;
 
   return {
@@ -36,6 +36,7 @@ function mapSummary(post: {
     description: post.description ?? "",
     thumbnailUrl: post.thumbnail_url ?? fallbackThumbnail ?? "",
     authorName: post.author_name?.trim() || "달디단 에디터",
+    createdAt,
     publishedAt,
     updatedAt: isModified ? updatedAt : null,
     viewCount: post.view_count ?? 0,

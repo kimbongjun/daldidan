@@ -5,7 +5,7 @@ import Image from "next/image";
 import { useState, useMemo } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { BlogPostSummary } from "@/lib/blog-shared";
-import { formatBlogDateTime } from "@/lib/blog-shared";
+import { formatBlogDateTime, getBlogActivityTimestamp } from "@/lib/blog-shared";
 
 const ACCENT = "#EA580C";
 const DAYS_OF_WEEK = ["일", "월", "화", "수", "목", "금", "토"];
@@ -253,7 +253,7 @@ export default function BlogMonthlyView({ posts }: { posts: BlogPostSummary[] })
                     </p>
                     <div className="flex items-center gap-2">
                       <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                        {formatBlogDateTime(post.publishedAt)}
+                        {formatBlogDateTime(getBlogActivityTimestamp(post))}
                       </span>
                       {post.category && catStyle && (
                         <span

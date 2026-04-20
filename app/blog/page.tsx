@@ -9,7 +9,7 @@ import BlogWeeklyView from "@/components/blog/BlogWeeklyView";
 import BlogMonthlyView from "@/components/blog/BlogMonthlyView";
 import { getPublishedBlogPosts, getBlogPostCount } from "@/lib/blog";
 import Pagination from "@/components/Pagination";
-import { formatBlogDateTime } from "@/lib/blog-shared";
+import { formatBlogDateTime, getBlogActivityTimestamp } from "@/lib/blog-shared";
 import type { BlogViewType } from "@/components/blog/BlogViewToggle";
 
 const NEW_COMMENT_THRESHOLD_DAYS = 7;
@@ -131,7 +131,7 @@ export default async function BlogPage({
                     </div>
                     <div className="p-4 flex flex-col gap-3">
                       <div className="flex items-center justify-between gap-3 text-xs" style={{ color: "var(--text-muted)" }}>
-                        <span>{formatBlogDateTime(post.publishedAt)}</span>
+                        <span>{formatBlogDateTime(getBlogActivityTimestamp(post))}</span>
                         <span>{post.authorName}</span>
                       </div>
                       <p className="text-lg font-black leading-snug" style={{ color: "var(--text-primary)" }}>{post.title}</p>

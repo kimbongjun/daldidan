@@ -8,6 +8,7 @@ export interface BlogPostSummary {
   description: string;
   thumbnailUrl: string;
   authorName: string;
+  createdAt: string;
   publishedAt: string;
   updatedAt: string | null;
   viewCount: number;
@@ -52,6 +53,11 @@ export function formatBlogDateTime(value: string) {
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    second: "2-digit",
     timeZone: "Asia/Seoul",
   }).format(d);
+}
+
+export function getBlogActivityTimestamp(post: Pick<BlogPostSummary, "createdAt" | "updatedAt">) {
+  return post.updatedAt ?? post.createdAt;
 }

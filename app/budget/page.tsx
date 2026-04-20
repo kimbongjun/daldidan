@@ -2,6 +2,7 @@
 
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PageHeader from "@/components/PageHeader";
+import Pagination from "@/components/Pagination";
 import { sendNativeNotification } from "@/lib/notifications";
 import { analyzeReceiptImage } from "@/lib/receipt-ocr";
 import {
@@ -13,6 +14,7 @@ import OcrScanModal from "@/components/OcrScanModal";
 import { preprocessReceiptImage } from "@/lib/image-preprocess";
 
 const ACCENT = "#6366F1";
+const TRANSACTIONS_PER_PAGE = 5;
 
 const CATEGORIES = ["식비", "교통", "쇼핑", "문화", "의료", "통신", "공과금", "구독비", "대출", "급여", "기타"];
 
@@ -118,6 +120,7 @@ export default function BudgetPage() {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [saveError, setSaveError] = useState("");
   const [chartsOpen, setChartsOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
   const [period, setPeriod] = useState<"daily" | "monthly" | "yearly">("monthly");
 
   // 월 선택
@@ -218,6 +221,19 @@ export default function BudgetPage() {
   const income = useMemo(() => transactions.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0), [transactions]);
   const expense = useMemo(() => transactions.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0), [transactions]);
   const balance = income - expense;
+  const totalPages = Math.max(1, Math.ceil(transactions.length / TRANSACTIONS_PER_PAGE));
+  const paginatedTransactions = useMemo(() => {
+    const start = (currentPage - 1) * TRANSACTIONS_PER_PAGE;
+    return transactions.slice(start, start + TRANSACTIONS_PER_PAGE);
+  }, [currentPage, transactions]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedMonth]);
+
+  useEffect(() => {
+    setCurrentPage((prev) => Math.min(prev, totalPages));
+  }, [totalPages]);
 
   const resetForm = () => {
     setForm(EMPTY_FORM());
@@ -255,6 +271,7 @@ export default function BudgetPage() {
         }
         const created = normalizeTransaction(await res.json() as TransactionApiResponse);
         setTransactions((prev) => [created, ...prev]);
+        setCurrentPage(1);
         sendNativeNotification(
           "가계부 내역이 추가되었어요",
           `${created.note || created.category} · ${created.amount.toLocaleString()}원`,
@@ -568,17 +585,25 @@ export default function BudgetPage() {
                   아직 거래 내역이 없습니다.<br />위 폼에서 첫 거래를 추가해 보세요.
                 </p>
               ) : (
-                transactions.map((tx) => (
-                  <TransactionRow
-                    key={tx.id}
-                    tx={tx}
-                    isEditing={editingId === tx.id}
-                    isOwner={currentUserId === tx.userId}
-                    onDelete={() => handleDelete(tx.id)}
-                    onViewReceipt={tx.receiptImageUrl ? () => setViewingReceiptTx(tx) : undefined}
-                    onView={() => setViewingDetailTx(tx)}
+                <>
+                  {paginatedTransactions.map((tx) => (
+                    <TransactionRow
+                      key={tx.id}
+                      tx={tx}
+                      isEditing={editingId === tx.id}
+                      isOwner={currentUserId === tx.userId}
+                      onDelete={() => handleDelete(tx.id)}
+                      onViewReceipt={tx.receiptImageUrl ? () => setViewingReceiptTx(tx) : undefined}
+                      onView={() => setViewingDetailTx(tx)}
+                    />
+                  ))}
+                  <Pagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    onPageChange={setCurrentPage}
+                    accentColor={ACCENT}
                   />
-                ))
+                </>
               )}
             </div>
           </div>

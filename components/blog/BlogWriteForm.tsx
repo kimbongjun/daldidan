@@ -35,6 +35,15 @@ const BlogEditor = dynamic(() => import("@/components/blog/BlogEditor"), {
 
 const DEFAULT_HTML = "";
 
+function combineDateWithTime(dateOnly: string, source?: string | null) {
+  const sourceDate = source ? new Date(source) : new Date();
+  const base = Number.isNaN(sourceDate.getTime()) ? new Date() : sourceDate;
+  const [year, month, day] = dateOnly.split("-").map(Number);
+  const combined = new Date(base);
+  combined.setFullYear(year, (month || 1) - 1, day || 1);
+  return combined.toISOString();
+}
+
 interface EditorValue {
   html: string;
   json: unknown;
@@ -127,11 +136,11 @@ export default function BlogWriteForm({
         const origKstDate = new Date(new Date(initialPost.publishedAt).getTime() + 9 * 3600_000).toISOString().slice(0, 10);
         resolvedPublishedAt = publishedDate === origKstDate
           ? initialPost.publishedAt
-          : `${publishedDate}T12:00:00+09:00`;
+          : combineDateWithTime(publishedDate, initialPost.publishedAt);
       } else {
         resolvedPublishedAt = publishedDate === kstToday
           ? new Date().toISOString()
-          : `${publishedDate}T12:00:00+09:00`;
+          : combineDateWithTime(publishedDate);
       }
 
       const response = await fetch("/api/blog/posts", {
