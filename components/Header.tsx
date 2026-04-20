@@ -586,9 +586,9 @@ export default function Header({
 
         {/* 날씨 아이콘 + 온도 버튼 */}
         <button
-          onClick={fetchWeather}
+          onClick={() => fetchWeather(true)}
           aria-label="날씨 새로고침"
-          title={weatherCondition ? `${weatherCondition} · 클릭해서 새로고침` : "위치 기반 날씨 불러오는 중"}
+          title={weatherCondition ? `${weatherCondition} · 클릭해서 즉시 새로고침` : "위치 기반 날씨 불러오는 중"}
           className="h-9 px-2.5 rounded-xl flex items-center gap-1.5 transition-all hover:opacity-80"
           style={{
             background: weatherBadgeStyle.bg,

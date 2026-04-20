@@ -22,7 +22,7 @@ interface WeatherState {
   icon: string;
   isLoading: boolean;
   error: string | null;
-  fetchWeather: () => Promise<void>;
+  fetchWeather: (force?: boolean) => Promise<void>;
 }
 
 const CACHE_KEY = "daldidan-weather-cache";
@@ -79,7 +79,7 @@ export const useWeatherStore = create<WeatherState>((set) => ({
   isLoading: false,
   error: null,
 
-  fetchWeather: async () => {
+  fetchWeather: async (force = false) => {
     set({ isLoading: true, error: null });
 
     try {
@@ -88,28 +88,32 @@ export const useWeatherStore = create<WeatherState>((set) => ({
       const roundedLat = roundCoord(lat);
       const roundedLon = roundCoord(lon);
 
-      try {
-        const raw = localStorage.getItem(CACHE_KEY);
-        if (raw) {
-          const cached = JSON.parse(raw) as WeatherCache;
-          const sameLocation = cached.lat === roundedLat && cached.lon === roundedLon;
-          const fresh = Date.now() - cached.timestamp < CACHE_TTL_MS;
+      if (!force) {
+        try {
+          const raw = localStorage.getItem(CACHE_KEY);
+          if (raw) {
+            const cached = JSON.parse(raw) as WeatherCache;
+            const sameLocation = cached.lat === roundedLat && cached.lon === roundedLon;
+            const fresh = Date.now() - cached.timestamp < CACHE_TTL_MS;
 
-          if (sameLocation && fresh) {
-            set({
-              condition: cached.condition,
-              temp: cached.temp,
-              feelsLike: cached.feelsLike,
-              description: cached.description,
-              icon: cached.icon,
-              isLoading: false,
-              error: null,
-            });
-            return;
+            if (sameLocation && fresh) {
+              set({
+                condition: cached.condition,
+                temp: cached.temp,
+                feelsLike: cached.feelsLike,
+                description: cached.description,
+                icon: cached.icon,
+                isLoading: false,
+                error: null,
+              });
+              return;
+            }
           }
+        } catch {
+          // 캐시 오류 무시
         }
-      } catch {
-        // 캐시 오류 무시
+      } else {
+        try { localStorage.removeItem(CACHE_KEY); } catch { /* ignore */ }
       }
 
       const res = await fetch(`/api/weather?lat=${lat}&lon=${lon}`, { cache: "no-store" });
