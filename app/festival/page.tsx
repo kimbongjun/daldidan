@@ -1,4 +1,5 @@
 import { getFestivalItems } from "@/lib/data/festival";
+import PageHeader from "@/components/PageHeader";
 import FestivalPageClient from "./FestivalPageClient";
 
 export const revalidate = 3600;
@@ -18,26 +19,17 @@ export default async function FestivalPage() {
         style={{
           maxWidth: 1200,
           margin: "0 auto",
-          padding: "2rem 1rem 4rem",
+          padding: "0 1rem 4rem",
           width: "100%",
           boxSizing: "border-box",
         }}
       >
-        {/* 페이지 헤더 */}
-        <div style={{ marginBottom: "2rem" }}>
-          <p
-            className="text-xs font-semibold uppercase tracking-widest mb-1"
-            style={{ color: "#10B981" }}
-          >
-            축제 / 행사
-          </p>
-          <h1
-            className="text-2xl font-bold"
-            style={{ color: "var(--text-primary)" }}
-          >
-            국내 행사·축제
-          </h1>
-        </div>
+        <PageHeader
+          title="국내 행사·축제"
+          subtitle="축제 / 행사"
+          accentColor="#10B981"
+          backHref="/"
+        />
 
         <FestivalPageClient items={items} source={source} />
       </div>
