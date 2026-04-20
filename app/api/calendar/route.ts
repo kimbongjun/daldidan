@@ -4,7 +4,11 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 export const runtime = "nodejs";
 
 function isMissingColumnError(error: { message?: string } | null, column: string) {
-  return Boolean(error?.message?.includes(`column calendar_events.${column} does not exist`));
+  const msg = error?.message ?? "";
+  return (
+    msg.includes(`column calendar_events.${column} does not exist`) ||
+    msg.includes(`Could not find the '${column}' column of 'calendar_events'`)
+  );
 }
 
 type CalendarEventRow = {
