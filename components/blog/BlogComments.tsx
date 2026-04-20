@@ -116,10 +116,10 @@ function CommentCard({
 }: CommentCardProps) {
   return (
     <div
-      className="rounded-2xl p-4 flex flex-col gap-2"
+      className="rounded-2xl p-4 flex flex-col"
       style={{ background: "var(--bg-input)", border: "1px solid var(--border)" }}
     >
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 min-w-0">
           {isReply && (
             <CornerDownRight size={13} style={{ color: ACCENT, flexShrink: 0 }} />
@@ -132,12 +132,8 @@ function CommentCard({
           </span>
           <span className="text-sm font-semibold truncate" style={{ color: "var(--text-primary)" }}>
             {comment.author_name}
-          </span>
-          <span className="text-xs shrink-0" style={{ color: "var(--text-muted)" }}>
-            {formatBlogDateTime(comment.updated_at !== comment.created_at ? comment.updated_at : comment.created_at)}
-            {comment.updated_at !== comment.created_at ? " (수정됨)" : ""}
-          </span>
-        </div>
+          </span>          
+        </div>            
         <div className="flex items-center gap-1 shrink-0">
           {!isReply && onReply && (
             <button
@@ -172,7 +168,12 @@ function CommentCard({
           )}
         </div>
       </div>
-
+      <div style={{paddingLeft: "2.25rem" }}>
+        <span className="text-xs shrink-0" style={{ color: "var(--text-muted)" }}>
+            {formatBlogDateTime(comment.updated_at !== comment.created_at ? comment.updated_at : comment.created_at)}
+            {comment.updated_at !== comment.created_at ? " (수정됨)" : ""}
+        </span>
+      </div>  
       <p
         className="text-sm leading-relaxed whitespace-pre-wrap"
         style={{ color: "var(--text-primary)", paddingLeft: "2.25rem" }}
