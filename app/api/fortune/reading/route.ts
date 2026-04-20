@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import Groq from "groq-sdk";
 
 export type FortuneType = "daily" | "card";
 export type CardCategory = "meal" | "travel" | "drink" | "snack";
@@ -140,13 +140,12 @@ export async function POST(request: NextRequest) {
     } satisfies FortuneResponse);
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) {
-    return NextResponse.json({ error: "GEMINI_API_KEY가 설정되지 않았습니다." }, { status: 500 });
+    return NextResponse.json({ error: "GROQ_API_KEY가 설정되지 않았습니다." }, { status: 500 });
   }
 
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+  const groq = new Groq({ apiKey });
 
   const zodiac = getZodiacAnimal(profile.birth_year);
   const hourLabel = getBirthHourLabel(profile.birth_hour);
@@ -165,8 +164,16 @@ export async function POST(request: NextRequest) {
 }`;
 
   try {
-    const result = await model.generateContent(prompt);
-    const text = result.response.text().trim();
+    const completion = await groq.chat.completions.create({
+      model: "llama-3.1-8b-instant",
+      messages: [
+        { role: "system", content: "당신은 한국 전통 사주 기반 운세 전문가입니다. 요청된 JSON 형식만 반환하고 다른 텍스트는 절대 포함하지 마세요." },
+        { role: "user", content: prompt },
+      ],
+      temperature: 0.8,
+      max_tokens: 512,
+    });
+    const text = (completion.choices[0]?.message?.content ?? "").trim();
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error("JSON 파싱 실패");
     const parsed = JSON.parse(jsonMatch[0]) as Omit<FortuneReading, "type">;
