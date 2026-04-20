@@ -24,6 +24,7 @@ export interface CardResult {
   category: CardCategory;
   category_label: string;
   result: string;
+  result_emoji: string;
   emoji: string;
 }
 
@@ -36,47 +37,93 @@ export interface FortuneResponse {
   birth_hour: number;
 }
 
-const CARD_POOLS: Record<CardCategory, { items: string[]; emoji: string; label: string }> = {
+const CARD_POOLS: Record<CardCategory, { items: { name: string; emoji: string }[]; emoji: string; label: string }> = {
   meal: {
     label: "오늘의 식사",
     emoji: "🍽️",
     items: [
-      "삼겹살 & 된장찌개", "치킨 & 맥주", "초밥 & 미소시루", "짜장면 & 탕수육",
-      "파스타 & 샐러드", "갈비탕 & 깍두기", "순두부찌개 & 공기밥", "라멘 & 교자",
-      "피자 & 콜라", "냉면 & 제육볶음", "돈까스 & 미소국", "마라탕 & 마라샹궈",
-      "버거 & 감자튀김", "카레 & 밥", "보쌈 & 굴전", "해물파전 & 막걸리",
+      { name: "삼겹살 & 된장찌개", emoji: "🥩" },
+      { name: "치킨 & 맥주",       emoji: "🍗" },
+      { name: "초밥 & 미소시루",    emoji: "🍣" },
+      { name: "짜장면 & 탕수육",    emoji: "🍜" },
+      { name: "파스타 & 샐러드",    emoji: "🍝" },
+      { name: "갈비탕 & 깍두기",    emoji: "🦴" },
+      { name: "순두부찌개 & 공기밥", emoji: "🫕" },
+      { name: "라멘 & 교자",        emoji: "🥟" },
+      { name: "피자 & 콜라",        emoji: "🍕" },
+      { name: "냉면 & 제육볶음",    emoji: "🥢" },
+      { name: "돈까스 & 미소국",    emoji: "🍱" },
+      { name: "마라탕 & 마라샹궈",  emoji: "🌶️" },
+      { name: "버거 & 감자튀김",    emoji: "🍔" },
+      { name: "카레 & 밥",          emoji: "🍛" },
+      { name: "보쌈 & 굴전",        emoji: "🥬" },
+      { name: "해물파전 & 막걸리",  emoji: "🥞" },
     ],
   },
   travel: {
     label: "이번 여행지",
     emoji: "✈️",
     items: [
-      "제주도 — 성산일출봉", "강릉 — 경포대 해변", "부산 — 해운대·광안리",
-      "경주 — 불국사·첨성대", "전주 — 한옥마을", "여수 — 밤바다·돌산도",
-      "속초 — 설악산·아바이마을", "통영 — 케이블카·미륵도", "제천 — 청풍호반",
-      "남해 — 독일마을·다랭이마을", "담양 — 메타세쿼이아길", "순천 — 순천만 국가정원",
-      "인천 — 월미도·차이나타운", "춘천 — 남이섬·닭갈비골목", "포항 — 호미곶",
-      "거제 — 외도·해금강",
+      { name: "제주도 — 성산일출봉",      emoji: "🏝️" },
+      { name: "강릉 — 경포대 해변",       emoji: "🏖️" },
+      { name: "부산 — 해운대·광안리",     emoji: "🌊" },
+      { name: "경주 — 불국사·첨성대",     emoji: "🏛️" },
+      { name: "전주 — 한옥마을",          emoji: "🏯" },
+      { name: "여수 — 밤바다·돌산도",     emoji: "🌃" },
+      { name: "속초 — 설악산·아바이마을", emoji: "⛰️" },
+      { name: "통영 — 케이블카·미륵도",   emoji: "🚡" },
+      { name: "제천 — 청풍호반",          emoji: "🏞️" },
+      { name: "남해 — 독일마을·다랭이마을", emoji: "🌿" },
+      { name: "담양 — 메타세쿼이아길",    emoji: "🌲" },
+      { name: "순천 — 순천만 국가정원",   emoji: "🌾" },
+      { name: "인천 — 월미도·차이나타운", emoji: "🎡" },
+      { name: "춘천 — 남이섬·닭갈비골목", emoji: "🍁" },
+      { name: "포항 — 호미곶",            emoji: "🌅" },
+      { name: "거제 — 외도·해금강",       emoji: "🪸" },
     ],
   },
   drink: {
     label: "오늘의 술",
     emoji: "🍺",
     items: [
-      "시원한 생맥주", "소주 (참이슬)", "소맥 황금비율", "막걸리 한 사발",
-      "IPA 크래프트 맥주", "하이볼 (위스키+소다)", "레드 와인 한 잔", "화이트 와인 한 잔",
-      "봉평 메밀막걸리", "감자주 (감자소주)", "오미자청 칵테일", "복분자주",
-      "사케 (일본 청주)", "진토닉", "모히토", "오렌지 에이드 (무알코올)",
+      { name: "시원한 생맥주",         emoji: "🍺" },
+      { name: "소주 (참이슬)",         emoji: "🥃" },
+      { name: "소맥 황금비율",         emoji: "🍻" },
+      { name: "막걸리 한 사발",        emoji: "🍶" },
+      { name: "IPA 크래프트 맥주",     emoji: "🫗" },
+      { name: "하이볼 (위스키+소다)",  emoji: "🥃" },
+      { name: "레드 와인 한 잔",       emoji: "🍷" },
+      { name: "화이트 와인 한 잔",     emoji: "🥂" },
+      { name: "봉평 메밀막걸리",       emoji: "🍶" },
+      { name: "감자주 (감자소주)",     emoji: "🥔" },
+      { name: "오미자청 칵테일",       emoji: "🍹" },
+      { name: "복분자주",              emoji: "🫐" },
+      { name: "사케 (일본 청주)",      emoji: "🍶" },
+      { name: "진토닉",               emoji: "🍸" },
+      { name: "모히토",               emoji: "🌿" },
+      { name: "오렌지 에이드 (무알코올)", emoji: "🍊" },
     ],
   },
   snack: {
     label: "오늘의 안주",
     emoji: "🍖",
     items: [
-      "닭발 (간장 or 불닭)", "오돌뼈 볶음", "족발 & 보쌈 세트", "감자전",
-      "두부김치", "골뱅이 무침", "쭈꾸미 볶음", "먹태 & 아몬드",
-      "치즈 플래터", "소시지 구이", "꼴뚜기 볶음", "순대 & 떡볶이",
-      "과카몰리 & 나초", "계란말이", "참치 김치찌개", "군만두",
+      { name: "닭발 (간장 or 불닭)", emoji: "🦶" },
+      { name: "오돌뼈 볶음",         emoji: "🦴" },
+      { name: "족발 & 보쌈 세트",    emoji: "🐷" },
+      { name: "감자전",              emoji: "🥔" },
+      { name: "두부김치",            emoji: "🥬" },
+      { name: "골뱅이 무침",         emoji: "🐌" },
+      { name: "쭈꾸미 볶음",         emoji: "🦑" },
+      { name: "먹태 & 아몬드",       emoji: "🐟" },
+      { name: "치즈 플래터",         emoji: "🧀" },
+      { name: "소시지 구이",         emoji: "🌭" },
+      { name: "꼴뚜기 볶음",         emoji: "🐙" },
+      { name: "순대 & 떡볶이",       emoji: "🌶️" },
+      { name: "과카몰리 & 나초",     emoji: "🥑" },
+      { name: "계란말이",            emoji: "🥚" },
+      { name: "참치 김치찌개",       emoji: "🐟" },
+      { name: "군만두",              emoji: "🥟" },
     ],
   },
 };
@@ -125,13 +172,14 @@ export async function POST(request: NextRequest) {
   if (type === "card") {
     const category = card_category ?? "meal";
     const pool = CARD_POOLS[category];
-    const result = pool.items[Math.floor(Math.random() * pool.items.length)];
+    const item = pool.items[Math.floor(Math.random() * pool.items.length)];
     return NextResponse.json({
       type: "card",
       card: {
         category,
         category_label: pool.label,
-        result,
+        result: item.name,
+        result_emoji: item.emoji,
         emoji: pool.emoji,
       },
       birth_year: profile.birth_year,

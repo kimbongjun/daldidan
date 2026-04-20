@@ -80,22 +80,58 @@ function CardFlipper({
     <motion.div
       initial={{ rotateY: 90, opacity: 0 }}
       animate={{ rotateY: 0, opacity: 1 }}
-      transition={{ type: "spring", stiffness: 200, damping: 20 }}
+      transition={{ type: "spring", stiffness: 180, damping: 18 }}
       className="flex flex-col items-center gap-4"
     >
       <div
-        className="w-full rounded-2xl flex flex-col items-center justify-center gap-3 py-8"
+        className="w-full rounded-2xl flex flex-col items-center justify-center gap-4 py-8 px-5 relative overflow-hidden"
         style={{
-          background: `linear-gradient(135deg, ${ACCENT}33, ${ACCENT}11)`,
-          border: `1px solid ${ACCENT}55`,
-          minHeight: 160,
+          background: `linear-gradient(135deg, ${ACCENT}44, ${ACCENT}18)`,
+          border: `1.5px solid ${ACCENT}66`,
+          minHeight: 180,
         }}
       >
-        <span style={{ fontSize: "2.5rem" }}>{card.emoji}</span>
-        <div className="text-center px-4">
-          <p className="text-xs font-semibold mb-1" style={{ color: ACCENT }}>{card.category_label}</p>
-          <p className="text-base font-bold" style={{ color: "var(--text-primary)" }}>{card.result}</p>
-        </div>
+        {/* 배경 장식 원 */}
+        <div
+          className="absolute -top-8 -right-8 w-32 h-32 rounded-full opacity-10"
+          style={{ background: ACCENT }}
+        />
+        <div
+          className="absolute -bottom-6 -left-6 w-24 h-24 rounded-full opacity-10"
+          style={{ background: ACCENT }}
+        />
+
+        {/* 결과 이모지 */}
+        <motion.span
+          initial={{ scale: 0, rotate: -20 }}
+          animate={{ scale: 1, rotate: 0 }}
+          transition={{ type: "spring", stiffness: 300, damping: 15, delay: 0.15 }}
+          style={{ fontSize: "4rem", lineHeight: 1, display: "block", position: "relative", zIndex: 1 }}
+        >
+          {card.result_emoji}
+        </motion.span>
+
+        {/* 결과 텍스트 */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.25, duration: 0.3 }}
+          className="text-center relative z-10"
+        >
+          <p
+            className="text-lg font-bold mb-2 leading-snug"
+            style={{ color: "var(--text-primary)" }}
+          >
+            {card.result}
+          </p>
+          <span
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold"
+            style={{ background: `${ACCENT}33`, color: ACCENT, border: `1px solid ${ACCENT}55` }}
+          >
+            <span>{card.emoji}</span>
+            {card.category_label}
+          </span>
+        </motion.div>
       </div>
       <button
         onClick={onReset}
