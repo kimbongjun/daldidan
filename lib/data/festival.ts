@@ -262,6 +262,15 @@ function resolveDetailUrl(primaryUrl: string, title: string, region: string): st
   return `https://search.naver.com/search.naver?query=${encodeURIComponent(`${title} ${region} 축제`)}`;
 }
 
+function resolveThumbnailUrl(thumbnail?: string): string | undefined {
+  if (!thumbnail) return undefined;
+  const trimmed = thumbnail.trim();
+  if (!trimmed) return undefined;
+  if (trimmed.startsWith("//")) return `https:${trimmed}`;
+  if (trimmed.startsWith("http://")) return `https://${trimmed.slice("http://".length)}`;
+  return trimmed;
+}
+
 // ── 메인 fetch 함수 ──────────────────────────────────────────
 export async function getFestivalItems(): Promise<FestivalResponse> {
   const tourKey = process.env.TOUR_API_KEY;
@@ -385,6 +394,7 @@ export async function getFestivalItems(): Promise<FestivalResponse> {
 
   const resolvedItems = items.map((item) => ({
     ...item,
+    thumbnail: resolveThumbnailUrl(item.thumbnail),
     detailUrl: resolveDetailUrl(item.detailUrl, item.title, item.region),
   }));
 
