@@ -5,7 +5,7 @@ import { ArrowLeft } from "lucide-react";
 
 interface Props {
   title: string;
-  subtitle?: string;
+  subtitle?: React.ReactNode;
   accentColor: string;
   backHref?: string;
   actions?: React.ReactNode;

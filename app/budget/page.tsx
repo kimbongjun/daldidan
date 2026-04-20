@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import OcrScanModal from "@/components/OcrScanModal";
 import { preprocessReceiptImage } from "@/lib/image-preprocess";
+import AiSummarySubtitle from "@/components/AiSummarySubtitle";
 
 const ACCENT = "#6366F1";
 const TRANSACTIONS_PER_PAGE = 5;
@@ -411,7 +412,18 @@ export default function BudgetPage() {
       )}
 
       <div className="max-w-[1100px] mx-auto px-4 sm:px-6 pb-16">
-        <PageHeader title="가계부" subtitle="내역 입력 및 소비 분석" accentColor={ACCENT} />
+        <PageHeader
+          title="가계부"
+          subtitle={
+            <AiSummarySubtitle
+              target="budget"
+              items={transactions.map((t) => `${t.type === "income" ? "수입" : "지출"} ${t.category} ${t.merchantName || t.note} ${t.amount.toLocaleString()}원`)}
+              fallback="내역 입력 및 소비 분석"
+              accentColor={ACCENT}
+            />
+          }
+          accentColor={ACCENT}
+        />
 
         {/* 월 선택 네비게이터 */}
         <div className="flex items-center justify-center gap-4 mb-5">

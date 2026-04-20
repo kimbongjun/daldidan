@@ -11,6 +11,7 @@ import { getPublishedBlogPosts, getBlogPostCount } from "@/lib/blog";
 import Pagination from "@/components/Pagination";
 import { formatBlogDateTime, getBlogActivityTimestamp } from "@/lib/blog-shared";
 import type { BlogViewType } from "@/components/blog/BlogViewToggle";
+import AiSummarySubtitle from "@/components/AiSummarySubtitle";
 
 const NEW_COMMENT_THRESHOLD_DAYS = 7;
 
@@ -68,7 +69,18 @@ export default async function BlogPage({
     <div className="min-h-screen" style={{ background: "var(--bg-base)" }}>
       <div className="max-w-[1200px] mx-auto px-4 sm:px-6 pb-12">
         <div className="flex items-center justify-between">
-          <PageHeader title="블로그" subtitle="달디단의 인생스토리" accentColor={ACCENT} />
+          <PageHeader
+            title="블로그"
+            subtitle={
+              <AiSummarySubtitle
+                target="blog"
+                items={posts.map((p) => p.title)}
+                fallback="달디단의 인생스토리"
+                accentColor={ACCENT}
+              />
+            }
+            accentColor={ACCENT}
+          />
           <Link
             href="/blog/write"
             className="pressable px-4 py-2 rounded-xl text-sm font-semibold transition-opacity hover:opacity-80"
