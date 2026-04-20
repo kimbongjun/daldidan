@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
+export const dynamic = "force-dynamic";
+
 interface OWMResponse {
   main: { temp: number; feels_like: number; humidity: number };
   weather: { main: string; description: string; icon: string }[];
@@ -22,14 +24,14 @@ export async function GET(req: NextRequest) {
 
   try {
     const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&units=metric&appid=${apiKey}&lang=ko`;
-    const res = await fetch(url, { next: { revalidate: 3600 } });
+    const res = await fetch(url, { cache: "no-store" });
     if (!res.ok) {
       return NextResponse.json({ error: "날씨 데이터를 가져오지 못했습니다." }, { status: 502 });
     }
     const data = await res.json() as OWMResponse;
     return NextResponse.json({
-      temp: Math.round(data.main.temp),
-      feelsLike: Math.round(data.main.feels_like),
+      temp: Number(data.main.temp.toFixed(1)),
+      feelsLike: Number(data.main.feels_like.toFixed(1)),
       humidity: data.main.humidity,
       description: data.weather[0]?.description ?? "",
       icon: data.weather[0]?.icon ?? "",

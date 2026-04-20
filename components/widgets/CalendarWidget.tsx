@@ -379,11 +379,13 @@ function EventDetailModal({
   date,
   onClose,
   onDeleted,
+  onError,
 }: {
   events: CalendarEvent[];
   date: string;
   onClose: () => void;
   onDeleted: () => void;
+  onError: (message: string) => void;
 }) {
   const [deleting, setDeleting] = useState<string | null>(null);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
@@ -392,7 +394,12 @@ function EventDetailModal({
     setDeleting(id);
     setConfirmingId(null);
     try {
-      await fetch(`/api/calendar/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/calendar/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({})) as { error?: string };
+        onError(payload.error ?? "삭제에 실패했습니다.");
+        return;
+      }
       onDeleted();
     } finally {
       setDeleting(null);
@@ -532,6 +539,7 @@ export default function CalendarWidget() {
   const [user, setUser] = useState<User | null | undefined>(undefined);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(false);
+  const [fetchError, setFetchError] = useState("");
   const [viewYear, setViewYear] = useState(() => new Date().getFullYear());
   const [viewMonth, setViewMonth] = useState(() => new Date().getMonth() + 1);
   const [showForm, setShowForm] = useState(false);
@@ -547,20 +555,48 @@ export default function CalendarWidget() {
     return () => subscription.unsubscribe();
   }, []);
 
-  const fetchEvents = useCallback(async () => {
-    if (!user) return;
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/calendar?year=${viewYear}&month=${viewMonth}`);
-      if (!res.ok) return;
-      const data = await res.json() as CalendarEvent[];
-      setEvents(Array.isArray(data) ? data : []);
-    } finally {
-      setLoading(false);
+  const fetchEvents = useCallback(async (signal?: AbortSignal) => {
+    if (!user?.id) {
+      setEvents([]);
+      setFetchError("");
+      return;
     }
-  }, [user, viewYear, viewMonth]);
+    setLoading(true);
+    setFetchError("");
+    try {
+      const res = await fetch(`/api/calendar?year=${viewYear}&month=${viewMonth}`, {
+        signal,
+        cache: "no-store",
+      });
+      if (res.status === 401) {
+        setEvents([]);
+        return;
+      }
+      const payload = await res.json().catch(() => ({})) as CalendarEvent[] & { error?: string };
+      if (!res.ok) {
+        throw new Error(payload.error ?? "일정을 불러오지 못했습니다.");
+      }
+      if (signal?.aborted) return;
+      setEvents(Array.isArray(payload) ? payload : []);
+    } catch (err) {
+      if (signal?.aborted) return;
+      setFetchError(err instanceof Error ? err.message : "일정을 불러오지 못했습니다.");
+    } finally {
+      if (!signal?.aborted) setLoading(false);
+    }
+  }, [user?.id, viewYear, viewMonth]);
 
-  useEffect(() => { fetchEvents(); }, [fetchEvents]);
+  useEffect(() => {
+    if (!user?.id) {
+      setEvents([]);
+      setLoading(false);
+      setFetchError("");
+      return;
+    }
+    const controller = new AbortController();
+    fetchEvents(controller.signal);
+    return () => controller.abort();
+  }, [fetchEvents, user?.id]);
 
   // 날짜별 이벤트 맵
   const eventsByDate = useMemo(() => {
@@ -657,7 +693,7 @@ export default function CalendarWidget() {
           </div>
           <div className="flex items-center gap-1">
             <button
-              onClick={fetchEvents}
+              onClick={() => { void fetchEvents(); }}
               disabled={loading}
               className="p-1.5 rounded-lg"
               style={{ color: "var(--text-muted)" }}
@@ -674,6 +710,15 @@ export default function CalendarWidget() {
             </button>
           </div>
         </div>
+
+        {fetchError ? (
+          <div
+            className="shrink-0 rounded-lg px-3 py-2 text-xs"
+            style={{ background: "rgba(244,63,94,0.12)", color: "#F43F5E", border: "1px solid rgba(244,63,94,0.22)" }}
+          >
+            {fetchError}
+          </div>
+        ) : null}
 
         {/* Month navigator */}
         <div className="flex items-center justify-between shrink-0">
@@ -863,6 +908,7 @@ export default function CalendarWidget() {
           events={eventsByDate[detailDate]}
           date={detailDate}
           onClose={() => setDetailDate(null)}
+          onError={setFetchError}
           onDeleted={() => { fetchEvents(); setDetailDate(null); }}
         />
       )}

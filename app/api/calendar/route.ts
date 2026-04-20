@@ -33,15 +33,17 @@ export async function GET(request: NextRequest) {
 
   // display_name 조회
   const userIds = [...new Set((data ?? []).map((e) => e.user_id).filter(Boolean))] as string[];
-  const admin = createAdminClient();
-  const { data: profiles } = await admin
-    .from("profiles")
-    .select("id, display_name")
-    .in("id", userIds);
-
   const nameMap: Record<string, string> = {};
-  for (const p of profiles ?? []) {
-    nameMap[p.id] = p.display_name ?? "익명";
+  if (userIds.length > 0) {
+    const admin = createAdminClient();
+    const { data: profiles } = await admin
+      .from("profiles")
+      .select("id, display_name")
+      .in("id", userIds);
+
+    for (const p of profiles ?? []) {
+      nameMap[p.id] = p.display_name ?? "익명";
+    }
   }
 
   const events = (data ?? []).map((e) => ({

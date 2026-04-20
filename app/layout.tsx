@@ -82,15 +82,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             } catch (error) {
               document.documentElement.setAttribute('data-theme', 'dark');
             }
-            try {
-              var wRaw = localStorage.getItem('daldidan-weather-cache');
-              if (wRaw) {
-                var wParsed = JSON.parse(wRaw);
-                if (wParsed && wParsed.condition && Date.now() - wParsed.timestamp < 3600000) {
-                  document.documentElement.setAttribute('data-weather', wParsed.condition);
-                }
-              }
-            } catch (e) {}
           `}
         </Script>
         <ThemeProvider>

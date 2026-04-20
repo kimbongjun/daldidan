@@ -26,7 +26,22 @@ interface WeatherState {
 }
 
 const CACHE_KEY = "daldidan-weather-cache";
-const CACHE_TTL_MS = 60 * 60 * 1000; // 1시간
+const CACHE_TTL_MS = 10 * 60 * 1000; // 10분
+
+type WeatherCache = {
+  timestamp: number;
+  lat: number;
+  lon: number;
+  condition: WeatherCondition;
+  temp: number;
+  feelsLike: number;
+  description: string;
+  icon: string;
+};
+
+function roundCoord(value: number) {
+  return Math.round(value * 1000) / 1000;
+}
 
 function classifyCondition(data: WeatherData): WeatherCondition {
   const { weatherMain, windSpeed, feelsLike } = data;
@@ -41,12 +56,6 @@ function classifyCondition(data: WeatherData): WeatherCondition {
   return "clear";
 }
 
-function applyWeatherTheme(condition: WeatherCondition) {
-  if (typeof document !== "undefined") {
-    document.documentElement.setAttribute("data-weather", condition);
-  }
-}
-
 function getPosition(): Promise<GeolocationPosition> {
   return new Promise((resolve, reject) => {
     if (typeof navigator === "undefined" || !("geolocation" in navigator)) {
@@ -55,7 +64,8 @@ function getPosition(): Promise<GeolocationPosition> {
     }
     navigator.geolocation.getCurrentPosition(resolve, reject, {
       timeout: 10000,
-      maximumAge: 3600000,
+      maximumAge: 10 * 60 * 1000,
+      enableHighAccuracy: true,
     });
   });
 }
@@ -70,48 +80,50 @@ export const useWeatherStore = create<WeatherState>((set) => ({
   error: null,
 
   fetchWeather: async () => {
-    // 캐시 확인
-    try {
-      const raw = localStorage.getItem(CACHE_KEY);
-      if (raw) {
-        const cached = JSON.parse(raw) as {
-          timestamp: number;
-          condition: WeatherCondition;
-          temp: number;
-          feelsLike: number;
-          description: string;
-          icon: string;
-        };
-        if (Date.now() - cached.timestamp < CACHE_TTL_MS) {
-          set({
-            condition: cached.condition,
-            temp: cached.temp,
-            feelsLike: cached.feelsLike,
-            description: cached.description,
-            icon: cached.icon,
-          });
-          applyWeatherTheme(cached.condition);
-          return;
-        }
-      }
-    } catch { /* 캐시 오류 무시 */ }
-
     set({ isLoading: true, error: null });
 
     try {
       const pos = await getPosition();
       const { latitude: lat, longitude: lon } = pos.coords;
-      const res = await fetch(`/api/weather?lat=${lat}&lon=${lon}`);
+      const roundedLat = roundCoord(lat);
+      const roundedLon = roundCoord(lon);
+
+      try {
+        const raw = localStorage.getItem(CACHE_KEY);
+        if (raw) {
+          const cached = JSON.parse(raw) as WeatherCache;
+          const sameLocation = cached.lat === roundedLat && cached.lon === roundedLon;
+          const fresh = Date.now() - cached.timestamp < CACHE_TTL_MS;
+
+          if (sameLocation && fresh) {
+            set({
+              condition: cached.condition,
+              temp: cached.temp,
+              feelsLike: cached.feelsLike,
+              description: cached.description,
+              icon: cached.icon,
+              isLoading: false,
+              error: null,
+            });
+            return;
+          }
+        }
+      } catch {
+        // 캐시 오류 무시
+      }
+
+      const res = await fetch(`/api/weather?lat=${lat}&lon=${lon}`, { cache: "no-store" });
       if (!res.ok) {
         const err = await res.json() as { error?: string };
         throw new Error(err.error ?? "날씨 조회 실패");
       }
       const data = await res.json() as WeatherData;
       const condition = classifyCondition(data);
-      applyWeatherTheme(condition);
 
-      const cacheEntry = {
+      const cacheEntry: WeatherCache = {
         timestamp: Date.now(),
+        lat: roundedLat,
+        lon: roundedLon,
         condition,
         temp: data.temp,
         feelsLike: data.feelsLike,
