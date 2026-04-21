@@ -502,3 +502,45 @@ create trigger set_updated_at_calendar_events
   before update on public.calendar_events
   for each row execute procedure public.set_updated_at();
   for each row execute procedure public.set_updated_at();
+
+
+-- ══════════════════════════════════════════════════════════════
+-- 14. 로또 (Lotto)
+-- ══════════════════════════════════════════════════════════════
+create table if not exists public.lotto_results (
+  id                   uuid primary key default uuid_generate_v4(),
+  drw_no               integer unique not null,
+  drw_no_date          date not null,
+  drw_no1              integer not null check (drw_no1 between 1 and 45),
+  drw_no2              integer not null check (drw_no2 between 1 and 45),
+  drw_no3              integer not null check (drw_no3 between 1 and 45),
+  drw_no4              integer not null check (drw_no4 between 1 and 45),
+  drw_no5              integer not null check (drw_no5 between 1 and 45),
+  drw_no6              integer not null check (drw_no6 between 1 and 45),
+  drw_no_bonus_no      integer not null check (drw_no_bonus_no between 1 and 45),
+  first_win_cnt        integer not null default 0,
+  first_win_amnt       bigint,
+  first_accum_prize_r  bigint not null default 0,
+  created_at           timestamptz not null default now()
+);
+
+create table if not exists public.lotto_my_tickets (
+  id            uuid primary key default uuid_generate_v4(),
+  user_id       uuid references public.profiles(id) on delete cascade,
+  drw_no        integer not null,
+  numbers       jsonb not null,
+  matched_count integer,
+  rank          integer,
+  checked_at    timestamptz,
+  created_at    timestamptz not null default now()
+);
+
+create index if not exists idx_lotto_results_drw_no
+  on public.lotto_results (drw_no desc);
+
+create index if not exists idx_lotto_my_tickets_user
+  on public.lotto_my_tickets (user_id, created_at desc);
+
+alter table public.lotto_my_tickets enable row level security;
+create policy "lotto_tickets_owner" on public.lotto_my_tickets
+  for all using (auth.uid() = user_id);
