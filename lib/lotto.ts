@@ -1,11 +1,18 @@
 import { createAdminClient } from "@/lib/supabase/server";
 
 const DHLOTTERY_URL = "https://www.dhlottery.co.kr/common.do?method=getLottoNumber&drwNo=";
+const NAVER_SEARCH_URL = "https://search.naver.com/search.naver?where=nexearch&query=";
 const DHLOTTERY_HEADERS = {
   "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
   "Accept": "application/json, text/plain, */*",
   "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
   "Referer": "https://www.dhlottery.co.kr/gameResult.do?method=byWin",
+};
+const NAVER_HEADERS = {
+  "User-Agent": DHLOTTERY_HEADERS["User-Agent"],
+  "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+  "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+  "Referer": "https://search.naver.com/",
 };
 
 export interface LottoData {
@@ -34,56 +41,54 @@ export function getLatestRound(now = new Date()): number {
   return Math.floor(elapsed / (7 * 24 * 60 * 60 * 1000)) + 1;
 }
 
-export async function fetchFromPublicApi(drwNo: number): Promise<LottoFetchResult> {
-  const key = process.env.LOTTO_API_KEY;
-  if (!key) return { ok: false, reason: "LOTTO_API_KEY 미설정" };
+function toNumber(value: string): number {
+  return Number(value.replace(/[^\d]/g, ""));
+}
 
-  try {
-    const url =
-      `https://apis.data.go.kr/B551015/LrsrClfInfo/getLottoNumber` +
-      `?serviceKey=${encodeURIComponent(key)}&drwNo=${drwNo}&_type=json`;
+function normalizeNaverDate(value: string): string {
+  return value.replace(/\.$/, "").replace(/\./g, "-");
+}
 
-    const res = await fetch(url, { signal: AbortSignal.timeout(10000), cache: "no-store" });
-    if (!res.ok) return { ok: false, reason: `공공데이터 HTTP ${res.status}` };
+function parseNaverLottoHtml(html: string, expectedRound: number): LottoFetchResult {
+  const roundMatch = html.match(/class="text _select_trigger _text"[^>]*>(\d+)회차 \((\d{4}\.\d{2}\.\d{2}\.)\)<\/a>/);
+  if (!roundMatch) return { ok: false, reason: "네이버 로또 위젯을 찾지 못했습니다." };
 
-    const json = await res.json() as {
-      response?: {
-        header?: { resultCode?: string; resultMsg?: string };
-        body?: { items?: { item?: unknown } };
-      };
-    };
-    const header = json.response?.header;
-    if (header?.resultCode !== "00") {
-      return { ok: false, reason: `공공데이터 오류: ${header?.resultMsg ?? "unknown"}` };
-    }
-
-    const raw = json.response?.body?.items?.item;
-    const item = Array.isArray(raw) ? raw[0] : raw;
-    if (!item || typeof (item as Record<string, unknown>).drwNo !== "number") {
-      return { ok: false, reason: "공공데이터 응답 형식 불일치" };
-    }
-
-    const d = item as Record<string, unknown>;
-    return {
-      ok: true,
-      data: {
-        drwNo: d.drwNo as number,
-        drwNoDate: d.drwNoDate as string,
-        drwtNo1: d.drwtNo1 as number,
-        drwtNo2: d.drwtNo2 as number,
-        drwtNo3: d.drwtNo3 as number,
-        drwtNo4: d.drwtNo4 as number,
-        drwtNo5: d.drwtNo5 as number,
-        drwtNo6: d.drwtNo6 as number,
-        bnusNo: d.bnusNo as number,
-        firstWinamnt: (d.firstWinamnt as number) ?? 0,
-        firstPrzwnerCo: (d.firstPrzwnerCo as number) ?? 0,
-        firstAccumAmnt: (d.firstAccumAmnt as number) ?? 0,
-      },
-    };
-  } catch (e) {
-    return { ok: false, reason: `공공데이터 네트워크 오류: ${e instanceof Error ? e.message : String(e)}` };
+  const round = Number(roundMatch[1]);
+  if (round !== expectedRound) {
+    return { ok: false, reason: `네이버 검색 결과 회차 불일치: 요청 ${expectedRound}회 / 응답 ${round}회` };
   }
+
+  const winningBlockMatch = html.match(/<div class="winning_number">([\s\S]*?)<\/div>\s*<div class="bonus_number">\s*<span class="ball [^"]+">(\d+)<\/span>/);
+  if (!winningBlockMatch) return { ok: false, reason: "네이버 당첨번호 영역 파싱 실패" };
+
+  const winningNumbers = Array.from(
+    winningBlockMatch[1].matchAll(/<span class="ball [^"]+">(\d+)<\/span>/g),
+    (match) => Number(match[1]),
+  );
+  if (winningNumbers.length !== 6) {
+    return { ok: false, reason: `네이버 당첨번호 개수 오류: ${winningNumbers.length}` };
+  }
+
+  const firstPrizeMatch = html.match(/<th scope="row" rowspan="4">1등<\/th>\s*<td class="sub_title">총 당첨금<\/td>\s*<td>([\d,]+)원<\/td>\s*<\/tr>\s*<tr>\s*<td class="sub_title">당첨 복권수<\/td>\s*<td>([\d,]+)개<\/td>\s*<\/tr>\s*<tr class="emphasis">\s*<td class="sub_title">1개당 당첨금<\/td>\s*<td>([\d,]+)원<\/td>/);
+  if (!firstPrizeMatch) return { ok: false, reason: "네이버 1등 당첨금 영역 파싱 실패" };
+
+  return {
+    ok: true,
+    data: {
+      drwNo: round,
+      drwNoDate: normalizeNaverDate(roundMatch[2]),
+      drwtNo1: winningNumbers[0],
+      drwtNo2: winningNumbers[1],
+      drwtNo3: winningNumbers[2],
+      drwtNo4: winningNumbers[3],
+      drwtNo5: winningNumbers[4],
+      drwtNo6: winningNumbers[5],
+      bnusNo: Number(winningBlockMatch[2]),
+      firstWinamnt: toNumber(firstPrizeMatch[3]),
+      firstPrzwnerCo: toNumber(firstPrizeMatch[2]),
+      firstAccumAmnt: toNumber(firstPrizeMatch[1]),
+    },
+  };
 }
 
 export async function fetchFromDhlottery(drwNo: number): Promise<LottoFetchResult> {
@@ -101,7 +106,7 @@ export async function fetchFromDhlottery(drwNo: number): Promise<LottoFetchResul
       data = JSON.parse(text);
     } catch {
       const isHtml = text.trimStart().startsWith("<");
-      return { ok: false, reason: isHtml ? "dhlottery IP 차단 (비한국 IP) — LOTTO_API_KEY 설정 필요" : "dhlottery JSON 파싱 실패" };
+      return { ok: false, reason: isHtml ? "dhlottery IP 차단 또는 봇 차단 HTML 응답" : "dhlottery JSON 파싱 실패" };
     }
 
     const r = data as Record<string, unknown>;
@@ -132,12 +137,29 @@ export async function fetchFromDhlottery(drwNo: number): Promise<LottoFetchResul
   }
 }
 
+export async function fetchFromNaverSearch(drwNo: number): Promise<LottoFetchResult> {
+  try {
+    const query = encodeURIComponent(`${drwNo}회 로또 당첨번호`);
+    const res = await fetch(NAVER_SEARCH_URL + query, {
+      signal: AbortSignal.timeout(10000),
+      cache: "no-store",
+      headers: NAVER_HEADERS,
+    });
+    if (!res.ok) return { ok: false, reason: `네이버 검색 HTTP ${res.status}` };
+
+    const html = await res.text();
+    return parseNaverLottoHtml(html, drwNo);
+  } catch (e) {
+    return { ok: false, reason: `네이버 검색 네트워크 오류: ${e instanceof Error ? e.message : String(e)}` };
+  }
+}
+
 export async function fetchLotto(drwNo: number): Promise<LottoFetchResult> {
-  const pub = await fetchFromPublicApi(drwNo);
-  if (pub.ok) return pub;
+  const naver = await fetchFromNaverSearch(drwNo);
+  if (naver.ok) return naver;
   const dhl = await fetchFromDhlottery(drwNo);
   if (dhl.ok) return dhl;
-  return { ok: false, reason: `공공데이터: ${pub.reason} / dhlottery: ${dhl.reason}` };
+  return { ok: false, reason: `네이버 크롤링: ${naver.reason} / dhlottery: ${dhl.reason}` };
 }
 
 export async function upsertLottoResult(data: LottoData) {

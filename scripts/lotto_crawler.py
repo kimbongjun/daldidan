@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
+from __future__ import annotations
+
 """
 동행복권 로또 당첨번호 크롤러
-dhlottery.co.kr에서 당첨번호를 가져와 Supabase lotto_results 테이블에 저장한다.
+네이버 로또 위젯 HTML을 우선 크롤링하고, 필요 시 dhlottery JSON을 보조로 사용한다.
+가져온 당첨번호를 Supabase lotto_results 테이블에 저장한다.
 
 사용법:
   python lotto_crawler.py                  # 최신 1회차 크롤링
@@ -15,6 +18,7 @@ dhlottery.co.kr에서 당첨번호를 가져와 Supabase lotto_results 테이블
 
 import argparse
 import os
+import re
 import sys
 import time
 from datetime import datetime, timedelta, timezone
@@ -29,6 +33,7 @@ FIRST_DRAW = datetime(2002, 12, 7, 20, 45, tzinfo=KST)  # 1회 추첨: 2002-12-0
 WEEK_SECS = 7 * 24 * 3600
 
 DHLOTTERY_URL = "https://www.dhlottery.co.kr/common.do?method=getLottoNumber&drwNo={}"
+NAVER_SEARCH_URL = "https://search.naver.com/search.naver?where=nexearch&query={}"
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -38,6 +43,12 @@ HEADERS = {
     "Accept": "application/json, text/plain, */*",
     "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
     "Referer": "https://www.dhlottery.co.kr/gameResult.do?method=byWin",
+}
+NAVER_HEADERS = {
+    "User-Agent": HEADERS["User-Agent"],
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": HEADERS["Accept-Language"],
+    "Referer": "https://search.naver.com/",
 }
 
 
@@ -49,7 +60,70 @@ def get_latest_round() -> int:
     return int(elapsed // WEEK_SECS) + 1
 
 
-def fetch_round(drw_no: int) -> dict | None:
+def _to_number(value: str) -> int:
+    return int("".join(ch for ch in value if ch.isdigit()) or "0")
+
+
+def fetch_round_from_naver(drw_no: int) -> dict | None:
+    try:
+        query = requests.utils.quote(f"{drw_no}회 로또 당첨번호")
+        r = requests.get(
+            NAVER_SEARCH_URL.format(query),
+            headers=NAVER_HEADERS,
+            timeout=10,
+        )
+        r.raise_for_status()
+        text = r.text
+
+        round_match = re.search(
+            r'class="text _select_trigger _text"[^>]*>(\d+)회차 \((\d{4}\.\d{2}\.\d{2}\.)\)</a>',
+            text,
+        )
+        if not round_match:
+            return None
+
+        actual_round = int(round_match.group(1))
+        if actual_round != drw_no:
+            return None
+
+        winning_match = re.search(
+            r'<div class="winning_number">([\s\S]*?)</div>\s*<div class="bonus_number">\s*<span class="ball [^"]+">(\d+)</span>',
+            text,
+        )
+        if not winning_match:
+            return None
+
+        numbers = [int(n) for n in re.findall(r'<span class="ball [^"]+">(\d+)</span>', winning_match.group(1))]
+        if len(numbers) != 6:
+            return None
+
+        first_prize_match = re.search(
+            r'<th scope="row" rowspan="4">1등</th>\s*<td class="sub_title">총 당첨금</td>\s*<td>([\d,]+)원</td>\s*</tr>\s*<tr>\s*<td class="sub_title">당첨 복권수</td>\s*<td>([\d,]+)개</td>\s*</tr>\s*<tr class="emphasis">\s*<td class="sub_title">1개당 당첨금</td>\s*<td>([\d,]+)원</td>',
+            text,
+        )
+        if not first_prize_match:
+            return None
+
+        return {
+            "drwNo": actual_round,
+            "drwNoDate": round_match.group(2).rstrip(".").replace(".", "-"),
+            "drwtNo1": numbers[0],
+            "drwtNo2": numbers[1],
+            "drwtNo3": numbers[2],
+            "drwtNo4": numbers[3],
+            "drwtNo5": numbers[4],
+            "drwtNo6": numbers[5],
+            "bnusNo": int(winning_match.group(2)),
+            "firstPrzwnerCo": _to_number(first_prize_match.group(2)),
+            "firstWinamnt": _to_number(first_prize_match.group(3)),
+            "firstAccumAmnt": _to_number(first_prize_match.group(1)),
+        }
+    except Exception as exc:
+        print(f"    네이버 크롤링 오류: {exc}")
+        return None
+
+
+def fetch_round_from_dhlottery(drw_no: int) -> dict | None:
     try:
         r = requests.get(DHLOTTERY_URL.format(drw_no), headers=HEADERS, timeout=10)
         r.raise_for_status()
@@ -58,8 +132,15 @@ def fetch_round(drw_no: int) -> dict | None:
             return None
         return data
     except Exception as exc:
-        print(f"    오류: {exc}")
+        print(f"    dhlottery 오류: {exc}")
         return None
+
+
+def fetch_round(drw_no: int) -> dict | None:
+    data = fetch_round_from_naver(drw_no)
+    if data:
+        return data
+    return fetch_round_from_dhlottery(drw_no)
 
 
 def to_row(data: dict) -> dict:
