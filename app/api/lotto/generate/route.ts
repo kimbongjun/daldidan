@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 
 export const revalidate = 300;
+export const dynamic = "force-dynamic";
 
 export interface LottoGenerateResponse {
   numbers: number[];

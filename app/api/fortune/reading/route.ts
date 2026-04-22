@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import Groq from "groq-sdk";
+import { createGroqClient } from "@/lib/groq";
 
 export type FortuneType = "daily" | "card";
 export type CardCategory = "meal" | "travel" | "drink" | "snack";
@@ -189,13 +189,6 @@ export async function POST(request: NextRequest) {
     } satisfies FortuneResponse);
   }
 
-  const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json({ error: "GROQ_API_KEY가 설정되지 않았습니다." }, { status: 500 });
-  }
-
-  const groq = new Groq({ apiKey });
-
   const zodiac = getZodiacAnimal(profile.birth_year);
   const hourLabel = getBirthHourLabel(profile.birth_hour);
   const today = new Date().toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" });
@@ -214,8 +207,9 @@ export async function POST(request: NextRequest) {
 }`;
 
   try {
+    const { client: groq, model } = createGroqClient();
     const completion = await groq.chat.completions.create({
-      model: "llama-3.1-8b-instant",
+      model,
       messages: [
         { role: "system", content: "당신은 한국 전통 사주 기반 운세 전문가입니다. 요청된 JSON 형식만 반환하고 다른 텍스트는 절대 포함하지 마세요." },
         { role: "user", content: prompt },
@@ -235,7 +229,8 @@ export async function POST(request: NextRequest) {
       gender: profile.gender,
       birth_hour: profile.birth_hour,
     } satisfies FortuneResponse);
-  } catch {
+  } catch (e) {
+    console.error("[fortune/reading] Groq 호출 실패:", e);
     return NextResponse.json({ error: "운세 생성에 실패했습니다. 잠시 후 다시 시도해주세요." }, { status: 500 });
   }
 }

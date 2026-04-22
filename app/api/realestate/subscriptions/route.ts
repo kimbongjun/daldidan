@@ -195,6 +195,7 @@ async function fetchSubscriptionsFromHtml(): Promise<SubscriptionItem[]> {
 // ── Route Handler ─────────────────────────────────────────────────────────────
 
 export const revalidate = 3600; // 1시간 캐시
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   let subscriptions: SubscriptionItem[] = MOCK_SUBSCRIPTIONS;

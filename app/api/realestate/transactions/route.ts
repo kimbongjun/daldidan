@@ -122,6 +122,7 @@ const MOCK_MARKET_INDEX: MarketIndex[] = [
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const revalidate = 3600;
+export const dynamic = "force-dynamic";
 
 // ── 국토교통부 실거래가 응답 타입 ─────────────────────────────────────────────
 // 국토교통부 실거래가 API 실제 응답 필드 (camelCase)

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/server";
+import { getLatestLottoResult } from "@/lib/lotto";
 
 export const revalidate = 60;
 
@@ -18,20 +18,12 @@ export interface LottoLatestResponse {
   firstAccumAmnt: number;
 }
 
-// 당첨번호는 scripts/lotto_crawler.py 가 Supabase에 저장 — 여기서는 조회만 한다
 export async function GET() {
   try {
-    const supabase = createAdminClient();
-    const { data, error } = await supabase
-      .from("lotto_results")
-      .select("drw_no, drw_no_date, drw_no1, drw_no2, drw_no3, drw_no4, drw_no5, drw_no6, drw_no_bonus_no, first_win_cnt, first_win_amnt, first_accum_prize_r")
-      .order("drw_no", { ascending: false })
-      .limit(1)
-      .single();
-
+    const { data, error } = await getLatestLottoResult();
     if (error || !data) {
       return NextResponse.json(
-        { error: "당첨 번호 데이터가 없습니다. 크롤러를 먼저 실행해 주세요." },
+        { error: error ?? "당첨 번호 데이터가 없습니다. 크롤러를 먼저 실행해 주세요." },
         { status: 503 },
       );
     }

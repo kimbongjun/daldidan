@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Shuffle, RefreshCw, LoaderCircle } from "lucide-react";
+import { Shuffle, RefreshCw, LoaderCircle, QrCode } from "lucide-react";
 import type { LottoLatestResponse } from "@/app/api/lotto/latest/route";
 import type { LottoGenerateResponse } from "@/app/api/lotto/generate/route";
+import LottoQrScannerModal from "@/components/widgets/LottoQrScannerModal";
 
 const ACCENT = "#F59E0B";
 
@@ -63,6 +64,7 @@ export default function LottoWidget() {
   const [latestLoading, setLatestLoading] = useState(true);
   const [genLoading, setGenLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [qrOpen, setQrOpen] = useState(false);
 
   useEffect(() => {
     fetch("/api/lotto/latest")
@@ -102,9 +104,20 @@ export default function LottoWidget() {
           <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: ACCENT }}>복권</p>
           <h2 className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>로또 6/45</h2>
         </div>
-        <span className="tag shrink-0" style={{ background: `${ACCENT}22`, color: ACCENT }}>
-          🎱 번호 생성
-        </span>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => setQrOpen(true)}
+            className="tag flex items-center gap-1.5 transition-opacity hover:opacity-80"
+            style={{ background: "rgba(255,255,255,0.06)", color: "var(--text-primary)" }}
+          >
+            <QrCode size={13} />
+            QR 확인
+          </button>
+          <span className="tag" style={{ background: `${ACCENT}22`, color: ACCENT }}>
+            🎱 번호 생성
+          </span>
+        </div>
       </div>
 
       {/* 최신 당첨 번호 */}
@@ -208,6 +221,8 @@ export default function LottoWidget() {
           </div>
         )}
       </div>
+
+      <LottoQrScannerModal open={qrOpen} onClose={() => setQrOpen(false)} />
     </div>
   );
 }
