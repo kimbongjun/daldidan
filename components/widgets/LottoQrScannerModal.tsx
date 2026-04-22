@@ -68,6 +68,7 @@ interface Props {
 
 export default function LottoQrScannerModal({ open, onClose }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const captureInputRef = useRef<HTMLInputElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const detectorRef = useRef<BarcodeDetectorInstance | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -224,6 +225,37 @@ export default function LottoQrScannerModal({ open, onClose }: Props) {
     await submitQr(manualQr.trim());
   };
 
+  const handleCaptureImage = async (file: File | null) => {
+    if (!file) return;
+
+    if (!window.BarcodeDetector) {
+      setStatus("error");
+      setError("이 브라우저는 촬영 이미지의 QR 판독을 지원하지 않습니다. QR 주소를 직접 입력해 주세요.");
+      return;
+    }
+
+    setStatus("submitting");
+    setError(null);
+
+    try {
+      const bitmap = await createImageBitmap(file);
+      const detector = detectorRef.current ?? new window.BarcodeDetector({ formats: ["qr_code"] });
+      detectorRef.current = detector;
+      const detected = await detector.detect(bitmap);
+      bitmap.close();
+
+      const rawValue = detected.find((item) => typeof item.rawValue === "string" && item.rawValue.trim())?.rawValue?.trim();
+      if (!rawValue) {
+        throw new Error("촬영한 이미지에서 QR을 찾지 못했습니다.");
+      }
+
+      await submitQr(rawValue);
+    } catch (e) {
+      setStatus("error");
+      setError(e instanceof Error ? e.message : "촬영 이미지에서 QR을 읽지 못했습니다.");
+    }
+  };
+
   if (!open) return null;
 
   return (
@@ -259,6 +291,19 @@ export default function LottoQrScannerModal({ open, onClose }: Props) {
         </div>
 
         <div className="p-5 pt-4 flex flex-col gap-4">
+          <input
+            ref={captureInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0] ?? null;
+              void handleCaptureImage(file);
+              e.currentTarget.value = "";
+            }}
+          />
+
           <div
             className="relative rounded-2xl overflow-hidden"
             style={{ background: "#0B1220", aspectRatio: "3 / 4", border: "1px solid rgba(255,255,255,0.08)" }}
@@ -366,6 +411,17 @@ export default function LottoQrScannerModal({ open, onClose }: Props) {
           </div>
 
           <div className="flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => captureInputRef.current?.click()}
+              disabled={status === "submitting"}
+              className="flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold transition-opacity hover:opacity-85 disabled:opacity-50"
+              style={{ background: "rgba(255,255,255,0.04)", color: "var(--text-primary)", border: "1px solid var(--border)" }}
+            >
+              <Camera size={15} />
+              카메라로 촬영해서 확인
+            </button>
+
             <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>
               QR 주소 직접 입력
             </label>

@@ -66,15 +66,25 @@ export default function LottoWidget() {
   const [error, setError] = useState<string | null>(null);
   const [qrOpen, setQrOpen] = useState(false);
 
+  const loadLatest = async () => {
+    setLatestLoading(true);
+    setError(null);
+
+    try {
+      const res = await fetch(`/api/lotto/latest?ts=${Date.now()}`, { cache: "no-store" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json() as LottoLatestResponse;
+      setLatest(data);
+    } catch {
+      setError("당첨 번호를 불러오지 못했습니다.");
+    } finally {
+      setLatestLoading(false);
+    }
+  };
+
   useEffect(() => {
-    fetch("/api/lotto/latest")
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json() as Promise<LottoLatestResponse>;
-      })
-      .then((d) => setLatest(d))
-      .catch(() => setError("당첨 번호를 불러오지 못했습니다."))
-      .finally(() => setLatestLoading(false));
+    void loadLatest();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleGenerate = async () => {
@@ -129,9 +139,20 @@ export default function LottoWidget() {
           <p className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>
             {latest ? `제 ${latest.drwNo}회 당첨 번호` : "최근 당첨 번호"}
           </p>
-          {latest && (
-            <p className="text-xs" style={{ color: "var(--text-muted)" }}>{latest.drwNoDate}</p>
-          )}
+          <div className="flex items-center gap-2">
+            {latest && (
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>{latest.drwNoDate}</p>
+            )}
+            <button
+              type="button"
+              onClick={() => void loadLatest()}
+              disabled={latestLoading}
+              className="rounded-lg px-2 py-1 text-[11px] font-semibold transition-opacity hover:opacity-80 disabled:opacity-50"
+              style={{ color: ACCENT, background: `${ACCENT}18`, border: `1px solid ${ACCENT}33` }}
+            >
+              새로고침
+            </button>
+          </div>
         </div>
 
         {latestLoading ? (
