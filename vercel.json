@@ -3,6 +3,10 @@
     {
       "path": "/api/calendar/remind",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/lotto/crawl",
+      "schedule": "10 12 * * 6"
     }
   ]
 }
