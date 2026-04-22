@@ -66,8 +66,11 @@ export default function LottoWidget() {
 
   useEffect(() => {
     fetch("/api/lotto/latest")
-      .then((r) => r.json())
-      .then((d: LottoLatestResponse) => setLatest(d))
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json() as Promise<LottoLatestResponse>;
+      })
+      .then((d) => setLatest(d))
       .catch(() => setError("당첨 번호를 불러오지 못했습니다."))
       .finally(() => setLatestLoading(false));
   }, []);
