@@ -30,6 +30,23 @@ export interface LottoData {
   firstAccumAmnt: number;
 }
 
+function toLottoResultRow(data: LottoData): LottoResultRow {
+  return {
+    drw_no: data.drwNo,
+    drw_no_date: data.drwNoDate,
+    drw_no1: data.drwtNo1,
+    drw_no2: data.drwtNo2,
+    drw_no3: data.drwtNo3,
+    drw_no4: data.drwtNo4,
+    drw_no5: data.drwtNo5,
+    drw_no6: data.drwtNo6,
+    drw_no_bonus_no: data.bnusNo,
+    first_win_cnt: data.firstPrzwnerCo,
+    first_win_amnt: data.firstWinamnt,
+    first_accum_prize_r: data.firstAccumAmnt,
+  };
+}
+
 export type LottoFetchResult =
   | { ok: true; data: LottoData }
   | { ok: false; reason: string };
@@ -198,51 +215,98 @@ export interface LottoResultRow {
   first_accum_prize_r: number;
 }
 
+function hasSupabaseAdminConfig(): boolean {
+  return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
+}
+
+async function persistFetchedResult(data: LottoData): Promise<string | null> {
+  if (!hasSupabaseAdminConfig()) return null;
+
+  try {
+    const { error } = await upsertLottoResult(data);
+    return error?.message ?? null;
+  } catch (e) {
+    return e instanceof Error ? e.message : String(e);
+  }
+}
+
+export async function getLottoResultByRound(drwNo: number): Promise<{ data: LottoResultRow | null; error: string | null }> {
+  let latestError: string | null = null;
+
+  if (hasSupabaseAdminConfig()) {
+    try {
+      const supabase = createAdminClient();
+      const { data, error } = await supabase
+        .from("lotto_results")
+        .select("drw_no, drw_no_date, drw_no1, drw_no2, drw_no3, drw_no4, drw_no5, drw_no6, drw_no_bonus_no, first_win_cnt, first_win_amnt, first_accum_prize_r")
+        .eq("drw_no", drwNo)
+        .maybeSingle();
+
+      if (!error && data) {
+        return { data: data as LottoResultRow, error: null };
+      }
+
+      latestError = error?.message ?? latestError;
+    } catch (e) {
+      latestError = e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  const fetched = await fetchLotto(drwNo);
+  if (!fetched.ok) {
+    return { data: null, error: latestError ? `${latestError} / ${fetched.reason}` : fetched.reason };
+  }
+
+  const persistError = await persistFetchedResult(fetched.data);
+  return {
+    data: toLottoResultRow(fetched.data),
+    error: persistError ?? null,
+  };
+}
+
 export async function getLatestLottoResult(): Promise<{ data: LottoResultRow | null; error: string | null }> {
-  const supabase = createAdminClient();
   const latestRound = getLatestRound();
+  let latestStored: LottoResultRow | null = null;
+  let latestError: string | null = null;
 
-  const { data: stored, error } = await supabase
-    .from("lotto_results")
-    .select("drw_no, drw_no_date, drw_no1, drw_no2, drw_no3, drw_no4, drw_no5, drw_no6, drw_no_bonus_no, first_win_cnt, first_win_amnt, first_accum_prize_r")
-    .order("drw_no", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  if (hasSupabaseAdminConfig()) {
+    try {
+      const supabase = createAdminClient();
+      const { data: stored, error } = await supabase
+        .from("lotto_results")
+        .select("drw_no, drw_no_date, drw_no1, drw_no2, drw_no3, drw_no4, drw_no5, drw_no6, drw_no_bonus_no, first_win_cnt, first_win_amnt, first_accum_prize_r")
+        .order("drw_no", { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
-  if (error) return { data: null, error: error.message };
-  const latestStored = stored as LottoResultRow | null;
+      if (error) {
+        latestError = error.message;
+      } else {
+        latestStored = stored as LottoResultRow | null;
+      }
+    } catch (e) {
+      latestError = e instanceof Error ? e.message : String(e);
+    }
+  }
+
   if (latestStored && latestStored.drw_no >= latestRound) return { data: latestStored, error: null };
 
-  const fetchRounds = latestStored ? [latestRound, latestRound - 1] : [latestRound, latestRound - 1, latestRound - 2];
+  const fetchRounds = latestStored
+    ? [latestRound, latestRound - 1, latestRound - 2]
+    : [latestRound, latestRound - 1, latestRound - 2, latestRound - 3];
 
   for (const round of fetchRounds) {
     if (round < 1) continue;
-    const fetched = await fetchLotto(round);
-    if (!fetched.ok) continue;
-
-    const { error: upsertError } = await upsertLottoResult(fetched.data);
-    if (upsertError) return { data: null, error: upsertError.message };
-
-    return {
-      data: {
-        drw_no: fetched.data.drwNo,
-        drw_no_date: fetched.data.drwNoDate,
-        drw_no1: fetched.data.drwtNo1,
-        drw_no2: fetched.data.drwtNo2,
-        drw_no3: fetched.data.drwtNo3,
-        drw_no4: fetched.data.drwtNo4,
-        drw_no5: fetched.data.drwtNo5,
-        drw_no6: fetched.data.drwtNo6,
-        drw_no_bonus_no: fetched.data.bnusNo,
-        first_win_cnt: fetched.data.firstPrzwnerCo,
-        first_win_amnt: fetched.data.firstWinamnt,
-        first_accum_prize_r: fetched.data.firstAccumAmnt,
-      },
-      error: null,
-    };
+    const fetched = await getLottoResultByRound(round);
+    if (fetched.data) return fetched;
+    latestError = fetched.error ?? latestError;
   }
 
-  return { data: latestStored ?? null, error: latestStored ? null : "당첨 번호 데이터가 없습니다. 크롤러를 먼저 실행해 주세요." };
+  if (latestStored) {
+    return { data: latestStored, error: latestError };
+  }
+
+  return { data: null, error: latestError ?? "당첨 번호 데이터가 없습니다. 크롤러를 먼저 실행해 주세요." };
 }
 
 export interface ParsedQrTicket {

@@ -2,7 +2,8 @@
 
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
-import { Camera, LoaderCircle, ScanLine, TriangleAlert, X } from "lucide-react";
+import { createPortal } from "react-dom";
+import { Camera, ImagePlus, Link as LinkIcon, LoaderCircle, ScanLine, TriangleAlert, X } from "lucide-react";
 import type { LottoQrResponse } from "@/app/api/lotto/qr/route";
 
 const ACCENT = "#F59E0B";
@@ -79,11 +80,19 @@ export default function LottoQrScannerModal({ open, onClose }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [manualQr, setManualQr] = useState("");
   const [result, setResult] = useState<LottoQrResponse | null>(null);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    setMounted(true);
+    return () => {
+      setMounted(false);
     };
   }, []);
 
@@ -98,11 +107,25 @@ export default function LottoQrScannerModal({ open, onClose }: Props) {
       return;
     }
 
-    void startScanner();
     return () => {
       stopScanner();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || typeof document === "undefined") return;
+
+    const { body, documentElement } = document;
+    const prevBodyOverflow = body.style.overflow;
+    const prevHtmlOverflow = documentElement.style.overflow;
+
+    body.style.overflow = "hidden";
+    documentElement.style.overflow = "hidden";
+
+    return () => {
+      body.style.overflow = prevBodyOverflow;
+      documentElement.style.overflow = prevHtmlOverflow;
+    };
   }, [open]);
 
   const stopScanner = () => {
@@ -175,10 +198,15 @@ export default function LottoQrScannerModal({ open, onClose }: Props) {
 
   const startScanner = async () => {
     if (typeof window === "undefined") return;
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setStatus("error");
+      setError("이 브라우저는 실시간 카메라 스캔을 지원하지 않습니다. 사진 업로드나 QR 주소 입력을 사용해 주세요.");
+      return;
+    }
 
     if (!window.BarcodeDetector) {
       setStatus("error");
-      setError("이 브라우저는 QR 카메라 스캔을 지원하지 않습니다. 아래 입력칸에 QR 주소를 붙여 넣어 주세요.");
+      setError("이 브라우저는 QR 카메라 스캔을 지원하지 않습니다. 사진 업로드나 QR 주소 입력을 사용해 주세요.");
       return;
     }
 
@@ -189,7 +217,7 @@ export default function LottoQrScannerModal({ open, onClose }: Props) {
       const formats = await window.BarcodeDetector.getSupportedFormats?.();
       if (formats && !formats.includes("qr_code")) {
         setStatus("error");
-        setError("이 브라우저는 QR 카메라 스캔을 지원하지 않습니다. 아래 입력칸에 QR 주소를 붙여 넣어 주세요.");
+        setError("이 브라우저는 QR 카메라 스캔을 지원하지 않습니다. 사진 업로드나 QR 주소 입력을 사용해 주세요.");
         return;
       }
 
@@ -256,9 +284,9 @@ export default function LottoQrScannerModal({ open, onClose }: Props) {
     }
   };
 
-  if (!open) return null;
+  if (!open || !mounted) return null;
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(8px)" }}
@@ -272,12 +300,16 @@ export default function LottoQrScannerModal({ open, onClose }: Props) {
           background: "var(--bg-card)",
           border: "1px solid var(--border)",
           boxShadow: "0 30px 80px rgba(0,0,0,0.45)",
+          maxHeight: "min(92dvh, 860px)",
         }}
       >
-        <div className="flex items-center justify-between px-5 pt-5">
-          <div>
+        <div className="flex items-center justify-between px-5 pt-5 pb-4">
+          <div className="min-w-0">
             <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: ACCENT }}>복권 QR</p>
             <h3 className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>당첨 결과 확인</h3>
+            <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
+              전체 화면 레이어에서 처리해 레이아웃 흔들림 없이 스캔합니다.
+            </p>
           </div>
           <button
             type="button"
@@ -290,7 +322,7 @@ export default function LottoQrScannerModal({ open, onClose }: Props) {
           </button>
         </div>
 
-        <div className="p-5 pt-4 flex flex-col gap-4">
+        <div className="overflow-y-auto px-5 pb-5 flex flex-col gap-4">
           <input
             ref={captureInputRef}
             type="file"
@@ -308,24 +340,36 @@ export default function LottoQrScannerModal({ open, onClose }: Props) {
             className="relative rounded-2xl overflow-hidden"
             style={{ background: "#0B1220", aspectRatio: "3 / 4", border: "1px solid rgba(255,255,255,0.08)" }}
           >
-            <video ref={videoRef} playsInline muted className="w-full h-full object-cover" />
+            {status === "scanning" || status === "starting" || status === "submitting" || status === "success" ? (
+              <video ref={videoRef} playsInline muted className="w-full h-full object-cover" />
+            ) : null}
 
             {status !== "success" && (
               <>
                 <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, rgba(0,0,0,0.3), rgba(0,0,0,0.08), rgba(0,0,0,0.4))" }} />
-                <div className="absolute inset-6 rounded-2xl" style={{ border: `2px solid ${ACCENT}CC`, boxShadow: `0 0 0 9999px rgba(0,0,0,0.22)` }}>
-                  <div
-                    className="absolute inset-x-0"
-                    style={{
-                      top: "50%",
-                      height: 2,
-                      background: `linear-gradient(90deg, transparent 0%, ${ACCENT} 18%, #FCD34D 50%, ${ACCENT} 82%, transparent 100%)`,
-                      boxShadow: `0 0 18px ${ACCENT}`,
-                      animation: "lotto-qr-scan 2s ease-in-out infinite",
-                    }}
-                  />
-                </div>
+                {(status === "scanning" || status === "starting" || status === "submitting") && (
+                  <div className="absolute inset-6 rounded-2xl" style={{ border: `2px solid ${ACCENT}CC`, boxShadow: `0 0 0 9999px rgba(0,0,0,0.22)` }}>
+                    <div
+                      className="absolute inset-x-0"
+                      style={{
+                        top: "50%",
+                        height: 2,
+                        background: `linear-gradient(90deg, transparent 0%, ${ACCENT} 18%, #FCD34D 50%, ${ACCENT} 82%, transparent 100%)`,
+                        boxShadow: `0 0 18px ${ACCENT}`,
+                        animation: "lotto-qr-scan 2s ease-in-out infinite",
+                      }}
+                    />
+                  </div>
+                )}
               </>
+            )}
+
+            {status === "idle" && (
+              <OverlayMessage
+                icon={<ScanLine size={18} />}
+                title="QR 확인 방식을 선택해 주세요"
+                description="실시간 스캔을 시작하거나, 티켓 사진 업로드 또는 QR 주소 붙여넣기로 바로 확인할 수 있습니다."
+              />
             )}
 
             {status === "starting" && (
@@ -413,13 +457,25 @@ export default function LottoQrScannerModal({ open, onClose }: Props) {
           <div className="flex flex-col gap-2">
             <button
               type="button"
+              onClick={() => void startScanner()}
+              disabled={status === "starting" || status === "submitting"}
+              className="flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold transition-opacity hover:opacity-85 disabled:opacity-50"
+              style={{ background: `linear-gradient(135deg, ${ACCENT}, #D97706)`, color: "#fff" }}
+            >
+              {status === "starting"
+                ? <><LoaderCircle size={15} className="animate-spin" /> 실시간 스캔 준비 중</>
+                : <><Camera size={15} /> 실시간 스캔 시작</>
+              }
+            </button>
+            <button
+              type="button"
               onClick={() => captureInputRef.current?.click()}
               disabled={status === "submitting"}
               className="flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold transition-opacity hover:opacity-85 disabled:opacity-50"
               style={{ background: "rgba(255,255,255,0.04)", color: "var(--text-primary)", border: "1px solid var(--border)" }}
             >
-              <Camera size={15} />
-              카메라로 촬영해서 확인
+              <ImagePlus size={15} />
+              사진 업로드로 QR 확인
             </button>
 
             <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>
@@ -444,7 +500,7 @@ export default function LottoQrScannerModal({ open, onClose }: Props) {
               className="flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold transition-opacity hover:opacity-85 disabled:opacity-50"
               style={{ background: `linear-gradient(135deg, ${ACCENT}, #D97706)`, color: "#fff" }}
             >
-              {status === "submitting" ? <LoaderCircle size={15} className="animate-spin" /> : <Camera size={15} />}
+              {status === "submitting" ? <LoaderCircle size={15} className="animate-spin" /> : <LinkIcon size={15} />}
               QR 결과 확인
             </button>
           </div>
@@ -457,7 +513,8 @@ export default function LottoQrScannerModal({ open, onClose }: Props) {
           }
         `}</style>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

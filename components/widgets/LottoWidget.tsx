@@ -84,7 +84,6 @@ export default function LottoWidget() {
 
   useEffect(() => {
     void loadLatest();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleGenerate = async () => {

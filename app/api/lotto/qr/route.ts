@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/server";
-import { fetchLotto, parseLottoQr, upsertLottoResult } from "@/lib/lotto";
+import { getLottoResultByRound, parseLottoQr } from "@/lib/lotto";
 
 interface QrRequest {
   qr: string;
@@ -55,43 +54,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "동행복권 QR 형식을 해석하지 못했습니다." }, { status: 400 });
   }
 
-  const supabase = createAdminClient();
-  let { data: draw, error } = await supabase
-    .from("lotto_results")
-    .select("drw_no, drw_no_date, drw_no1, drw_no2, drw_no3, drw_no4, drw_no5, drw_no6, drw_no_bonus_no")
-    .eq("drw_no", parsed.drwNo)
-    .maybeSingle();
-
-  if (error) {
-    return NextResponse.json({ error: "당첨 데이터 조회에 실패했습니다." }, { status: 500 });
-  }
-
-  if (!draw) {
-    const fetched = await fetchLotto(parsed.drwNo);
-    if (fetched.ok) {
-      const { error: upsertError } = await upsertLottoResult(fetched.data);
-      if (upsertError) {
-        return NextResponse.json({ error: upsertError.message }, { status: 500 });
-      }
-
-      const refreshed = await supabase
-        .from("lotto_results")
-        .select("drw_no, drw_no_date, drw_no1, drw_no2, drw_no3, drw_no4, drw_no5, drw_no6, drw_no_bonus_no")
-        .eq("drw_no", parsed.drwNo)
-        .maybeSingle();
-
-      draw = refreshed.data;
-      error = refreshed.error;
-    }
-  }
-
-  if (error) {
-    return NextResponse.json({ error: "당첨 데이터 조회에 실패했습니다." }, { status: 500 });
-  }
+  const { data: draw, error } = await getLottoResultByRound(parsed.drwNo);
 
   if (!draw) {
     return NextResponse.json(
-      { error: `제 ${parsed.drwNo}회 당첨 데이터를 가져오지 못했습니다.` },
+      { error: error ?? `제 ${parsed.drwNo}회 당첨 데이터를 가져오지 못했습니다.` },
       { status: 404 },
     );
   }

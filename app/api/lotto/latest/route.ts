@@ -22,7 +22,7 @@ export interface LottoLatestResponse {
 export async function GET() {
   try {
     const { data, error } = await getLatestLottoResult();
-    if (error || !data) {
+    if (!data) {
       return NextResponse.json(
         { error: error ?? "당첨 번호 데이터가 없습니다. 크롤러를 먼저 실행해 주세요." },
         {
@@ -32,6 +32,10 @@ export async function GET() {
           },
         },
       );
+    }
+
+    if (error) {
+      console.warn("[lotto/latest] fallback warning:", error);
     }
 
     return NextResponse.json(
