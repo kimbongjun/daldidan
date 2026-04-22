@@ -9,6 +9,7 @@ import FestivalWidget from "@/components/widgets/FestivalWidget";
 import RealEstateWidget from "@/components/widgets/RealEstateWidget";
 import CalendarWidget from "@/components/widgets/CalendarWidget";
 import FortuneWidget from "@/components/widgets/FortuneWidget";
+import LottoWidget from "@/components/widgets/LottoWidget";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import type { BlogPostSummary } from "@/lib/blog-shared";
 
@@ -55,6 +56,7 @@ export default function DashboardShell({
         <BentoGrid
           blog={<ErrorBoundary><BlogWidget initialPosts={initialBlogPosts} /></ErrorBoundary>}
           fortune={<ErrorBoundary><FortuneWidget /></ErrorBoundary>}
+          lotto={<ErrorBoundary><LottoWidget /></ErrorBoundary>}
         />
         <Footer />
       </div>
@@ -65,9 +67,11 @@ export default function DashboardShell({
 function BentoGrid({
   blog,
   fortune,
+  lotto,
 }: {
   blog: React.ReactNode;
   fortune: React.ReactNode;
+  lotto: React.ReactNode;
 }) {
   return (
     <div style={{ width: "100%", marginTop: "1rem" }}>
@@ -98,6 +102,7 @@ function BentoGrid({
               "blog    budget"
               "blog    calendar"
               "blog    fortune"
+              "blog    lotto"
               "festival festival"
               "realestate realestate";
           }
@@ -110,6 +115,7 @@ function BentoGrid({
         <div style={{ gridArea: "budget",     minWidth: 0, minHeight: 460 }}><ErrorBoundary><BudgetWidget /></ErrorBoundary></div>
         <div style={{ gridArea: "calendar",   minWidth: 0, minHeight: 520 }}><ErrorBoundary><CalendarWidget /></ErrorBoundary></div>
         <div style={{ gridArea: "fortune",    minWidth: 0, minHeight: 420 }}>{fortune}</div>
+        <div style={{ gridArea: "lotto",      minWidth: 0, minHeight: 380 }}>{lotto}</div>
         <div style={{ gridArea: "festival",   minWidth: 0, height: 300 }}><FestivalWidget /></div>
         <div style={{ gridArea: "realestate", minWidth: 0, height: 340 }}><RealEstateWidget /></div>
       </div>
@@ -120,6 +126,7 @@ function BentoGrid({
         <div style={{ minWidth: 0 }}><ErrorBoundary><BudgetWidget /></ErrorBoundary></div>
         <div style={{ minWidth: 0, gridColumn: "1 / -1", minHeight: 520 }}><ErrorBoundary><CalendarWidget /></ErrorBoundary></div>
         <div style={{ minWidth: 0, minHeight: 420, gridColumn: "1 / -1" }}>{fortune}</div>
+        <div style={{ minWidth: 0, minHeight: 380, gridColumn: "1 / -1" }}>{lotto}</div>
         <div style={{ minWidth: 0, height: 300, gridColumn: "1 / -1" }}><FestivalWidget /></div>
         <div style={{ minWidth: 0, gridColumn: "1 / -1" }}><RealEstateWidget /></div>
       </div>
@@ -130,6 +137,7 @@ function BentoGrid({
         <div style={{ minWidth: 0 }}><ErrorBoundary><BudgetWidget /></ErrorBoundary></div>
         <div style={{ minWidth: 0, minHeight: 520 }}><ErrorBoundary><CalendarWidget /></ErrorBoundary></div>
         <div style={{ minWidth: 0, minHeight: 420 }}>{fortune}</div>
+        <div style={{ minWidth: 0, minHeight: 380 }}>{lotto}</div>
         <div style={{ minWidth: 0, height: 300 }}><FestivalWidget /></div>
         <div style={{ minWidth: 0 }}><RealEstateWidget /></div>
       </div>
