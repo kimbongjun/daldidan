@@ -126,7 +126,6 @@ export default function MyPage() {
       }
 
       setAvatarUrl(uploadData.url);
-      await persistProfile({ avatar_url: uploadData.url });
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
     } catch (err) {

@@ -112,8 +112,13 @@ export async function PATCH(request: NextRequest) {
   const admin = createAdminClient();
   const { error } = await admin
     .from("profiles")
-    .update(updates)
-    .eq("id", user.id);
+    .upsert(
+      {
+        id: user.id,
+        ...updates,
+      },
+      { onConflict: "id" },
+    );
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

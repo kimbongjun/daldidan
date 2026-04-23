@@ -52,8 +52,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "post_id가 필요합니다." }, { status: 400 });
   }
 
-  const supabase = createPublicClient();
-  const { data, error } = await supabase
+  const publicSupabase = createPublicClient();
+  const { data, error } = await publicSupabase
     .from("blog_comments")
     .select("id, user_id, author_name, content, image_urls, created_at, updated_at, parent_id")
     .eq("post_id", postId)
@@ -63,7 +63,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const comments = await attachCommentAvatars(supabase, (data ?? []) as CommentRow[]);
+  const comments = await attachCommentAvatars(createAdminClient(), (data ?? []) as CommentRow[]);
   return NextResponse.json(comments);
 }
 

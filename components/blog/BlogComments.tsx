@@ -281,7 +281,9 @@ export default function BlogComments({ postId }: { postId: string }) {
 
   const fetchComments = async () => {
     try {
-      const res = await fetch(`/api/blog/comments?post_id=${encodeURIComponent(postId)}`);
+      const res = await fetch(`/api/blog/comments?post_id=${encodeURIComponent(postId)}`, {
+        cache: "no-store",
+      });
       const data = await res.json();
       if (!res.ok) throw new Error((data as { error?: string }).error ?? "댓글을 불러오지 못했습니다.");
       setComments(Array.isArray(data) ? data : []);
