@@ -887,7 +887,7 @@ export default function Header({
                   </p>
                 </div>
                 <Link
-                  href="/mypage?settings=open"
+                  href="/settings"
                   onClick={() => setDropdownOpen(false)}
                   style={{
                     width: "100%", padding: "0.75rem 1rem", display: "flex", alignItems: "center",
@@ -898,7 +898,7 @@ export default function Header({
                   사이트 옵션
                 </Link>
                 <Link
-                  href="/mypage#profile-avatar"
+                  href="/mypage"
                   onClick={() => setDropdownOpen(false)}
                   style={{
                     width: "100%", padding: "0.75rem 1rem", display: "flex", alignItems: "center",
