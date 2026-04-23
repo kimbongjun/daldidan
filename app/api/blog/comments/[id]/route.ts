@@ -17,7 +17,7 @@ async function resolveAvatarUrl(userId: string | null) {
   if (!userId) return null;
 
   const supabase = createAdminClient();
-  let { data, error } = await supabase
+  const { data, error } = await supabase
     .from("profiles")
     .select("avatar_url")
     .eq("id", userId)
