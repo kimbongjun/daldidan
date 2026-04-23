@@ -1,32 +1,19 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Camera, ImagePlus, Link as LinkIcon, LoaderCircle, ScanLine, TriangleAlert, X } from "lucide-react";
 import type { LottoQrResponse } from "@/app/api/lotto/qr/route";
+import type { Html5Qrcode } from "html5-qrcode";
 
 const ACCENT = "#F59E0B";
 
 type ScanStatus = "idle" | "starting" | "scanning" | "submitting" | "error" | "success";
 
-declare global {
-  interface Window {
-    BarcodeDetector?: BarcodeDetectorConstructor;
-  }
-}
-
-interface BarcodeDetectorResult {
-  rawValue?: string;
-}
-
-interface BarcodeDetectorInstance {
-  detect(source: ImageBitmapSource): Promise<BarcodeDetectorResult[]>;
-}
-
-interface BarcodeDetectorConstructor {
-  new (options?: { formats?: string[] }): BarcodeDetectorInstance;
-  getSupportedFormats?: () => Promise<string[]>;
+interface CameraDevice {
+  id: string;
+  label: string;
 }
 
 function rankLabel(rank: number | null): string {
@@ -68,11 +55,9 @@ interface Props {
 }
 
 export default function LottoQrScannerModal({ open, onClose }: Props) {
-  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const scannerRegionId = useId().replace(/:/g, "-");
   const captureInputRef = useRef<HTMLInputElement | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const detectorRef = useRef<BarcodeDetectorInstance | null>(null);
-  const rafRef = useRef<number | null>(null);
+  const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
   const lastScanRef = useRef<string | null>(null);
   const mountedRef = useRef(true);
 
@@ -98,7 +83,7 @@ export default function LottoQrScannerModal({ open, onClose }: Props) {
 
   useEffect(() => {
     if (!open) {
-      stopScanner();
+      void stopScanner();
       setStatus("idle");
       setError(null);
       setManualQr("");
@@ -108,7 +93,7 @@ export default function LottoQrScannerModal({ open, onClose }: Props) {
     }
 
     return () => {
-      stopScanner();
+      void stopScanner();
     };
   }, [open]);
 
@@ -128,18 +113,24 @@ export default function LottoQrScannerModal({ open, onClose }: Props) {
     };
   }, [open]);
 
-  const stopScanner = () => {
-    if (rafRef.current !== null) {
-      window.cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
+  const stopScanner = async () => {
+    const scanner = html5QrCodeRef.current;
+    if (!scanner) return;
+
+    html5QrCodeRef.current = null;
+
+    try {
+      if (scanner.isScanning) {
+        await scanner.stop();
+      }
+    } catch {
+      // 스캐너 정지 실패는 정리 단계에서 무시한다.
     }
 
-    streamRef.current?.getTracks().forEach((track) => track.stop());
-    streamRef.current = null;
-
-    if (videoRef.current) {
-      videoRef.current.pause();
-      videoRef.current.srcObject = null;
+    try {
+      scanner.clear();
+    } catch {
+      // DOM 정리 실패는 무시한다.
     }
   };
 
@@ -160,7 +151,7 @@ export default function LottoQrScannerModal({ open, onClose }: Props) {
       }
 
       if (!mountedRef.current) return;
-      stopScanner();
+      await stopScanner();
       setResult(json as LottoQrResponse);
       setStatus("success");
     } catch (e) {
@@ -171,29 +162,15 @@ export default function LottoQrScannerModal({ open, onClose }: Props) {
     }
   };
 
-  const scanLoop = async () => {
-    if (!videoRef.current || !detectorRef.current || status === "submitting" || status === "success") {
-      rafRef.current = window.requestAnimationFrame(() => {
-        void scanLoop();
-      });
-      return;
-    }
+  const loadQrLibrary = () => import("html5-qrcode");
 
-    try {
-      const detected = await detectorRef.current.detect(videoRef.current);
-      const rawValue = detected.find((item) => typeof item.rawValue === "string" && item.rawValue.trim())?.rawValue?.trim();
-      if (rawValue && rawValue !== lastScanRef.current) {
-        lastScanRef.current = rawValue;
-        await submitQr(rawValue);
-        return;
-      }
-    } catch {
-      // 브라우저별 검출 실패는 루프를 유지한다.
-    }
+  const pickPreferredCamera = (cameras: CameraDevice[]): CameraDevice | null => {
+    if (cameras.length === 0) return null;
 
-    rafRef.current = window.requestAnimationFrame(() => {
-      void scanLoop();
-    });
+    const rearCamera = cameras.find((camera) => /back|rear|environment|후면|광각/i.test(camera.label));
+    if (rearCamera) return rearCamera;
+
+    return cameras[cameras.length - 1] ?? null;
   };
 
   const startScanner = async () => {
@@ -204,44 +181,53 @@ export default function LottoQrScannerModal({ open, onClose }: Props) {
       return;
     }
 
-    if (!window.BarcodeDetector) {
-      setStatus("error");
-      setError("이 브라우저는 QR 카메라 스캔을 지원하지 않습니다. 사진 업로드나 QR 주소 입력을 사용해 주세요.");
-      return;
-    }
-
     setStatus("starting");
     setError(null);
 
     try {
-      const formats = await window.BarcodeDetector.getSupportedFormats?.();
-      if (formats && !formats.includes("qr_code")) {
-        setStatus("error");
-        setError("이 브라우저는 QR 카메라 스캔을 지원하지 않습니다. 사진 업로드나 QR 주소 입력을 사용해 주세요.");
-        return;
-      }
+      await stopScanner();
+      const { Html5Qrcode, Html5QrcodeSupportedFormats } = await loadQrLibrary();
+      const scanner = new Html5Qrcode(
+        scannerRegionId,
+        {
+          formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+          verbose: false,
+          useBarCodeDetectorIfSupported: true,
+        },
+      );
+      html5QrCodeRef.current = scanner;
 
-      detectorRef.current = new window.BarcodeDetector({ formats: ["qr_code"] });
+      const cameras = await Html5Qrcode.getCameras() as CameraDevice[];
+      const preferredCamera = pickPreferredCamera(cameras);
+      const cameraConfig = preferredCamera?.id
+        ? preferredCamera.id
+        : { facingMode: { ideal: "environment" } };
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: "environment" } },
-        audio: false,
-      });
-
-      streamRef.current = stream;
-
-      if (!videoRef.current) return;
-      videoRef.current.srcObject = stream;
-      await videoRef.current.play();
+      await scanner.start(
+        cameraConfig,
+        {
+          fps: 10,
+          qrbox: { width: 220, height: 220 },
+          aspectRatio: 1,
+          disableFlip: false,
+        },
+        (decodedText) => {
+          const rawValue = decodedText.trim();
+          if (!rawValue || rawValue === lastScanRef.current || status === "submitting" || status === "success") return;
+          lastScanRef.current = rawValue;
+          void submitQr(rawValue);
+        },
+        () => {
+          // 검출 실패는 정상 플로우라 무시한다.
+        },
+      );
 
       if (!mountedRef.current) return;
       setStatus("scanning");
-      rafRef.current = window.requestAnimationFrame(() => {
-        void scanLoop();
-      });
     } catch (e) {
+      await stopScanner();
       setStatus("error");
-      setError(e instanceof Error ? e.message : "카메라를 시작하지 못했습니다.");
+      setError(e instanceof Error ? e.message : "카메라를 시작하지 못했습니다. 사진 업로드나 QR 주소 입력을 사용해 주세요.");
     }
   };
 
@@ -256,29 +242,30 @@ export default function LottoQrScannerModal({ open, onClose }: Props) {
   const handleCaptureImage = async (file: File | null) => {
     if (!file) return;
 
-    if (!window.BarcodeDetector) {
-      setStatus("error");
-      setError("이 브라우저는 촬영 이미지의 QR 판독을 지원하지 않습니다. QR 주소를 직접 입력해 주세요.");
-      return;
-    }
-
     setStatus("submitting");
     setError(null);
 
     try {
-      const bitmap = await createImageBitmap(file);
-      const detector = detectorRef.current ?? new window.BarcodeDetector({ formats: ["qr_code"] });
-      detectorRef.current = detector;
-      const detected = await detector.detect(bitmap);
-      bitmap.close();
+      await stopScanner();
+      const { Html5Qrcode, Html5QrcodeSupportedFormats } = await loadQrLibrary();
+      const scanner = new Html5Qrcode(
+        scannerRegionId,
+        {
+          formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+          verbose: false,
+          useBarCodeDetectorIfSupported: true,
+        },
+      );
+      html5QrCodeRef.current = scanner;
 
-      const rawValue = detected.find((item) => typeof item.rawValue === "string" && item.rawValue.trim())?.rawValue?.trim();
+      const rawValue = (await scanner.scanFile(file, false)).trim();
       if (!rawValue) {
         throw new Error("촬영한 이미지에서 QR을 찾지 못했습니다.");
       }
 
       await submitQr(rawValue);
     } catch (e) {
+      await stopScanner();
       setStatus("error");
       setError(e instanceof Error ? e.message : "촬영 이미지에서 QR을 읽지 못했습니다.");
     }
@@ -340,9 +327,7 @@ export default function LottoQrScannerModal({ open, onClose }: Props) {
             className="relative rounded-2xl overflow-hidden"
             style={{ background: "#0B1220", aspectRatio: "3 / 4", border: "1px solid rgba(255,255,255,0.08)" }}
           >
-            {status === "scanning" || status === "starting" || status === "submitting" || status === "success" ? (
-              <video ref={videoRef} playsInline muted className="w-full h-full object-cover" />
-            ) : null}
+            <div id={scannerRegionId} className="absolute inset-0" />
 
             {status !== "success" && (
               <>
@@ -507,6 +492,18 @@ export default function LottoQrScannerModal({ open, onClose }: Props) {
         </div>
 
         <style>{`
+          #${scannerRegionId} {
+            width: 100%;
+            height: 100%;
+          }
+
+          #${scannerRegionId} video,
+          #${scannerRegionId} canvas {
+            width: 100% !important;
+            height: 100% !important;
+            object-fit: cover;
+          }
+
           @keyframes lotto-qr-scan {
             0%, 100% { transform: translateY(-90px); opacity: 0.35; }
             50% { transform: translateY(90px); opacity: 1; }
