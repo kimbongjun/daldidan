@@ -1,11 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
-import { sendPushToAllSubscribers } from "@/lib/push-notification";
+import { sendPushToUserIds } from "@/lib/push-notification";
 
 export const runtime = "nodejs";
 
 function isMissingColumnError(error: { message?: string } | null, column: string) {
-  return Boolean(error?.message?.includes(`column calendar_events.${column} does not exist`));
+  const message = error?.message ?? "";
+  return (
+    message.includes(`column calendar_events.${column} does not exist`) ||
+    message.includes(`Could not find the '${column}' column of 'calendar_events'`)
+  );
+}
+
+function formatKstDate(date: Date) {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+
+  return formatter.format(date);
 }
 
 /**
@@ -29,12 +44,12 @@ export async function POST(request: NextRequest) {
   const now = new Date();
   const tomorrow = new Date(now);
   tomorrow.setDate(now.getDate() + 1);
-  const tomorrowStr = tomorrow.toISOString().slice(0, 10);
+  const tomorrowStr = formatKstDate(tomorrow);
 
   // 내일 시작하는 일정 조회 (remind_sent = false)
   let { data: events, error } = await admin
     .from("calendar_events")
-    .select("id, title, event_type, start_date, start_time, location, description")
+    .select("id, user_id, title, event_type, start_date, start_time, location, description")
     .eq("start_date", tomorrowStr)
     .eq("remind_sent", false);
 
@@ -42,7 +57,7 @@ export async function POST(request: NextRequest) {
   if (!supportsRemindSent) {
     const fallback = await admin
       .from("calendar_events")
-      .select("id, title, event_type, start_date, start_time, location, description")
+      .select("id, user_id, title, event_type, start_date, start_time, location, description")
       .eq("start_date", tomorrowStr);
     events = fallback.data;
     error = fallback.error;
@@ -66,16 +81,18 @@ export async function POST(request: NextRequest) {
   const sentIds: string[] = [];
 
   for (const event of events) {
+    if (!event.user_id) continue;
+
     const label = typeLabel[event.event_type as string] ?? "일정";
     const timeStr = event.start_time ? ` ${String(event.start_time).slice(0, 5)}` : "";
     const locationStr = event.location ? ` · ${event.location}` : "";
     const body = `내일${timeStr}${locationStr}`;
 
-    const result = await sendPushToAllSubscribers({
+    const result = await sendPushToUserIds([event.user_id as string], {
       title: `📅 [D-1] ${label}: ${event.title}`,
       body,
       url: "/",
-    });
+    }, "all");
 
     totalSent += result.sent;
     if (result.sent > 0 || result.failed === 0) {

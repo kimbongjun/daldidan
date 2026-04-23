@@ -249,20 +249,24 @@ export async function sendPushToAllSubscribers(
 export async function sendPushToUserIds(
   userIds: string[],
   params: PushDispatchParams,
-  type: "comment" | "new_post" = "comment",
+  type: "comment" | "new_post" | "all" = "comment",
 ): Promise<{ sent: number; failed: number }> {
   if (!process.env.FIREBASE_ADMIN_PROJECT_ID || userIds.length === 0) {
     return { sent: 0, failed: 0 };
   }
 
   const supabase = createAdminClient();
-  const prefColumn = type === "comment" ? "notify_comment" : "notify_new_post";
-
-  const { data, error } = await supabase
+  const baseQuery = supabase
     .from("push_subscriptions")
     .select("fcm_token, device_type, user_id, user_agent, updated_at")
-    .in("user_id", userIds)
-    .or(`${prefColumn}.eq.true,${prefColumn}.is.null`);
+    .in("user_id", userIds);
+
+  const query =
+    type === "all"
+      ? baseQuery
+      : baseQuery.or(`${type === "comment" ? "notify_comment" : "notify_new_post"}.eq.true,${type === "comment" ? "notify_comment" : "notify_new_post"}.is.null`);
+
+  const { data, error } = await query;
 
   if (error || !data) return { sent: 0, failed: 0 };
 

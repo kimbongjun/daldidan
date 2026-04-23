@@ -73,10 +73,12 @@ function resolveSlugCandidates(slug: string) {
 
 export async function getBlogPostCount(category?: string | null): Promise<number> {
   const supabase = createPublicClient();
+  const nowIso = new Date().toISOString();
   let query = supabase
     .from("blog_posts")
     .select("id", { count: "exact", head: true })
-    .eq("is_published", true);
+    .eq("is_published", true)
+    .or(`published_at.is.null,published_at.lte.${nowIso}`);
 
   if (category) query = query.eq("category", category);
 
@@ -86,10 +88,12 @@ export async function getBlogPostCount(category?: string | null): Promise<number
 
 export async function getPublishedBlogPosts(limit = 9, category?: string | null, offset = 0) {
   const supabase = createPublicClient();
+  const nowIso = new Date().toISOString();
   let query = supabase
     .from("blog_posts")
     .select("id, slug, title, description, thumbnail_url, content_html, author_name, published_at, updated_at, created_at, view_count, category, blog_comments(created_at)")
-    .eq("is_published", true);
+    .eq("is_published", true)
+    .or(`published_at.is.null,published_at.lte.${nowIso}`);
 
   if (category) {
     query = query.eq("category", category);
@@ -107,11 +111,13 @@ export async function getPublishedBlogPosts(limit = 9, category?: string | null,
 export async function getBlogPostBySlug(slug: string) {
   const supabase = createPublicClient();
   const candidates = resolveSlugCandidates(slug);
+  const nowIso = new Date().toISOString();
   const { data, error } = await supabase
     .from("blog_posts")
     .select("id, slug, title, description, thumbnail_url, author_name, published_at, updated_at, created_at, content_html, view_count, category, blog_comments(created_at)")
     .in("slug", candidates)
     .eq("is_published", true)
+    .or(`published_at.is.null,published_at.lte.${nowIso}`)
     .limit(2);
 
   if (error || !data) return null;

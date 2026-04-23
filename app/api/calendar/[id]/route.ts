@@ -36,6 +36,17 @@ export async function PATCH(
   const { id } = await params;
   const body = await request.json() as Record<string, unknown>;
 
+  const { data: existing, error: fetchError } = await supabase
+    .from("calendar_events")
+    .select("id, start_date, start_time")
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (fetchError || !existing) {
+    return NextResponse.json({ error: "수정할 일정을 찾지 못했습니다." }, { status: 404 });
+  }
+
   const allowed = ["title", "event_type", "start_date", "start_time", "end_date", "end_time", "location", "description", "is_recurring", "recurrence"];
   const patch: Record<string, unknown> = {};
   for (const key of allowed) {
@@ -44,6 +55,16 @@ export async function PATCH(
 
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: "변경할 필드가 없습니다." }, { status: 400 });
+  }
+
+  const nextStartDate = typeof patch.start_date === "string" ? patch.start_date : existing.start_date;
+  const nextStartTime =
+    typeof patch.start_time === "string"
+      ? (patch.start_time || null)
+      : existing.start_time;
+
+  if (nextStartDate !== existing.start_date || nextStartTime !== existing.start_time) {
+    patch.remind_sent = false;
   }
 
   const { data, error } = await supabase

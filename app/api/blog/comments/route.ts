@@ -52,6 +52,22 @@ export async function POST(request: NextRequest) {
 
   const admin = createAdminClient();
 
+  if (parentId) {
+    const { data: parentComment, error: parentError } = await admin
+      .from("blog_comments")
+      .select("id, post_id")
+      .eq("id", parentId)
+      .maybeSingle();
+
+    if (parentError) {
+      return NextResponse.json({ error: parentError.message }, { status: 500 });
+    }
+
+    if (!parentComment || parentComment.post_id !== postId) {
+      return NextResponse.json({ error: "대댓글 대상 댓글이 올바르지 않습니다." }, { status: 400 });
+    }
+  }
+
   if (user) {
     // 로그인 유저: 닉네임 사용, 비밀번호 불필요
     const { data: profile } = await admin
@@ -170,9 +186,11 @@ async function dispatchCommentNotification({
   if (isReply) {
     const { data: parentComment } = await admin
       .from("blog_comments")
-      .select("user_id")
+      .select("user_id, post_id")
       .eq("id", parentId)
       .maybeSingle();
+
+    if (!parentComment || parentComment.post_id !== postId) return;
 
     const parentAuthorId = parentComment?.user_id ?? null;
 

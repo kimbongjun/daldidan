@@ -51,6 +51,9 @@ export async function POST(request: NextRequest) {
   const authorName = profile?.display_name?.trim() || user.email?.split("@")[0] || "달디단 에디터";
   // 클라이언트에서 발행일을 지정하면 사용, 없으면 현재 시각
   const candidateDate = body.publishedAt ? new Date(body.publishedAt) : null;
+  if (candidateDate && !isNaN(candidateDate.getTime()) && candidateDate.getTime() > Date.now()) {
+    return NextResponse.json({ error: "미래 시각으로는 발행할 수 없습니다." }, { status: 400 });
+  }
   const publishedAt = (candidateDate && !isNaN(candidateDate.getTime()))
     ? candidateDate.toISOString()
     : new Date().toISOString();
@@ -128,6 +131,9 @@ export async function PATCH(request: NextRequest) {
   const contentHtml = body.contentHtml?.trim() ?? "";
   const category = body.category?.trim() || null;
   const candidateDate = body.publishedAt ? new Date(body.publishedAt) : null;
+  if (candidateDate && !isNaN(candidateDate.getTime()) && candidateDate.getTime() > Date.now()) {
+    return NextResponse.json({ error: "미래 시각으로는 발행일을 변경할 수 없습니다." }, { status: 400 });
+  }
   const publishedAt = (candidateDate && !isNaN(candidateDate.getTime()))
     ? candidateDate.toISOString()
     : null;
