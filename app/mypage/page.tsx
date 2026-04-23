@@ -37,6 +37,7 @@ type SiteSettings = {
 
 export default function MyPage() {
   const router = useRouter();
+  const avatarFileRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const ogFileRef = useRef<HTMLInputElement>(null);
   const faviconFileRef = useRef<HTMLInputElement>(null);
@@ -48,8 +49,10 @@ export default function MyPage() {
   const [birthYear, setBirthYear] = useState<string>("");
   const [gender, setGender] = useState<string>("");
   const [birthHour, setBirthHour] = useState<string>("");
+  const [avatarUrl, setAvatarUrl] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [avatarUploading, setAvatarUploading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
 
@@ -88,11 +91,13 @@ export default function MyPage() {
       if (profileRes.ok) {
         const p = await profileRes.json() as {
           display_name: string;
+          avatar_url: string | null;
           birth_year: number | null;
           gender: string | null;
           birth_hour: number | null;
         };
         setDisplayName(p.display_name);
+        setAvatarUrl(p.avatar_url ?? "");
         if (p.birth_year) setBirthYear(String(p.birth_year));
         if (p.gender) setGender(p.gender);
         if (p.birth_hour != null) setBirthHour(String(p.birth_hour));
@@ -110,6 +115,7 @@ export default function MyPage() {
     setSaving(true); setError(""); setSuccess(false);
     try {
       const body: Record<string, unknown> = { display_name: displayName };
+      body.avatar_url = avatarUrl.trim() || null;
       if (birthYear) body.birth_year = Number(birthYear);
       else body.birth_year = null;
       if (gender) body.gender = gender;
@@ -129,6 +135,30 @@ export default function MyPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "저장에 실패했습니다.");
     } finally { setSaving(false); }
+  };
+
+  const uploadAvatar = async (file: File) => {
+    setAvatarUploading(true);
+    setUploadError("");
+    try {
+      const supabase = createClient();
+      const ext = file.name.split(".").pop()?.toLowerCase() ?? "jpg";
+      const safeExt = /^[a-z0-9]+$/.test(ext) ? ext : "jpg";
+      const path = `avatars/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${safeExt}`;
+      const { data, error } = await supabase.storage
+        .from("blog-images")
+        .upload(path, file, {
+          upsert: true,
+          contentType: file.type || undefined,
+        });
+      if (error) throw error;
+      const { data: { publicUrl } } = supabase.storage.from("blog-images").getPublicUrl(data.path);
+      setAvatarUrl(publicUrl);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "아바타 업로드에 실패했습니다.");
+    } finally {
+      setAvatarUploading(false);
+    }
   };
 
   const handleSettingsSave = async () => {
@@ -196,12 +226,22 @@ export default function MyPage() {
       {/* ── 프로필 카드 ── */}
       <div className="bento-card p-6 flex flex-col gap-6">
         <div className="flex items-center gap-4">
-          <div
-            className="w-14 h-14 rounded-2xl flex items-center justify-center font-bold text-xl shrink-0"
-            style={{ background: "linear-gradient(135deg, #7C3AED, #06B6D4)", color: "#fff" }}
-          >
-            {avatarLetter}
-          </div>
+          {avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={avatarUrl}
+              alt="프로필 아바타"
+              className="w-14 h-14 rounded-2xl object-cover shrink-0"
+              style={{ border: "1px solid var(--border)" }}
+            />
+          ) : (
+            <div
+              className="w-14 h-14 rounded-2xl flex items-center justify-center font-bold text-xl shrink-0"
+              style={{ background: "linear-gradient(135deg, #7C3AED, #06B6D4)", color: "#fff" }}
+            >
+              {avatarLetter}
+            </div>
+          )}
           <div className="min-w-0">
             <p className="font-bold truncate" style={{ color: "var(--text-primary)" }}>{displayName || "닉네임 없음"}</p>
             <p className="text-sm truncate" style={{ color: "var(--text-muted)" }}>{email}</p>
@@ -211,6 +251,72 @@ export default function MyPage() {
         <hr style={{ border: "none", borderTop: "1px solid var(--border)" }} />
 
         <form onSubmit={handleSave} className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>프로필 아바타</label>
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+              댓글과 마이페이지에 표시됩니다. 정사각형 이미지를 권장합니다.
+            </p>
+            <div className="flex items-center gap-3">
+              {avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={avatarUrl}
+                  alt="아바타 미리보기"
+                  className="w-16 h-16 rounded-2xl object-cover shrink-0"
+                  style={{ border: "1px solid var(--border)" }}
+                />
+              ) : (
+                <div
+                  className="w-16 h-16 rounded-2xl flex items-center justify-center font-bold text-xl shrink-0"
+                  style={{ background: "linear-gradient(135deg, #7C3AED, #06B6D4)", color: "#fff" }}
+                >
+                  {avatarLetter}
+                </div>
+              )}
+              <input
+                type="url"
+                value={avatarUrl}
+                onChange={(e) => setAvatarUrl(e.target.value)}
+                placeholder="아바타 이미지 URL 직접 입력"
+                style={{ ...inputStyle, flex: 1 }}
+              />
+            </div>
+            <div className="flex gap-2">
+              <input
+                ref={avatarFileRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) void uploadAvatar(file);
+                  e.currentTarget.value = "";
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => avatarFileRef.current?.click()}
+                disabled={avatarUploading}
+                className="pressable px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50 flex items-center gap-1.5"
+                style={{ background: "rgba(234,88,12,0.12)", color: ACCENT }}
+              >
+                {avatarUploading ? <LoaderCircle size={12} className="animate-spin" /> : <ImageIcon size={12} />}
+                {avatarUploading ? "업로드 중..." : "파일 선택"}
+              </button>
+              {avatarUrl && (
+                <button
+                  type="button"
+                  onClick={() => setAvatarUrl("")}
+                  className="pressable px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5"
+                  style={{ background: "rgba(244,63,94,0.1)", color: "#F43F5E" }}
+                >
+                  <Trash2 size={12} />
+                  삭제
+                </button>
+              )}
+            </div>
+          </div>
+
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>닉네임</label>
             <input value={displayName} onChange={(e) => setDisplayName(e.target.value)}

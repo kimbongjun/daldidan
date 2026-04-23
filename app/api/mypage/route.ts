@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 
+function isMissingColumnError(error: { message?: string } | null, column: string) {
+  const message = error?.message ?? "";
+  return (
+    message.includes(`column profiles.${column} does not exist`) ||
+    message.includes(`Could not find the '${column}' column of 'profiles'`)
+  );
+}
+
 export async function GET() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -9,15 +17,30 @@ export async function GET() {
     return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
   }
 
-  const { data: profile } = await supabase
+  let { data: profile, error } = await supabase
     .from("profiles")
-    .select("display_name, birth_year, gender, birth_hour")
+    .select("display_name, avatar_url, birth_year, gender, birth_hour")
     .eq("id", user.id)
     .maybeSingle();
+
+  if (isMissingColumnError(error, "avatar_url")) {
+    const fallback = await supabase
+      .from("profiles")
+      .select("display_name, birth_year, gender, birth_hour")
+      .eq("id", user.id)
+      .maybeSingle();
+    profile = fallback.data ? { ...fallback.data, avatar_url: null } : fallback.data;
+    error = fallback.error;
+  }
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
 
   return NextResponse.json({
     email: user.email ?? "",
     display_name: profile?.display_name ?? "",
+    avatar_url: profile?.avatar_url ?? null,
     birth_year: profile?.birth_year ?? null,
     gender: profile?.gender ?? null,
     birth_hour: profile?.birth_hour ?? null,
@@ -34,6 +57,7 @@ export async function PATCH(request: NextRequest) {
 
   const body = await request.json() as {
     display_name?: string;
+    avatar_url?: string | null;
     birth_year?: number | null;
     gender?: string | null;
     birth_hour?: number | null;
@@ -71,6 +95,14 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "올바른 태어난 시를 입력해주세요." }, { status: 400 });
     }
     updates.birth_hour = body.birth_hour;
+  }
+
+  if (body.avatar_url !== undefined) {
+    const avatarUrl = body.avatar_url?.trim() ?? "";
+    if (avatarUrl && !/^https?:\/\//i.test(avatarUrl)) {
+      return NextResponse.json({ error: "올바른 아바타 이미지 URL을 입력해주세요." }, { status: 400 });
+    }
+    updates.avatar_url = avatarUrl || null;
   }
 
   if (Object.keys(updates).length === 0) {

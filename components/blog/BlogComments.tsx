@@ -11,6 +11,7 @@ interface Comment {
   id: string;
   user_id: string | null;
   author_name: string;
+  avatar_url: string | null;
   content: string;
   image_urls: string[];
   created_at: string;
@@ -124,12 +125,22 @@ function CommentCard({
           {isReply && (
             <CornerDownRight size={13} style={{ color: ACCENT, flexShrink: 0 }} />
           )}
-          <span
-            className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
-            style={{ background: "rgba(234,88,12,0.14)", color: ACCENT }}
-          >
-            {comment.author_name.slice(0, 1)}
-          </span>
+          {comment.avatar_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={comment.avatar_url}
+              alt={`${comment.author_name} 아바타`}
+              className="w-7 h-7 rounded-full object-cover shrink-0"
+              style={{ border: "1px solid rgba(234,88,12,0.18)" }}
+            />
+          ) : (
+            <span
+              className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+              style={{ background: "rgba(234,88,12,0.14)", color: ACCENT }}
+            >
+              {comment.author_name.slice(0, 1)}
+            </span>
+          )}
           <span className="text-sm font-semibold truncate" style={{ color: "var(--text-primary)" }}>
             {comment.author_name}
           </span>          
@@ -338,7 +349,7 @@ export default function BlogComments({ postId }: { postId: string }) {
       });
       const data = await res.json() as Comment & { error?: string };
       if (!res.ok) throw new Error(data.error ?? "댓글 작성에 실패했습니다.");
-      setComments((prev) => [...prev, data]);
+      await fetchComments();
       setContent(""); setAuthorName(""); setPassword(""); setImages([]);
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "댓글 작성에 실패했습니다.");
@@ -365,7 +376,7 @@ export default function BlogComments({ postId }: { postId: string }) {
       });
       const data = await res.json() as Comment & { error?: string };
       if (!res.ok) throw new Error(data.error ?? "답글 작성에 실패했습니다.");
-      setComments((prev) => [...prev, data]);
+      await fetchComments();
       setReplyingTo(null);
       setReplyContent(""); setReplyAuthorName(""); setReplyPassword(""); setReplyImages([]);
     } catch (err) {
@@ -402,7 +413,7 @@ export default function BlogComments({ postId }: { postId: string }) {
       });
       const data = await res.json() as Comment & { error?: string };
       if (!res.ok) throw new Error(data.error ?? "수정에 실패했습니다.");
-      setComments((prev) => prev.map((c) => (c.id === actionTarget.id ? data : c)));
+      await fetchComments();
       closeAction();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "수정에 실패했습니다.");
@@ -424,7 +435,7 @@ export default function BlogComments({ postId }: { postId: string }) {
       });
       const data = await res.json() as { ok?: boolean; error?: string };
       if (!res.ok) throw new Error(data.error ?? "삭제에 실패했습니다.");
-      setComments((prev) => prev.filter((c) => c.id !== actionTarget.id && c.parent_id !== actionTarget.id));
+      await fetchComments();
       closeAction();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "삭제에 실패했습니다.");

@@ -14,6 +14,7 @@ create extension if not exists "pg_cron";         -- 스케줄 캐시 갱신용
 create table if not exists public.profiles (
   id            uuid primary key references auth.users(id) on delete cascade,
   display_name  text,
+  avatar_url    text,
   theme         text not null default 'dark' check (theme in ('dark', 'light')),
   home_city     text not null default '서울',
   birth_year    integer check (birth_year between 1900 and 2100),
@@ -22,6 +23,8 @@ create table if not exists public.profiles (
   created_at    timestamptz not null default now(),
   updated_at    timestamptz not null default now()
 );
+
+alter table public.profiles add column if not exists avatar_url text;
 
 -- 신규 유저 자동 프로필 생성
 create or replace function public.handle_new_user()

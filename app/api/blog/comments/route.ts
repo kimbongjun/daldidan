@@ -3,6 +3,49 @@ import { createAdminClient, createClient, createPublicClient } from "@/lib/supab
 import { hashPassword } from "@/lib/password";
 import { sendPushToUserIds } from "@/lib/push-notification";
 
+type CommentRow = {
+  id: string;
+  user_id: string | null;
+  author_name: string;
+  content: string;
+  image_urls: string[];
+  created_at: string;
+  updated_at: string;
+  parent_id: string | null;
+};
+
+async function attachCommentAvatars(admin: ReturnType<typeof createAdminClient> | ReturnType<typeof createPublicClient>, comments: CommentRow[]) {
+  const userIds = [...new Set(comments.map((comment) => comment.user_id).filter(Boolean))] as string[];
+  const avatarMap: Record<string, string | null> = {};
+
+  if (userIds.length > 0) {
+    let { data: profiles, error } = await admin
+      .from("profiles")
+      .select("id, avatar_url")
+      .in("id", userIds);
+
+    if (error?.message?.includes("avatar_url")) {
+      const fallback = await admin
+        .from("profiles")
+        .select("id")
+        .in("id", userIds);
+      profiles = fallback.data?.map((profile) => ({ ...profile, avatar_url: null })) ?? [];
+      error = fallback.error;
+    }
+
+    if (!error) {
+      for (const profile of profiles ?? []) {
+        avatarMap[profile.id] = profile.avatar_url ?? null;
+      }
+    }
+  }
+
+  return comments.map((comment) => ({
+    ...comment,
+    avatar_url: comment.user_id ? (avatarMap[comment.user_id] ?? null) : null,
+  }));
+}
+
 export async function GET(request: NextRequest) {
   const postId = request.nextUrl.searchParams.get("post_id");
   if (!postId) {
@@ -20,7 +63,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json(data ?? []);
+  const comments = await attachCommentAvatars(supabase, (data ?? []) as CommentRow[]);
+  return NextResponse.json(comments);
 }
 
 export async function POST(request: NextRequest) {
@@ -106,7 +150,8 @@ export async function POST(request: NextRequest) {
       } catch { /* 알림 실패는 무시 */ }
     });
 
-    return NextResponse.json(data, { status: 201 });
+    const [commentWithAvatar] = await attachCommentAvatars(admin, [data as CommentRow]);
+    return NextResponse.json(commentWithAvatar, { status: 201 });
   }
 
   // 비로그인 유저: 이름 + 비밀번호 필요
@@ -148,7 +193,7 @@ export async function POST(request: NextRequest) {
     } catch { /* 알림 실패는 무시 */ }
   });
 
-  return NextResponse.json(data, { status: 201 });
+  return NextResponse.json({ ...(data as CommentRow), avatar_url: null }, { status: 201 });
 }
 
 // ── 알림 발송 헬퍼 ──────────────────────────────────────────────

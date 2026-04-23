@@ -13,6 +13,23 @@ async function resolveComment(id: string) {
   return data;
 }
 
+async function resolveAvatarUrl(userId: string | null) {
+  if (!userId) return null;
+
+  const supabase = createAdminClient();
+  let { data, error } = await supabase
+    .from("profiles")
+    .select("avatar_url")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (error?.message?.includes("avatar_url")) {
+    return null;
+  }
+
+  return data?.avatar_url ?? null;
+}
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -72,7 +89,10 @@ export async function PATCH(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json(data);
+  return NextResponse.json({
+    ...data,
+    avatar_url: await resolveAvatarUrl(data.user_id),
+  });
 }
 
 export async function DELETE(
