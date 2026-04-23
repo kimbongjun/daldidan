@@ -8,9 +8,14 @@ export async function GET() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("display_name")
+    .select("display_name, avatar_url")
     .eq("id", user.id)
     .single();
 
-  return NextResponse.json({ id: user.id, displayName: profile?.display_name ?? null });
+  return NextResponse.json({
+    id: user.id,
+    email: user.email ?? null,
+    displayName: profile?.display_name ?? null,
+    avatarUrl: profile?.avatar_url ?? null,
+  });
 }

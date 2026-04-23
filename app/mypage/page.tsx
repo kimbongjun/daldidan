@@ -71,7 +71,8 @@ export default function MyPage() {
   const [faviconUploading, setFaviconUploading] = useState(false);
   const [pwaIconUploading, setPwaIconUploading] = useState(false);
   const [pwaSplashUploading, setPwaSplashUploading] = useState(false);
-  const [uploadError, setUploadError] = useState("");
+  const [avatarUploadError, setAvatarUploadError] = useState("");
+  const [settingsUploadError, setSettingsUploadError] = useState("");
 
   // ?settings=open 파라미터로 옵션 패널 자동 전개
   useEffect(() => {
@@ -139,7 +140,7 @@ export default function MyPage() {
 
   const uploadAvatar = async (file: File) => {
     setAvatarUploading(true);
-    setUploadError("");
+    setAvatarUploadError("");
     try {
       const supabase = createClient();
       const ext = file.name.split(".").pop()?.toLowerCase() ?? "jpg";
@@ -155,7 +156,7 @@ export default function MyPage() {
       const { data: { publicUrl } } = supabase.storage.from("blog-images").getPublicUrl(data.path);
       setAvatarUrl(publicUrl);
     } catch (err) {
-      setUploadError(err instanceof Error ? err.message : "아바타 업로드에 실패했습니다.");
+      setAvatarUploadError(err instanceof Error ? err.message : "아바타 업로드에 실패했습니다.");
     } finally {
       setAvatarUploading(false);
     }
@@ -180,7 +181,7 @@ export default function MyPage() {
     setUploading: (v: boolean) => void
   ) => {
     setUploading(true);
-    setUploadError("");
+    setSettingsUploadError("");
     try {
       const supabase = createClient();
       const ext = file.name.split(".").pop()?.toLowerCase() ?? "jpg";
@@ -195,7 +196,7 @@ export default function MyPage() {
       const { data: { publicUrl } } = supabase.storage.from("blog-images").getPublicUrl(data.path);
       setSettings((prev) => ({ ...prev, [field]: publicUrl }));
     } catch (err) {
-      setUploadError(err instanceof Error ? err.message : "이미지 업로드에 실패했습니다.");
+      setSettingsUploadError(err instanceof Error ? err.message : "이미지 업로드에 실패했습니다.");
     } finally { setUploading(false); }
   };
 
@@ -224,7 +225,25 @@ export default function MyPage() {
       </div>
 
       {/* ── 프로필 카드 ── */}
-      <div className="bento-card p-6 flex flex-col gap-6">
+      <div id="profile-avatar" className="bento-card p-6 flex flex-col gap-6 scroll-mt-24">
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href="/mypage#profile-avatar"
+            className="pressable px-3 py-1.5 rounded-full text-xs font-semibold"
+            style={{ background: "rgba(234,88,12,0.12)", color: ACCENT }}
+          >
+            프로필 편집
+          </Link>
+          <button
+            type="button"
+            onClick={() => setOptionsOpen(true)}
+            className="pressable px-3 py-1.5 rounded-full text-xs font-semibold"
+            style={{ background: "var(--bg-input)", color: "var(--text-primary)", border: "1px solid var(--border)" }}
+          >
+            사이트 옵션 보기
+          </button>
+        </div>
+
         <div className="flex items-center gap-4">
           {avatarUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -315,6 +334,9 @@ export default function MyPage() {
                 </button>
               )}
             </div>
+            {avatarUploadError && (
+              <p className="text-sm" style={{ color: "#F43F5E" }}>{avatarUploadError}</p>
+            )}
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -776,8 +798,8 @@ export default function MyPage() {
 
             <hr style={{ border: "none", borderTop: "1px solid var(--border)" }} />
 
-            {uploadError && (
-              <p className="text-sm" style={{ color: "#F43F5E" }}>{uploadError}</p>
+            {settingsUploadError && (
+              <p className="text-sm" style={{ color: "#F43F5E" }}>{settingsUploadError}</p>
             )}
             {settingsSuccess && (
               <p className="text-sm text-center" style={{ color: "#10B981" }}>옵션이 저장되었습니다. 새로고침 후 적용됩니다.</p>

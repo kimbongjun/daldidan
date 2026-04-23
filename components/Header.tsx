@@ -81,9 +81,15 @@ export default function Header({
   locationLoading?: boolean;
 }) {
   const router = useRouter();
+  type UserProfile = {
+    avatarUrl: string | null;
+    displayName: string | null;
+    email: string | null;
+  };
   // now를 null로 초기화해 SSR hydration 불일치 방지
   const [now, setNow] = useState<Date | null>(null);
   const [user, setUser] = useState<SupabaseUser | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [notificationMenuOpen, setNotificationMenuOpen] = useState(false);
 
@@ -162,6 +168,36 @@ export default function Header({
     });
     return () => subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!user) {
+      setUserProfile(null);
+      return;
+    }
+
+    let active = true;
+
+    fetch("/api/me", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("failed");
+        return response.json() as Promise<UserProfile>;
+      })
+      .then((profile) => {
+        if (active) setUserProfile(profile);
+      })
+      .catch(() => {
+        if (!active) return;
+        setUserProfile({
+          avatarUrl: null,
+          displayName: null,
+          email: user.email ?? null,
+        });
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [user]);
 
   // 드롭다운 외부 클릭 닫기
   useEffect(() => {
@@ -264,7 +300,8 @@ export default function Header({
   const weatherBadgeStyle = isLight
     ? { color: "#334155", bg: "var(--bg-card)" }
     : { color: "#E2E8F0", bg: "var(--bg-card)" };
-  const avatarLetter = user?.email?.[0]?.toUpperCase() ?? "U";
+  const avatarLetter = userProfile?.displayName?.[0]?.toUpperCase() ?? user?.email?.[0]?.toUpperCase() ?? "U";
+  const userAvatarUrl = userProfile?.avatarUrl ?? null;
   const firebaseConfigured = Boolean(process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID);
   const pushSupported = firebaseConfigured && typeof window !== "undefined" && "Notification" in window && "serviceWorker" in navigator;
   // iOS Safari + 브라우저 모드에서는 PWA 홈 화면 추가 후에만 구독 가능
@@ -814,11 +851,25 @@ export default function Header({
           <div ref={dropdownRef} style={{ position: "relative" }}>
             <button
               onClick={() => setDropdownOpen((v) => !v)}
-              className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm transition-all hover:opacity-80"
-              style={{ background: "linear-gradient(135deg, #7C3AED, #06B6D4)", color: "#fff", border: "none", cursor: "pointer" }}
+              className="w-9 h-9 rounded-xl flex items-center justify-center overflow-hidden font-bold text-sm transition-all hover:opacity-80"
+              style={{
+                background: userAvatarUrl ? "var(--bg-card)" : "linear-gradient(135deg, #7C3AED, #06B6D4)",
+                color: "#fff",
+                border: userAvatarUrl ? "1px solid var(--border)" : "none",
+                cursor: "pointer",
+              }}
               aria-label="유저 메뉴"
             >
-              {avatarLetter}
+              {userAvatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={userAvatarUrl}
+                  alt="유저 아바타"
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                avatarLetter
+              )}
             </button>
 
             {dropdownOpen && (
@@ -832,7 +883,7 @@ export default function Header({
                 <div style={{ padding: "0.75rem 1rem", borderBottom: "1px solid var(--border)" }}>
                   <p style={{ fontSize: "0.7rem", color: "var(--text-muted)", margin: 0 }}>로그인 계정</p>
                   <p style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-primary)", margin: "0.15rem 0 0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {user.email}
+                    {userProfile?.email ?? user.email}
                   </p>
                 </div>
                 <Link
@@ -847,7 +898,7 @@ export default function Header({
                   사이트 옵션
                 </Link>
                 <Link
-                  href="/mypage"
+                  href="/mypage#profile-avatar"
                   onClick={() => setDropdownOpen(false)}
                   style={{
                     width: "100%", padding: "0.75rem 1rem", display: "flex", alignItems: "center",
@@ -855,7 +906,7 @@ export default function Header({
                   }}
                 >
                   <UserCircle size={14} />
-                  마이페이지
+                  프로필 편집
                 </Link>
                 <form action={signOut}>
                   <button
