@@ -210,20 +210,14 @@ export default function MyPage() {
             )}
             <div className="min-w-0">
               <p className="font-bold truncate" style={{ color: "var(--text-primary)" }}>{displayName || "닉네임 없음"}</p>
-              <p className="text-sm truncate" style={{ color: "var(--text-muted)" }}>{email}</p>
-              <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
-                댓글과 헤더 메뉴에 동일한 아바타가 표시됩니다.
-              </p>
+              <p className="text-sm truncate" style={{ color: "var(--text-muted)" }}>{email}</p>             
             </div>
           </div>
 
           <div className="rounded-2xl p-4 flex flex-col gap-3" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid var(--border)" }}>
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>아바타 이미지 업로드</p>
-                <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                  프로덕션에서도 항상 보이도록 프로필 상단에 고정했습니다. 업로드 후 즉시 저장됩니다.
-                </p>
+                <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>아바타 이미지 업로드</p>                
               </div>
               <button
                 type="button"
