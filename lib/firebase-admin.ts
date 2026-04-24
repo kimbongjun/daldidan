@@ -161,6 +161,19 @@ export async function sendFcmMessage(params: SendFcmMessageParams) {
       body: JSON.stringify({
         message: {
           token: params.token,
+          android: {
+            notification: {
+              title: params.title,
+              body: params.body,
+              sound: "default",
+              ...(params.imageUrl ? { imageUrl: params.imageUrl } : {}),
+            },
+            data: {
+              url: params.url,
+              title: params.title,
+              body: params.body,
+            },
+          },
           webpush: {
             notification: {
               title: params.title,

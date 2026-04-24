@@ -35,28 +35,13 @@ const messaging = firebase.messaging();
 
 // 앱이 백그라운드이거나 닫혀 있을 때 수신
 messaging.onBackgroundMessage(function(payload) {
-  if (payload.notification) {
-    const title = payload.data?.title ?? payload.notification.title ?? '달디단';
-    const body  = payload.data?.body ?? payload.notification.body ?? '새 글이 등록되었습니다';
-    const url   = payload.data?.url ?? payload.fcmOptions?.link ?? '/blog';
-
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
-      clientList.forEach(function(client) {
-        client.postMessage({
-          type: 'blog-notification',
-          payload: { title, body, url, createdAt: new Date().toISOString() },
-        });
-      });
-    });
-    return;
-  }
-
   const title = payload.data?.title ?? payload.notification?.title ?? '달디단';
-  const body  = payload.data?.body ?? payload.notification?.body ?? '새 글이 등록되었습니다';
+  const body  = payload.data?.body ?? payload.notification?.body ?? '새 알림이 있습니다';
   const icon  = payload.data?.icon ?? payload.notification?.icon ?? '/favicon.ico';
   const badge = payload.data?.badge ?? '/favicon.ico';
   const url   = payload.data?.url ?? payload.fcmOptions?.link ?? '/blog';
 
+  // 열려 있는 탭에도 전달 (포그라운드 클라이언트 in-app 알림 표시용)
   clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
     clientList.forEach(function(client) {
       client.postMessage({
@@ -66,6 +51,7 @@ messaging.onBackgroundMessage(function(payload) {
     });
   });
 
+  // 시스템 알림 표시 — Android Chrome 백그라운드 수신의 핵심
   return self.registration.showNotification(title, {
     body,
     icon,
