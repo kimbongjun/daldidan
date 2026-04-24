@@ -50,8 +50,9 @@ async function handleUpload(request: NextRequest) {
 
   let outputBuffer: Buffer;
   try {
-    outputBuffer = await sharp(inputBuffer, { animated: false })
+    outputBuffer = await sharp(inputBuffer, { animated: false, failOn: "error" })
       .rotate()
+      .toColorspace("srgb")
       .resize({
         width: 512,
         height: 512,
@@ -62,7 +63,7 @@ async function handleUpload(request: NextRequest) {
       .toBuffer();
   } catch (error) {
     console.error("[mypage/avatar] sharp 변환 실패:", error);
-    return NextResponse.json({ error: "지원하지 않는 이미지 형식입니다." }, { status: 400 });
+    return NextResponse.json({ error: "이미지를 처리할 수 없습니다. JPG, PNG, WebP, HEIC 형식을 사용해 주세요." }, { status: 400 });
   }
 
   const storagePath = `${user.id}/avatars/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.webp`;
