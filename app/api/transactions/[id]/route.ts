@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient, createClient } from "@/lib/supabase/server";
 
 // PATCH /api/transactions/[id] — 거래 수정
 export async function PATCH(
@@ -38,14 +38,24 @@ export async function PATCH(
     .update(patch)
     .eq("id", id)
     .eq("user_id", user.id)
-    .select("id, user_id, type, category, buyer, merchant_name, location, receipt_image_url, amount, note, date, profiles(display_name)")
+    .select("id, user_id, type, category, buyer, merchant_name, location, receipt_image_url, amount, note, date")
     .single();
 
   if (error) {
     if (error.code === "PGRST116") return NextResponse.json({ error: "수정 권한이 없습니다." }, { status: 403 });
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  return NextResponse.json(data);
+
+  // POST / GET 과 동일하게 author_display 를 flat 필드로 포함해 반환
+  const admin = createAdminClient();
+  const { data: profile } = await admin.from("profiles").select("display_name").eq("id", user.id).single();
+  let authorDisplay = profile?.display_name ?? "";
+  if (!authorDisplay) {
+    const { data: authUser } = await admin.auth.admin.getUserById(user.id);
+    authorDisplay = authUser?.user?.email?.split("@")[0] ?? "사용자";
+  }
+
+  return NextResponse.json({ ...data, author_display: authorDisplay });
 }
 
 // DELETE /api/transactions/[id] — 거래 삭제
