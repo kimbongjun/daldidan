@@ -222,6 +222,7 @@ export default function BudgetPage() {
   const income = useMemo(() => transactions.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0), [transactions]);
   const expense = useMemo(() => transactions.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0), [transactions]);
   const balance = income - expense;
+  const savingsRate = income > 0 ? Math.round(((income - expense) / income) * 100) : 0;
   const totalPages = Math.max(1, Math.ceil(transactions.length / TRANSACTIONS_PER_PAGE));
   const paginatedTransactions = useMemo(() => {
     const start = (currentPage - 1) * TRANSACTIONS_PER_PAGE;
@@ -657,12 +658,12 @@ export default function BudgetPage() {
                     <span className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>저축률</span>
                     <span className="text-sm font-black"
                       style={{ color: balance >= 0 ? "#10B981" : "#F43F5E" }}>
-                      {income > 0 ? Math.round(((income - expense) / income) * 100) : 0}%
+                      {savingsRate}%
                     </span>
                   </div>
                   <div style={{ height: 6, borderRadius: 999, background: "var(--border)", overflow: "hidden" }}>
                     <div style={{
-                      width: `${Math.min(Math.max(income > 0 ? Math.round(((income - expense) / income) * 100) : 0, 0), 100)}%`,
+                      width: `${Math.min(Math.max(savingsRate, 0), 100)}%`,
                       height: "100%", borderRadius: 999,
                       background: balance >= 0 ? "#10B981" : "#F43F5E",
                       transition: "width 0.6s ease",
@@ -837,13 +838,6 @@ function TransactionRow({
         onClick={onView}
         role={onView ? "button" : undefined}
       >
-        {/* <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-xs font-bold"
-          style={{
-            background: `${CATEGORY_COLORS[tx.category] ?? "#8B8BA7"}22`,
-            color: CATEGORY_COLORS[tx.category] ?? "#8B8BA7",
-          }}>
-          {tx.category.slice(0, 1)}
-        </div> */}
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold truncate" style={{ color: "var(--text-primary)", maxWidth: "10rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap"}}>
             {tx.note || tx.category}

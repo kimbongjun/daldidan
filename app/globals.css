@@ -232,6 +232,10 @@ input[type="reset"]:not(:disabled):active,
 .animate-ticker { animation: ticker 30s linear infinite; }
 .animate-ticker:hover { animation-play-state: paused; }
 
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 .clamp-2 {
   display: -webkit-box;
   -webkit-line-clamp: 2;

@@ -126,6 +126,130 @@ function getAuthorColor(userId: string): string {
   return AUTHOR_COLORS[Math.abs(hash) % AUTHOR_COLORS.length];
 }
 
+// ─── EventFormFields (shared) ─────────────────────────────────────────────────
+function EventFormFields({
+  form,
+  set,
+}: {
+  form: NewEvent;
+  set: <K extends keyof NewEvent>(key: K, value: NewEvent[K]) => void;
+}) {
+  return (
+    <>
+      <div className="flex flex-col gap-1">
+        <label className="text-xs" style={{ color: "var(--text-muted)" }}>제목 *</label>
+        <input
+          type="text"
+          value={form.title}
+          onChange={(e) => set("title", e.target.value)}
+          placeholder="일정 제목"
+          className="w-full px-3 py-2 rounded-lg text-sm outline-none"
+          style={{ background: "var(--bg-input)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
+          autoFocus
+        />
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label className="text-xs" style={{ color: "var(--text-muted)" }}>유형</label>
+        <div className="flex gap-2">
+          {(Object.keys(EVENT_TYPE_META) as EventType[]).map((type) => {
+            const meta = EVENT_TYPE_META[type];
+            const selected = form.event_type === type;
+            return (
+              <button
+                key={type}
+                type="button"
+                onClick={() => set("event_type", type)}
+                className="flex-1 py-1.5 rounded-lg text-xs font-medium transition-opacity"
+                style={{
+                  background: selected ? meta.bg : "var(--bg-input)",
+                  color: selected ? meta.color : "var(--text-muted)",
+                  border: `1px solid ${selected ? meta.color : "var(--border)"}`,
+                }}
+              >
+                {meta.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        {[
+          { label: "시작 날짜 *", type: "date", value: form.start_date, key: "start_date", min: undefined },
+          { label: "시작 시간",   type: "time", value: form.start_time, key: "start_time", min: undefined },
+          { label: "종료 날짜",   type: "date", value: form.end_date,   key: "end_date",   min: form.start_date },
+          { label: "종료 시간",   type: "time", value: form.end_time,   key: "end_time",   min: undefined },
+        ].map(({ label, type, value, key, min }) => (
+          <div key={key} className="flex flex-col gap-1 min-w-0">
+            <label className="text-xs" style={{ color: "var(--text-muted)" }}>{label}</label>
+            <input
+              type={type}
+              value={value}
+              min={min}
+              onChange={(e) => set(key as keyof NewEvent, e.target.value)}
+              className="w-full min-w-0 px-2 py-2 rounded-lg text-xs outline-none"
+              style={{ background: "var(--bg-input)", border: "1px solid var(--border)", color: "var(--text-primary)", boxSizing: "border-box" }}
+            />
+          </div>
+        ))}
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label className="text-xs flex items-center gap-1" style={{ color: "var(--text-muted)" }}>
+          <MapPin size={11} /> 장소
+        </label>
+        <input
+          type="text"
+          value={form.location}
+          onChange={(e) => set("location", e.target.value)}
+          placeholder="장소 또는 링크"
+          className="w-full px-3 py-2 rounded-lg text-sm outline-none"
+          style={{ background: "var(--bg-input)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
+        />
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label className="text-xs" style={{ color: "var(--text-muted)" }}>메모</label>
+        <textarea
+          value={form.description}
+          onChange={(e) => set("description", e.target.value)}
+          placeholder="추가 메모"
+          rows={2}
+          className="w-full px-3 py-2 rounded-lg text-sm outline-none resize-none"
+          style={{ background: "var(--bg-input)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
+        />
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={form.is_recurring}
+            onChange={(e) => set("is_recurring", e.target.checked)}
+            className="w-4 h-4 accent-[#0EA5E9]"
+          />
+          <span className="text-sm flex items-center gap-1" style={{ color: "var(--text-primary)" }}>
+            <Repeat size={13} /> 반복 일정
+          </span>
+        </label>
+        {form.is_recurring && (
+          <select
+            value={form.recurrence}
+            onChange={(e) => set("recurrence", e.target.value as Recurrence | "")}
+            className="w-full px-3 py-2 pr-8 rounded-lg text-sm outline-none"
+            style={{ background: "var(--bg-input)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
+          >
+            {(Object.keys(RECURRENCE_LABELS) as (Recurrence | "")[]).filter((k) => k !== "").map((k) => (
+              <option key={k} value={k}>{RECURRENCE_LABELS[k]}</option>
+            ))}
+          </select>
+        )}
+      </div>
+    </>
+  );
+}
+
 // ─── EventEditModal ───────────────────────────────────────────────────────────
 function EventEditModal({
   event,
@@ -214,119 +338,8 @@ function EventEditModal({
         </div>
 
         <form onSubmit={handleSubmit} className="p-5 flex flex-col gap-4">
-          <div className="flex flex-col gap-1">
-            <label className="text-xs" style={{ color: "var(--text-muted)" }}>제목 *</label>
-            <input
-              type="text"
-              value={form.title}
-              onChange={(e) => set("title", e.target.value)}
-              placeholder="일정 제목"
-              className="w-full px-3 py-2 rounded-lg text-sm outline-none"
-              style={{ background: "var(--bg-input)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
-              autoFocus
-            />
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <label className="text-xs" style={{ color: "var(--text-muted)" }}>유형</label>
-            <div className="flex gap-2">
-              {(Object.keys(EVENT_TYPE_META) as EventType[]).map((type) => {
-                const meta = EVENT_TYPE_META[type];
-                const selected = form.event_type === type;
-                return (
-                  <button
-                    key={type}
-                    type="button"
-                    onClick={() => set("event_type", type)}
-                    className="flex-1 py-1.5 rounded-lg text-xs font-medium transition-opacity"
-                    style={{
-                      background: selected ? meta.bg : "var(--bg-input)",
-                      color: selected ? meta.color : "var(--text-muted)",
-                      border: `1px solid ${selected ? meta.color : "var(--border)"}`,
-                    }}
-                  >
-                    {meta.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              { label: "시작 날짜 *", type: "date", value: form.start_date, key: "start_date", min: undefined },
-              { label: "시작 시간",   type: "time", value: form.start_time, key: "start_time", min: undefined },
-              { label: "종료 날짜",   type: "date", value: form.end_date,   key: "end_date",   min: form.start_date },
-              { label: "종료 시간",   type: "time", value: form.end_time,   key: "end_time",   min: undefined },
-            ].map(({ label, type, value, key, min }) => (
-              <div key={key} className="flex flex-col gap-1 min-w-0">
-                <label className="text-xs" style={{ color: "var(--text-muted)" }}>{label}</label>
-                <input
-                  type={type}
-                  value={value}
-                  min={min}
-                  onChange={(e) => set(key as keyof NewEvent, e.target.value)}
-                  className="w-full min-w-0 px-2 py-2 rounded-lg text-xs outline-none"
-                  style={{ background: "var(--bg-input)", border: "1px solid var(--border)", color: "var(--text-primary)", boxSizing: "border-box" }}
-                />
-              </div>
-            ))}
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <label className="text-xs flex items-center gap-1" style={{ color: "var(--text-muted)" }}>
-              <MapPin size={11} /> 장소
-            </label>
-            <input
-              type="text"
-              value={form.location}
-              onChange={(e) => set("location", e.target.value)}
-              placeholder="장소 또는 링크"
-              className="w-full px-3 py-2 rounded-lg text-sm outline-none"
-              style={{ background: "var(--bg-input)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
-            />
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <label className="text-xs" style={{ color: "var(--text-muted)" }}>메모</label>
-            <textarea
-              value={form.description}
-              onChange={(e) => set("description", e.target.value)}
-              placeholder="추가 메모"
-              rows={2}
-              className="w-full px-3 py-2 rounded-lg text-sm outline-none resize-none"
-              style={{ background: "var(--bg-input)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
-            />
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={form.is_recurring}
-                onChange={(e) => set("is_recurring", e.target.checked)}
-                className="w-4 h-4 accent-[#0EA5E9]"
-              />
-              <span className="text-sm flex items-center gap-1" style={{ color: "var(--text-primary)" }}>
-                <Repeat size={13} /> 반복 일정
-              </span>
-            </label>
-            {form.is_recurring && (
-              <select
-                value={form.recurrence}
-                onChange={(e) => set("recurrence", e.target.value as Recurrence | "")}
-                className="w-full px-3 py-2 pr-8 rounded-lg text-sm outline-none"
-                style={{ background: "var(--bg-input)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
-              >
-                {(Object.keys(RECURRENCE_LABELS) as (Recurrence | "")[]).filter((k) => k !== "").map((k) => (
-                  <option key={k} value={k}>{RECURRENCE_LABELS[k]}</option>
-                ))}
-              </select>
-            )}
-          </div>
-
+          <EventFormFields form={form} set={set} />
           {error && <p className="text-xs" style={{ color: "#F43F5E" }}>{error}</p>}
-
           <button
             type="submit"
             disabled={saving}
@@ -419,131 +432,7 @@ function EventFormModal({
         </div>
 
         <form onSubmit={handleSubmit} className="p-5 flex flex-col gap-4">
-          {/* 제목 */}
-          <div className="flex flex-col gap-1">
-            <label className="text-xs" style={{ color: "var(--text-muted)" }}>제목 *</label>
-            <input
-              type="text"
-              value={form.title}
-              onChange={(e) => set("title", e.target.value)}
-              placeholder="일정 제목"
-              className="w-full px-3 py-2 rounded-lg text-sm outline-none"
-              style={{
-                background: "var(--bg-input)",
-                border: "1px solid var(--border)",
-                color: "var(--text-primary)",
-              }}
-              autoFocus
-            />
-          </div>
-
-          {/* 유형 */}
-          <div className="flex flex-col gap-1">
-            <label className="text-xs" style={{ color: "var(--text-muted)" }}>유형</label>
-            <div className="flex gap-2">
-              {(Object.keys(EVENT_TYPE_META) as EventType[]).map((type) => {
-                const meta = EVENT_TYPE_META[type];
-                const selected = form.event_type === type;
-                return (
-                  <button
-                    key={type}
-                    type="button"
-                    onClick={() => set("event_type", type)}
-                    className="flex-1 py-1.5 rounded-lg text-xs font-medium transition-opacity"
-                    style={{
-                      background: selected ? meta.bg : "var(--bg-input)",
-                      color: selected ? meta.color : "var(--text-muted)",
-                      border: `1px solid ${selected ? meta.color : "var(--border)"}`,
-                    }}
-                  >
-                    {meta.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* 날짜/시간 — min-w-0으로 grid 셀 넘침 방지, boxSizing border-box */}
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              { label: "시작 날짜 *", type: "date", value: form.start_date, key: "start_date", min: undefined },
-              { label: "시작 시간",   type: "time", value: form.start_time, key: "start_time", min: undefined },
-              { label: "종료 날짜",   type: "date", value: form.end_date,   key: "end_date",   min: form.start_date },
-              { label: "종료 시간",   type: "time", value: form.end_time,   key: "end_time",   min: undefined },
-            ].map(({ label, type, value, key, min }) => (
-              <div key={key} className="flex flex-col gap-1 min-w-0">
-                <label className="text-xs" style={{ color: "var(--text-muted)" }}>{label}</label>
-                <input
-                  type={type}
-                  value={value}
-                  min={min}
-                  onChange={(e) => set(key as keyof NewEvent, e.target.value)}
-                  className="w-full min-w-0 px-2 py-2 rounded-lg text-xs outline-none"
-                  style={{
-                    background: "var(--bg-input)",
-                    border: "1px solid var(--border)",
-                    color: "var(--text-primary)",
-                    boxSizing: "border-box",
-                  }}
-                />
-              </div>
-            ))}
-          </div>
-
-          {/* 장소 */}
-          <div className="flex flex-col gap-1">
-            <label className="text-xs flex items-center gap-1" style={{ color: "var(--text-muted)" }}>
-              <MapPin size={11} /> 장소
-            </label>
-            <input
-              type="text"
-              value={form.location}
-              onChange={(e) => set("location", e.target.value)}
-              placeholder="장소 또는 링크"
-              className="w-full px-3 py-2 rounded-lg text-sm outline-none"
-              style={{ background: "var(--bg-input)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
-            />
-          </div>
-
-          {/* 메모 */}
-          <div className="flex flex-col gap-1">
-            <label className="text-xs" style={{ color: "var(--text-muted)" }}>메모</label>
-            <textarea
-              value={form.description}
-              onChange={(e) => set("description", e.target.value)}
-              placeholder="추가 메모"
-              rows={2}
-              className="w-full px-3 py-2 rounded-lg text-sm outline-none resize-none"
-              style={{ background: "var(--bg-input)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
-            />
-          </div>
-
-          {/* 반복 */}
-          <div className="flex flex-col gap-2">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={form.is_recurring}
-                onChange={(e) => set("is_recurring", e.target.checked)}
-                className="w-4 h-4 accent-[#0EA5E9]"
-              />
-              <span className="text-sm flex items-center gap-1" style={{ color: "var(--text-primary)" }}>
-                <Repeat size={13} /> 반복 일정
-              </span>
-            </label>
-            {form.is_recurring && (
-              <select
-                value={form.recurrence}
-                onChange={(e) => set("recurrence", e.target.value as Recurrence | "")}
-                className="w-full px-3 py-2 pr-8 rounded-lg text-sm outline-none"
-                style={{ background: "var(--bg-input)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
-              >
-                {(Object.keys(RECURRENCE_LABELS) as (Recurrence | "")[]).filter((k) => k !== "").map((k) => (
-                  <option key={k} value={k}>{RECURRENCE_LABELS[k]}</option>
-                ))}
-              </select>
-            )}
-          </div>
+          <EventFormFields form={form} set={set} />
 
           {/* 공동 일정 */}
           <div

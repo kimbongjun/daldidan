@@ -33,6 +33,18 @@ function detectDevice(): "ios" | "android" | "web" {
   return "web";
 }
 
+const WEATHER_ICONS: Record<WeatherCondition, React.ReactNode> = {
+  clear: <Sun size={14} />,
+  cloudy: <Cloud size={14} />,
+  rain: <CloudRain size={14} />,
+  snow: <Snowflake size={14} />,
+  hot: <Thermometer size={14} />,
+  cold: <Thermometer size={14} />,
+  windy: <Wind size={14} />,
+  storm: <CloudLightning size={14} />,
+  foggy: <CloudFog size={14} />,
+};
+
 const PUSH_STORAGE_KEY = "daldidan-push";
 const PUSH_INSTALLATION_KEY = "daldidan-push-installation-id";
 
@@ -285,17 +297,7 @@ export default function Header({
   const greeting = customGreeting || (now ? getDefaultGreeting(now.getHours()) : "");
   const isLight = theme === "light";
 
-  const WEATHER_ICON_MAP: Record<WeatherCondition, React.ReactNode> = {
-    clear: <Sun size={14} />,
-    cloudy: <Cloud size={14} />,
-    rain: <CloudRain size={14} />,
-    snow: <Snowflake size={14} />,
-    hot: <Thermometer size={14} />,
-    cold: <Thermometer size={14} />,
-    windy: <Wind size={14} />,
-    storm: <CloudLightning size={14} />,
-    foggy: <CloudFog size={14} />,
-  };
+  const WEATHER_ICON_MAP = WEATHER_ICONS;
   const weatherDisplay = weatherCondition ? WEATHER_ICON_MAP[weatherCondition] : null;
   const weatherBadgeStyle = isLight
     ? { color: "#334155", bg: "var(--bg-card)" }
@@ -674,7 +676,6 @@ export default function Header({
                   }}
                 />
               )}
-              <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
             </button>
 
             {notificationMenuOpen && (
