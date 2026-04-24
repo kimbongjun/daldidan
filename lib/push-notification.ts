@@ -226,14 +226,18 @@ async function getAllSubscriptions(): Promise<PushSubscriptionRow[]> {
     .select("fcm_token, device_type, user_id, user_agent, updated_at")
     .or("notify_new_post.eq.true,notify_new_post.is.null");
 
-  if (error || !subscriptions) return [];
-  return subscriptions;
+  if (error) {
+    console.error("[push-notification] 전체 구독 조회 실패:", error.message);
+    return [];
+  }
+  return subscriptions ?? [];
 }
 
 export async function sendPushToAllSubscribers(
   params: PushDispatchParams,
 ): Promise<{ sent: number; failed: number }> {
   if (!process.env.FIREBASE_ADMIN_PROJECT_ID) {
+    console.warn("[push-notification] FIREBASE_ADMIN_PROJECT_ID 미설정 — 전체 구독자 알림 건너뜀");
     return { sent: 0, failed: 0 };
   }
 
@@ -251,9 +255,11 @@ export async function sendPushToUserIds(
   params: PushDispatchParams,
   type: "comment" | "new_post" | "all" = "comment",
 ): Promise<{ sent: number; failed: number }> {
-  if (!process.env.FIREBASE_ADMIN_PROJECT_ID || userIds.length === 0) {
+  if (!process.env.FIREBASE_ADMIN_PROJECT_ID) {
+    console.warn("[push-notification] FIREBASE_ADMIN_PROJECT_ID 미설정 — 타겟 알림 건너뜀");
     return { sent: 0, failed: 0 };
   }
+  if (userIds.length === 0) return { sent: 0, failed: 0 };
 
   const supabase = createAdminClient();
   const baseQuery = supabase
@@ -261,14 +267,16 @@ export async function sendPushToUserIds(
     .select("fcm_token, device_type, user_id, user_agent, updated_at")
     .in("user_id", userIds);
 
-  const query =
-    type === "all"
-      ? baseQuery
-      : baseQuery.or(`${type === "comment" ? "notify_comment" : "notify_new_post"}.eq.true,${type === "comment" ? "notify_comment" : "notify_new_post"}.is.null`);
+  const col = type === "comment" ? "notify_comment" : "notify_new_post";
+  const query = type === "all" ? baseQuery : baseQuery.or(`${col}.eq.true,${col}.is.null`);
 
   const { data, error } = await query;
 
-  if (error || !data) return { sent: 0, failed: 0 };
+  if (error) {
+    console.error("[push-notification] 구독 조회 실패:", error.message);
+    return { sent: 0, failed: 0 };
+  }
+  if (!data || data.length === 0) return { sent: 0, failed: 0 };
 
   const result = await dispatchPushToSubscriptions(data, params);
   return { sent: result.sent, failed: result.failed };

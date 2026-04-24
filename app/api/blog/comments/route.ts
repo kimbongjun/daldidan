@@ -147,7 +147,9 @@ export async function POST(request: NextRequest) {
           content,
           origin: process.env.NEXT_PUBLIC_SITE_URL ?? "",
         });
-      } catch { /* 알림 실패는 무시 */ }
+      } catch (err) {
+        console.error("[comment-notification] 댓글 알림 발송 실패:", err);
+      }
     });
 
     const [commentWithAvatar] = await attachCommentAvatars(admin, [data as CommentRow]);
@@ -190,7 +192,9 @@ export async function POST(request: NextRequest) {
         content,
         origin: process.env.NEXT_PUBLIC_SITE_URL ?? "",
       });
-    } catch { /* 알림 실패는 무시 */ }
+    } catch (err) {
+      console.error("[comment-notification] 비로그인 댓글 알림 발송 실패:", err);
+    }
   });
 
   return NextResponse.json({ ...(data as CommentRow), avatar_url: null }, { status: 201 });
