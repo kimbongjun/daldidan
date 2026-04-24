@@ -103,6 +103,7 @@ interface CommentCardProps {
   onReply?: () => void;
   replyCount?: number;
   onImageClick: (urls: string[], index: number) => void;
+  onAvatarClick?: (url: string) => void;
 }
 
 function CommentCard({
@@ -114,6 +115,7 @@ function CommentCard({
   onReply,
   replyCount,
   onImageClick,
+  onAvatarClick,
 }: CommentCardProps) {
   return (
     <div
@@ -126,13 +128,20 @@ function CommentCard({
             <CornerDownRight size={13} style={{ color: ACCENT, flexShrink: 0 }} />
           )}
           {comment.avatar_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={comment.avatar_url}
-              alt={`${comment.author_name} 아바타`}
-              className="w-7 h-7 rounded-full object-cover shrink-0"
-              style={{ border: "1px solid rgba(234,88,12,0.18)" }}
-            />
+            <button
+              type="button"
+              onClick={() => onAvatarClick?.(comment.avatar_url!)}
+              className="shrink-0"
+              style={{ padding: 0, background: "none", border: "none", cursor: "zoom-in", borderRadius: "50%" }}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={comment.avatar_url}
+                alt={`${comment.author_name} 아바타`}
+                className="w-7 h-7 rounded-full object-cover"
+                style={{ border: "1px solid rgba(234,88,12,0.18)", display: "block" }}
+              />
+            </button>
           ) : (
             <span
               className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
@@ -507,6 +516,7 @@ export default function BlogComments({ postId }: { postId: string }) {
                   }}
                   replyCount={replies.length}
                   onImageClick={openLightbox}
+                  onAvatarClick={(url) => openLightbox([url], 0)}
                 />
 
                 {/* 대댓글 목록 */}
@@ -521,6 +531,7 @@ export default function BlogComments({ postId }: { postId: string }) {
                         onEdit={() => openEdit(reply)}
                         onDelete={() => openDelete(reply)}
                         onImageClick={openLightbox}
+                        onAvatarClick={(url) => openLightbox([url], 0)}
                       />
                     ))}
                   </div>
