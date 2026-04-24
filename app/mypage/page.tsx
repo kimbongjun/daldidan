@@ -120,6 +120,12 @@ export default function MyPage() {
         method: "POST",
         body: formData,
       });
+
+      const ct = uploadRes.headers.get("content-type") ?? "";
+      if (!ct.includes("application/json")) {
+        throw new Error(`업로드 서버 오류가 발생했습니다. (HTTP ${uploadRes.status})`);
+      }
+
       const uploadData = await uploadRes.json() as { error?: string; url?: string };
       if (!uploadRes.ok || !uploadData.url) {
         throw new Error(uploadData.error ?? "아바타 업로드에 실패했습니다.");
