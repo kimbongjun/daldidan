@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/calendar/remind",
-      "schedule": "0 0 * * *"
+      "schedule": "*/15 * * * *"
     },
     {
       "path": "/api/lotto/crawl",
