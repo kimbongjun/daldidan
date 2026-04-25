@@ -479,7 +479,8 @@ create table if not exists public.calendar_events (
   is_recurring  boolean not null default false,
   recurrence    text check (recurrence in ('daily', 'weekly', 'monthly', 'yearly')),
   is_shared     boolean not null default false,
-  remind_sent   boolean not null default false,  -- D-1 알림 발송 여부
+  reminder_minutes integer default null check (reminder_minutes in (15, 30, 60, 720)),
+  remind_sent   boolean not null default false,  -- 알림 발송 여부 (reminder_minutes 기반)
   created_at    timestamptz not null default now(),
   updated_at    timestamptz not null default now()
 );

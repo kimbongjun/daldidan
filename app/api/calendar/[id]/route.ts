@@ -38,7 +38,7 @@ export async function PATCH(
 
   const { data: existing, error: fetchError } = await supabase
     .from("calendar_events")
-    .select("id, start_date, start_time")
+    .select("id, start_date, start_time, reminder_minutes")
     .eq("id", id)
     .eq("user_id", user.id)
     .maybeSingle();
@@ -47,7 +47,7 @@ export async function PATCH(
     return NextResponse.json({ error: "수정할 일정을 찾지 못했습니다." }, { status: 404 });
   }
 
-  const allowed = ["title", "event_type", "start_date", "start_time", "end_date", "end_time", "location", "description", "is_recurring", "recurrence"];
+  const allowed = ["title", "event_type", "start_date", "start_time", "end_date", "end_time", "location", "description", "is_recurring", "recurrence", "reminder_minutes"];
   const patch: Record<string, unknown> = {};
   for (const key of allowed) {
     if (key in body) patch[key] = body[key];
@@ -63,7 +63,8 @@ export async function PATCH(
       ? (patch.start_time || null)
       : existing.start_time;
 
-  if (nextStartDate !== existing.start_date || nextStartTime !== existing.start_time) {
+  const reminderChanged = "reminder_minutes" in body;
+  if (nextStartDate !== existing.start_date || nextStartTime !== existing.start_time || reminderChanged) {
     patch.remind_sent = false;
   }
 

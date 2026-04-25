@@ -25,6 +25,7 @@ type CalendarEventRow = {
   is_recurring: boolean;
   recurrence: string | null;
   is_shared?: boolean;
+  reminder_minutes?: number | null;
   created_at: string;
 };
 
@@ -53,6 +54,7 @@ export async function GET(request: NextRequest) {
       "is_recurring",
       "recurrence",
       includeIsShared ? "is_shared" : null,
+      "reminder_minutes",
       "created_at",
     ].filter(Boolean).join(", ");
 
@@ -131,6 +133,7 @@ export async function POST(request: NextRequest) {
     is_recurring?: boolean;
     recurrence?: string;
     is_shared?: boolean;
+    reminder_minutes?: number | null;
   };
 
   const title = body.title?.trim();
@@ -160,6 +163,7 @@ export async function POST(request: NextRequest) {
     is_recurring: body.is_recurring ?? false,
     recurrence,
     is_shared: body.is_shared ?? false,
+    reminder_minutes: body.reminder_minutes ?? null,
   };
 
   let { data, error } = await supabase
@@ -183,6 +187,7 @@ export async function POST(request: NextRequest) {
         description: insertPayload.description,
         is_recurring: insertPayload.is_recurring,
         recurrence: insertPayload.recurrence,
+        reminder_minutes: insertPayload.reminder_minutes,
       })
       .select()
       .single();

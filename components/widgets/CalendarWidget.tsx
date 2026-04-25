@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  Bell,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
@@ -37,6 +38,7 @@ interface CalendarEvent {
   author_name: string;
   is_mine: boolean;
   is_shared: boolean;
+  reminder_minutes: number | null;
 }
 
 type NewEvent = {
@@ -51,6 +53,7 @@ type NewEvent = {
   is_recurring: boolean;
   recurrence: Recurrence | "";
   is_shared: boolean;
+  reminder_minutes: number | null;
 };
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -67,6 +70,14 @@ const RECURRENCE_LABELS: Record<Recurrence | "", string> = {
   yearly:   "매년",
 };
 
+const REMINDER_OPTIONS: { value: number | null; label: string }[] = [
+  { value: null, label: "알람 없음" },
+  { value: 15,   label: "15분 전" },
+  { value: 30,   label: "30분 전" },
+  { value: 60,   label: "1시간 전" },
+  { value: 720,  label: "12시간 전" },
+];
+
 const WEEK_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
 
 const DEFAULT_NEW_EVENT: NewEvent = {
@@ -81,6 +92,7 @@ const DEFAULT_NEW_EVENT: NewEvent = {
   is_recurring: false,
   recurrence: "",
   is_shared: false,
+  reminder_minutes: null,
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -221,6 +233,24 @@ function EventFormFields({
         />
       </div>
 
+      <div className="flex flex-col gap-1">
+        <label className="text-xs flex items-center gap-1" style={{ color: "var(--text-muted)" }}>
+          <Bell size={11} /> 일정알람
+        </label>
+        <select
+          value={form.reminder_minutes === null ? "" : String(form.reminder_minutes)}
+          onChange={(e) => set("reminder_minutes", e.target.value === "" ? null : Number(e.target.value))}
+          className="w-full px-3 py-2 pr-8 rounded-lg text-sm outline-none"
+          style={{ background: "var(--bg-input)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
+        >
+          {REMINDER_OPTIONS.map((opt) => (
+            <option key={opt.value ?? "null"} value={opt.value === null ? "" : String(opt.value)}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
       <div className="flex flex-col gap-2">
         <label className="flex items-center gap-2 cursor-pointer">
           <input
@@ -272,6 +302,7 @@ function EventEditModal({
     is_recurring: event.is_recurring,
     recurrence: event.recurrence ?? "",
     is_shared: event.is_shared,
+    reminder_minutes: event.reminder_minutes ?? null,
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -302,6 +333,7 @@ function EventEditModal({
           description: form.description.trim(),
           is_recurring: form.is_recurring,
           recurrence: form.is_recurring && form.recurrence ? form.recurrence : null,
+          reminder_minutes: form.reminder_minutes,
         }),
       });
       if (!res.ok) {
@@ -395,6 +427,7 @@ function EventFormModal({
           is_recurring: form.is_recurring,
           recurrence: form.is_recurring && form.recurrence ? form.recurrence : null,
           is_shared: form.is_shared,
+          reminder_minutes: form.reminder_minutes,
         }),
       });
       if (!res.ok) {
