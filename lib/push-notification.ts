@@ -78,13 +78,13 @@ function toAbsoluteUrl(pathOrUrl: string | undefined, baseUrl: string) {
 }
 
 function buildSubscriptionDedupKey(subscription: PushSubscriptionRow) {
+  if (subscription.user_id) {
+    return `user:${subscription.user_id}:${subscription.device_type}:${normalizeUserAgentSignature(subscription.user_agent)}`;
+  }
+
   const installationId = extractInstallationId(subscription.user_agent);
   if (installationId) {
     return `installation:${installationId}`;
-  }
-
-  if (subscription.user_id) {
-    return `user:${subscription.user_id}:${subscription.device_type}:${normalizeUserAgentSignature(subscription.user_agent)}`;
   }
 
   return `token:${subscription.fcm_token}`;

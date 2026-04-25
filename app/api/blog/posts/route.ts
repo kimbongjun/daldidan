@@ -4,7 +4,6 @@ import { ensureUniqueBlogSlug, extractFirstImageFromHtml, getPublishedBlogPosts 
 import { extractDescriptionFromHtml } from "@/lib/blog-shared";
 import { createClient } from "@/lib/supabase/server";
 import { sendBlogPublishNotification } from "@/lib/resend";
-import { sendPushToAllSubscribers } from "@/lib/push-notification";
 
 export const runtime = "nodejs";
 
@@ -81,30 +80,14 @@ export async function POST(request: NextRequest) {
   revalidatePath("/blog");
   revalidatePath(`/blog/${slug}`);
 
-  const postPath = `/blog/${encodeURIComponent(slug)}`;
-  const requestOrigin = request.nextUrl.origin;
-
   after(async () => {
-    const [emailResult, pushResult] = await Promise.allSettled([
-      sendBlogPublishNotification({
-        title,
-        description,
-        slug,
-        authorName,
-        thumbnailUrl: resolvedThumbnail,
-      }),
-      sendPushToAllSubscribers({
-        title: "달디단 — 새 글이 등록되었습니다",
-        body: title,
-        url: postPath,
-        icon: resolvedThumbnail ?? undefined,
-        origin: requestOrigin,
-      }),
-    ]);
-
-    // 백그라운드 알림 실패는 사용자 응답에 영향 없음 — 무시
-    void emailResult;
-    void pushResult;
+    await sendBlogPublishNotification({
+      title,
+      description,
+      slug,
+      authorName,
+      thumbnailUrl: resolvedThumbnail,
+    });
   });
 
   return NextResponse.json({ slug }, { status: 201 });

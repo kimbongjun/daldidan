@@ -21,8 +21,9 @@ export async function POST(request: NextRequest) {
   }
 
   const admin = createAdminClient();
-  const ext = file.name.split(".").pop() ?? "jpg";
-  const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+  const rawExt = file.name.includes(".") ? file.name.split(".").pop()!.toLowerCase().replace(/[^a-z0-9]/g, "") : "";
+  const ext = rawExt || "jpg";
+  const fileName = `${crypto.randomUUID()}.${ext}`;
   const path = `comments/${fileName}`;
 
   const arrayBuffer = await file.arrayBuffer();
