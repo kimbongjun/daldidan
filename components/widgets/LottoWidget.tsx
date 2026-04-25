@@ -179,12 +179,13 @@ export default function LottoWidget() {
               1등 당첨자 <span className="font-bold" style={{ color: ACCENT }}>{latest.firstPrzwnerCo}명</span>
             </p>
             {latest.firstWinamnt ? (
-              <p className="text-xs flex items-center gap-1 flex-wrap justify-end" style={{ color: "var(--text-muted)" }}>
+              <p className="text-xs flex items-center gap-1.5" style={{ color: "var(--text-muted)" }}>
                 1인당 <span className="font-bold" style={{ color: ACCENT }}>
                   {Math.round(latest.firstWinamnt / 100_000_000)}억
                 </span>
-                <span style={{ fontSize: 10 }}>
-                  (실수령 약 {calcNetPrize(latest.firstWinamnt)}억)
+                <span style={{ opacity: 0.35 }}>|</span>
+                실수령 <span className="font-semibold" style={{ color: "var(--text-primary)" }}>
+                  {calcNetPrize(latest.firstWinamnt)}억
                 </span>
               </p>
             ) : (
