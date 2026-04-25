@@ -289,7 +289,9 @@ export async function getLatestLottoResult(): Promise<{ data: LottoResultRow | n
     }
   }
 
-  if (latestStored && latestStored.drw_no >= latestRound) return { data: latestStored, error: null };
+  if (latestStored && latestStored.drw_no >= latestRound && latestStored.first_win_amnt !== null) {
+    return { data: latestStored, error: null };
+  }
 
   const fetchRounds = latestStored
     ? [latestRound, latestRound - 1, latestRound - 2]

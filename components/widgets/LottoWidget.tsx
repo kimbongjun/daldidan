@@ -8,7 +8,8 @@ import LottoQrScannerModal from "@/components/widgets/LottoQrScannerModal";
 
 const ACCENT = "#F59E0B";
 
-function calcNetPrize(amnt: number): number {
+function calcNetPrize(amnt: number | null): number | null {
+  if (!amnt) return null;
   const taxRate = amnt > 300_000_000 ? 0.33 : 0.22;
   return Math.round((amnt * (1 - taxRate)) / 100_000_000);
 }
@@ -177,14 +178,18 @@ export default function LottoWidget() {
             <p className="text-xs" style={{ color: "var(--text-muted)" }}>
               1등 당첨자 <span className="font-bold" style={{ color: ACCENT }}>{latest.firstPrzwnerCo}명</span>
             </p>
-            <p className="text-xs flex items-center gap-1 flex-wrap justify-end" style={{ color: "var(--text-muted)" }}>
-              1인당 <span className="font-bold" style={{ color: ACCENT }}>
-                {Math.round(latest.firstWinamnt / 100_000_000)}억
-              </span>
-              <span style={{ fontSize: 10 }}>
-                (실수령 약 {calcNetPrize(latest.firstWinamnt)}억)
-              </span>
-            </p>
+            {latest.firstWinamnt ? (
+              <p className="text-xs flex items-center gap-1 flex-wrap justify-end" style={{ color: "var(--text-muted)" }}>
+                1인당 <span className="font-bold" style={{ color: ACCENT }}>
+                  {Math.round(latest.firstWinamnt / 100_000_000)}억
+                </span>
+                <span style={{ fontSize: 10 }}>
+                  (실수령 약 {calcNetPrize(latest.firstWinamnt)}억)
+                </span>
+              </p>
+            ) : (
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>당첨금 정보 집계 중</p>
+            )}
           </div>
         )}
       </div>

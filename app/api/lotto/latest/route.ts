@@ -14,7 +14,7 @@ export interface LottoLatestResponse {
   drwtNo5: number;
   drwtNo6: number;
   bnusNo: number;
-  firstWinamnt: number;
+  firstWinamnt: number | null;
   firstPrzwnerCo: number;
   firstAccumAmnt: number;
 }
@@ -49,7 +49,7 @@ export async function GET() {
         drwtNo5: data.drw_no5,
         drwtNo6: data.drw_no6,
         bnusNo: data.drw_no_bonus_no,
-        firstWinamnt: data.first_win_amnt ?? 0,
+        firstWinamnt: data.first_win_amnt,
         firstPrzwnerCo: data.first_win_cnt,
         firstAccumAmnt: data.first_accum_prize_r,
       } satisfies LottoLatestResponse,
