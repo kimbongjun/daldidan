@@ -8,6 +8,11 @@ import LottoQrScannerModal from "@/components/widgets/LottoQrScannerModal";
 
 const ACCENT = "#F59E0B";
 
+function calcNetPrize(amnt: number): number {
+  const taxRate = amnt > 300_000_000 ? 0.33 : 0.22;
+  return Math.round((amnt * (1 - taxRate)) / 100_000_000);
+}
+
 function getBallColor(n: number): string {
   if (n <= 10) return "#EF4444";
   if (n <= 20) return "#F97316";
@@ -172,9 +177,12 @@ export default function LottoWidget() {
             <p className="text-xs" style={{ color: "var(--text-muted)" }}>
               1등 당첨자 <span className="font-bold" style={{ color: ACCENT }}>{latest.firstPrzwnerCo}명</span>
             </p>
-            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+            <p className="text-xs flex items-center gap-1 flex-wrap justify-end" style={{ color: "var(--text-muted)" }}>
               1인당 <span className="font-bold" style={{ color: ACCENT }}>
-                {Math.round(latest.firstWinamnt / 100000000)}억
+                {Math.round(latest.firstWinamnt / 100_000_000)}억
+              </span>
+              <span style={{ fontSize: 10 }}>
+                (실수령 약 {calcNetPrize(latest.firstWinamnt)}억)
               </span>
             </p>
           </div>
