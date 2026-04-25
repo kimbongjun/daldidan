@@ -230,13 +230,42 @@ export default function Header({
     try {
       const raw = localStorage.getItem(PUSH_STORAGE_KEY);
       if (!raw) return;
-      const parsed = JSON.parse(raw) as { status?: string; token?: string };
+      const parsed = JSON.parse(raw) as { status?: string; token?: string; linkedUserId?: string | null };
       if (parsed.status === "subscribed" && parsed.token) {
         setPushStatus("subscribed");
         setPushToken(parsed.token);
       }
     } catch { /* ignore */ }
   }, []);
+
+  // 로그인 감지 → 익명 구독(user_id=null)된 FCM 토큰에 user_id 재연결
+  // Samsung Browser/Safari에서 비로그인 구독 후 로그인 시 댓글 알림 누락 방지
+  useEffect(() => {
+    if (!user?.id || pushStatus !== "subscribed" || !pushToken) return;
+    try {
+      const raw = localStorage.getItem(PUSH_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as { status?: string; token?: string; linkedUserId?: string | null };
+      if (parsed.linkedUserId === user.id) return;
+    } catch { return; }
+
+    fetch("/api/push/subscribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        token: pushToken,
+        deviceType: detectDevice(),
+        installationId: getPushInstallationId(),
+      }),
+    }).then((res) => {
+      if (!res.ok) return;
+      localStorage.setItem(PUSH_STORAGE_KEY, JSON.stringify({
+        status: "subscribed",
+        token: pushToken,
+        linkedUserId: user.id,
+      }));
+    }).catch(() => {});
+  }, [user?.id, pushStatus, pushToken]);
 
   // SW 사전 등록 — 구독 버튼 클릭 전에 SW를 활성화해 iOS APNS 연결 지연 최소화
   useEffect(() => {
@@ -364,7 +393,7 @@ export default function Header({
         return;
       }
 
-      localStorage.setItem(PUSH_STORAGE_KEY, JSON.stringify({ status: "subscribed", token }));
+      localStorage.setItem(PUSH_STORAGE_KEY, JSON.stringify({ status: "subscribed", token, linkedUserId: user?.id ?? null }));
       setPushToken(token);
       setPushStatus("subscribed");
     } catch (err) {
