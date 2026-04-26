@@ -36,13 +36,6 @@ export function parseYouTubeEmbedUrl(input: string) {
   return null;
 }
 
-export function createGoogleMapEmbedSrc(place: string) {
-  const key = process.env.NEXT_PUBLIC_GOOGLE_MAPS_EMBED_API_KEY?.trim();
-  if (!key) return null;
-  if (!place.trim()) return null;
-
-  return `https://www.google.com/maps/embed/v1/place?key=${encodeURIComponent(key)}&q=${encodeURIComponent(place.trim())}&language=ko`;
-}
 
 export const EmbedBlock = Node.create({
   name: "embedBlock",

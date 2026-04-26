@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { Calendar, LoaderCircle, PenLine, Trash2, X } from "lucide-react";
+import { BookmarkCheck, Calendar, Clock, LoaderCircle, PenLine, Trash2, X } from "lucide-react";
 import type { EditableBlogPost } from "@/lib/blog-shared";
 import { BLOG_CATEGORIES } from "@/lib/blog-shared";
 
@@ -44,9 +44,27 @@ function combineDateWithTime(dateOnly: string, source?: string | null) {
   return combined.toISOString();
 }
 
+function formatDraftTime(isoString: string) {
+  const date = new Date(isoString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMin = Math.floor(diffMs / 60_000);
+  if (diffMin < 1) return "방금 전";
+  if (diffMin < 60) return `${diffMin}분 전`;
+  return date.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
+}
+
 interface EditorValue {
   html: string;
   json: unknown;
+}
+
+interface DraftData {
+  title: string;
+  contentHtml: string;
+  category: string;
+  publishedDate: string;
+  savedAt: string;
 }
 
 export default function BlogWriteForm({
@@ -56,6 +74,8 @@ export default function BlogWriteForm({
 }) {
   const router = useRouter();
   const isEditMode = Boolean(initialPost);
+  const draftKey = `blog_draft_${initialPost?.id ?? "new"}`;
+
   const [title, setTitle] = useState(initialPost?.title ?? "");
   const [category, setCategory] = useState<string>(initialPost?.category ?? "");
   // 발행일: 기존 글이면 stored publishedAt, 신규 글이면 오늘 날짜 (YYYY-MM-DD)
@@ -74,6 +94,57 @@ export default function BlogWriteForm({
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
   const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const [editorKey, setEditorKey] = useState(0);
+
+  // 임시저장 관련 상태
+  const [pendingDraft, setPendingDraft] = useState<DraftData | null>(null);
+  const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
+
+  // 마운트 시 임시저장 데이터 확인
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(draftKey);
+      if (!raw) return;
+      const draft = JSON.parse(raw) as DraftData;
+      // 현재 초기값과 동일한 내용이면 복원 배너 무시
+      const normalize = (h: string) => h.replace(/<p><\/p>/g, "").trim();
+      const isSameAsInitial =
+        draft.title === (initialPost?.title ?? "") &&
+        normalize(draft.contentHtml) === normalize(initialPost?.contentHtml ?? "");
+      if (!isSameAsInitial) {
+        setPendingDraft(draft);
+      }
+    } catch {
+      localStorage.removeItem(draftKey);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const saveDraft = useCallback(() => {
+    const draft: DraftData = {
+      title,
+      contentHtml: content.html,
+      category,
+      publishedDate,
+      savedAt: new Date().toISOString(),
+    };
+    localStorage.setItem(draftKey, JSON.stringify(draft));
+    setDraftSavedAt(draft.savedAt);
+  }, [draftKey, title, content.html, category, publishedDate]);
+
+  const clearDraft = useCallback(() => {
+    localStorage.removeItem(draftKey);
+    setDraftSavedAt(null);
+  }, [draftKey]);
+
+  const restoreDraft = (draft: DraftData) => {
+    setTitle(draft.title);
+    setContent({ html: draft.contentHtml, json: null });
+    setCategory(draft.category);
+    setPublishedDate(draft.publishedDate);
+    setEditorKey((k) => k + 1);
+    setPendingDraft(null);
+  };
 
   // 초기값 대비 변경 여부 (에디터가 빈 상태를 <p></p> 로 반환하는 경우도 미변경으로 처리)
   const isDirty = useMemo(() => {
@@ -94,6 +165,13 @@ export default function BlogWriteForm({
   useEffect(() => {
     isDirtyRef.current = isDirty;
   }, [isDirty]);
+
+  // 30초마다 자동 임시저장 (변경사항 있을 때만)
+  useEffect(() => {
+    if (!isDirty) return;
+    const timer = setInterval(saveDraft, 30_000);
+    return () => clearInterval(timer);
+  }, [isDirty, saveDraft]);
 
   // 브라우저 새로고침/탭 닫기 방어
   useEffect(() => {
@@ -160,6 +238,7 @@ export default function BlogWriteForm({
         throw new Error(payload.error ?? "글을 저장하지 못했습니다.");
       }
 
+      clearDraft();
       router.push(`/blog/${encodeURIComponent(payload.slug)}`);
       router.refresh();
     } catch (submitError) {
@@ -187,6 +266,7 @@ export default function BlogWriteForm({
         throw new Error(payload.error ?? "글을 삭제하지 못했습니다.");
       }
 
+      clearDraft();
       router.push("/blog");
       router.refresh();
     } catch (deleteError) {
@@ -277,6 +357,40 @@ export default function BlogWriteForm({
           </div>
         </div>
 
+        {/* 임시저장 복원 배너 */}
+        {pendingDraft && (
+          <div
+            className="rounded-2xl px-4 py-3 flex items-center justify-between gap-3"
+            style={{ background: "rgba(234,88,12,0.08)", border: "1px solid rgba(234,88,12,0.25)" }}
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <BookmarkCheck size={15} style={{ color: "#EA580C", flexShrink: 0 }} />
+              <span className="text-xs font-semibold" style={{ color: "#EA580C" }}>임시저장된 글이 있습니다</span>
+              <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                {formatDraftTime(pendingDraft.savedAt)}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => restoreDraft(pendingDraft)}
+                className="pressable px-3 py-1 rounded-xl text-xs font-bold"
+                style={{ background: "#EA580C", color: "#fff" }}
+              >
+                불러오기
+              </button>
+              <button
+                type="button"
+                onClick={() => { setPendingDraft(null); clearDraft(); }}
+                className="pressable p-1 rounded-lg"
+                style={{ color: "var(--text-muted)" }}
+              >
+                <X size={13} />
+              </button>
+            </div>
+          </div>
+        )}
+
         <input
           placeholder="글 제목"
           value={title}
@@ -284,7 +398,7 @@ export default function BlogWriteForm({
           style={{ ...inputStyle, fontSize: "1.25rem", fontWeight: 800 }}
         />
 
-        <BlogEditor value={content} onChange={setContent} />
+        <BlogEditor key={editorKey} value={content} onChange={setContent} />
 
         {error ? (
           <p className="text-sm font-medium" style={{ color: "#F43F5E" }}>{error}</p>
@@ -350,6 +464,29 @@ export default function BlogWriteForm({
 
         <div className="bento-card p-5 flex flex-col gap-3">
           <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>발행 체크</p>
+
+          {/* 임시저장 버튼 */}
+          <button
+            type="button"
+            onClick={saveDraft}
+            disabled={submitting || deleting}
+            className="pressable w-full py-2.5 rounded-2xl font-semibold text-sm transition-opacity disabled:opacity-45 flex items-center justify-center gap-2"
+            style={{
+              background: "var(--bg-input)",
+              color: "var(--text-muted)",
+              border: "1px solid var(--border)",
+            }}
+          >
+            <BookmarkCheck size={14} />
+            임시저장
+          </button>
+          {draftSavedAt && (
+            <p className="text-xs flex items-center gap-1" style={{ color: "var(--text-muted)" }}>
+              <Clock size={11} />
+              {formatDraftTime(draftSavedAt)} 저장됨
+            </p>
+          )}
+
           <button
             type="button"
             onClick={handleSubmit}
