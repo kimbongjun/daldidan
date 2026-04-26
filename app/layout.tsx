@@ -33,15 +33,16 @@ export async function generateMetadata(): Promise<Metadata> {
   const description = s.meta_description || "날씨, 쇼핑, 영화, 여행, 가계부를 한 곳에서";
   const ogImage = s.meta_og_image || undefined;
   const splashUrl = s.pwa_splash_url || undefined;
-  const faviconVersion = s.favicon_url || s.pwa_icon_url || "default";
-  const faviconUrl = `/favicon.ico?v=${encodeURIComponent(faviconVersion)}`;
   const pwaIconUrl = s.pwa_icon_url || undefined;
+  // 커스텀 favicon이 있으면 직접 URL 사용 → 307 리다이렉트 체인 방지
+  const faviconUrl = s.favicon_url || s.pwa_icon_url || "/favicon.ico";
+  const faviconIsImage = faviconUrl !== "/favicon.ico";
 
   return {
     title,
     description,
     icons: {
-      icon: [{ url: faviconUrl, type: "image/x-icon" }],
+      icon: [{ url: faviconUrl, type: faviconIsImage ? "image/png" : "image/x-icon" }],
       shortcut: [{ url: faviconUrl }],
       // iOS Safari는 manifest icons를 무시하고 apple-touch-icon만 사용함
       ...(pwaIconUrl
