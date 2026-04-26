@@ -36,7 +36,7 @@ function MapInputView({ editor, getPos, deleteNode }: NodeViewProps) {
   }, []);
 
   const selectedPlace = candidates.find((p) => p.id === selectedId) ?? null;
-  const embedSrc = selectedPlace ? createKakaoMapEmbedSrc(selectedPlace.id) : null;
+  const embedSrc = selectedPlace ? createKakaoMapEmbedSrc(selectedPlace) : null;
 
   const search = async () => {
     const q = query.trim();
@@ -268,7 +268,7 @@ function MapInputView({ editor, getPos, deleteNode }: NodeViewProps) {
             </button>
 
             {showPreview && embedSrc && (
-              <div style={{ borderRadius: "0.875rem", overflow: "hidden", border: "1px solid var(--border)", aspectRatio: "4/3" }}>
+              <div style={{ borderRadius: "0.875rem", overflow: "hidden", border: "1px solid var(--border)", aspectRatio: "16/9" }}>
                 <iframe
                   src={embedSrc}
                   title={`${selectedPlace.name} 미리보기`}

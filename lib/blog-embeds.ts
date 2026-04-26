@@ -1,7 +1,7 @@
 import { Node, mergeAttributes } from "@tiptap/core";
 
-export function createKakaoMapEmbedSrc(placeId: string): string {
-  return `https://map.kakao.com/?itemId=${encodeURIComponent(placeId)}`;
+export function createKakaoMapEmbedSrc(place: { id: string; lat: number; lng: number }): string {
+  return `https://maps.google.com/maps?q=${place.lat},${place.lng}&z=16&output=embed&hl=ko`;
 }
 
 export function parseYouTubeEmbedUrl(input: string) {
