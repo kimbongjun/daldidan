@@ -1,7 +1,11 @@
 import { Resend } from "resend";
 import { createAdminClient } from "@/lib/supabase/server";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+let _resend: Resend | null = null;
+function getResend(): Resend {
+  if (!_resend) _resend = new Resend(process.env.RESEND_API_KEY);
+  return _resend;
+}
 
 const FROM_EMAIL =
   process.env.RESEND_FROM_EMAIL ?? "달디단 <noreply@daldidan.com>";
@@ -107,7 +111,7 @@ export async function sendBlogPublishNotification(params: {
     }));
 
     try {
-      const { data, error } = await resend.batch.send(messages);
+      const { data, error } = await getResend().batch.send(messages);
 
       if (error) {
         console.error("[resend] 배치 발송 오류:", error);
