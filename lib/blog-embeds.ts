@@ -1,11 +1,7 @@
 import { Node, mergeAttributes } from "@tiptap/core";
 
-export function createGoogleMapEmbedSrc(place: string): string | null {
-  const key = process.env.NEXT_PUBLIC_GOOGLE_MAPS_EMBED_API_KEY?.trim();
-  if (!key) return null;
-  if (!place.trim()) return null;
-
-  return `https://www.google.com/maps/embed/v1/place?key=${encodeURIComponent(key)}&q=${encodeURIComponent(place.trim())}&language=ko&zoom=16`;
+export function createKakaoMapEmbedSrc(placeId: string): string {
+  return `https://map.kakao.com/?itemId=${encodeURIComponent(placeId)}`;
 }
 
 export function parseYouTubeEmbedUrl(input: string) {
@@ -87,7 +83,7 @@ export const EmbedBlock = Node.create({
         "iframe",
         {
           src: HTMLAttributes.src,
-          title: HTMLAttributes.title || (kind === "map" ? "네이버 지도" : "YouTube video"),
+          title: HTMLAttributes.title || (kind === "map" ? "카카오 지도" : "YouTube video"),
           loading: "lazy",
           allowfullscreen: "true",
           referrerpolicy: "no-referrer-when-downgrade",

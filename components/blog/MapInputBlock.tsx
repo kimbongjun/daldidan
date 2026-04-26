@@ -12,7 +12,7 @@ import {
   Search,
   X,
 } from "lucide-react";
-import { createGoogleMapEmbedSrc } from "@/lib/blog-embeds";
+import { createKakaoMapEmbedSrc } from "@/lib/blog-embeds";
 
 interface PlaceCandidate {
   id: string;
@@ -36,9 +36,7 @@ function MapInputView({ editor, getPos, deleteNode }: NodeViewProps) {
   }, []);
 
   const selectedPlace = candidates.find((p) => p.id === selectedId) ?? null;
-  const embedSrc = selectedPlace
-    ? createGoogleMapEmbedSrc(selectedPlace.formattedAddress)
-    : null;
+  const embedSrc = selectedPlace ? createKakaoMapEmbedSrc(selectedPlace.id) : null;
 
   const search = async () => {
     const q = query.trim();
@@ -70,10 +68,7 @@ function MapInputView({ editor, getPos, deleteNode }: NodeViewProps) {
   };
 
   const insertMap = () => {
-    if (!selectedPlace || !embedSrc) {
-      setError("NEXT_PUBLIC_GOOGLE_MAPS_EMBED_API_KEY 환경 변수가 필요합니다.");
-      return;
-    }
+    if (!selectedPlace || !embedSrc) return;
     const pos = typeof getPos === "function" ? getPos() : null;
     if (pos == null) return;
 
@@ -118,7 +113,7 @@ function MapInputView({ editor, getPos, deleteNode }: NodeViewProps) {
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
             <MapPinned size={15} style={{ color: "#EA580C" }} />
             <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "#EA580C", letterSpacing: "0.04em" }}>
-              Google 지도 삽입
+              카카오 지도 삽입
             </span>
           </div>
           <button
@@ -283,12 +278,6 @@ function MapInputView({ editor, getPos, deleteNode }: NodeViewProps) {
                   allowFullScreen
                 />
               </div>
-            )}
-
-            {showPreview && !embedSrc && (
-              <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", padding: "0.5rem 0" }}>
-                NEXT_PUBLIC_GOOGLE_MAPS_EMBED_API_KEY가 설정되지 않아 미리보기를 표시할 수 없습니다.
-              </p>
             )}
 
             <button
