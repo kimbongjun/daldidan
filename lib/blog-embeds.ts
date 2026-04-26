@@ -4,6 +4,12 @@ export function parseNaverMapEmbedUrl(input: string): string | null {
   const value = input.trim();
   if (!value) return null;
 
+  // iframe 코드에서 src 추출 (<iframe ... src="https://..." ...>)
+  const iframeSrcMatch = value.match(/src=["']([^"']+)["']/i);
+  if (iframeSrcMatch?.[1]) {
+    return parseNaverMapEmbedUrl(iframeSrcMatch[1]);
+  }
+
   try {
     const url = new URL(value);
     const host = url.hostname.replace(/^www\./, "");
@@ -13,16 +19,24 @@ export function parseNaverMapEmbedUrl(input: string): string | null {
     }
 
     if (host === "map.naver.com") {
-      const placeMatch = url.pathname.match(/\/entry\/place\/(\d+)/);
-      if (placeMatch?.[1]) {
-        return `https://map.naver.com/v5/entry/place/${placeMatch[1]}?c=15.00,0,0,0,dh`;
+      // /p/entry/place/ID (신규 URL 포맷)
+      const placeMatchP = url.pathname.match(/\/p\/entry\/place\/(\d+)/);
+      if (placeMatchP?.[1]) {
+        return `https://map.naver.com/p/entry/place/${placeMatchP[1]}`;
       }
 
-      const searchMatch = url.pathname.match(/\/search\/([^/?]+)/);
+      // /v5/entry/place/ID (구 URL 포맷)
+      const placeMatchV5 = url.pathname.match(/\/(?:v5\/)?entry\/place\/(\d+)/);
+      if (placeMatchV5?.[1]) {
+        return `https://map.naver.com/p/entry/place/${placeMatchV5[1]}`;
+      }
+
+      const searchMatch = url.pathname.match(/\/(?:v5\/)?search\/([^/?]+)/);
       if (searchMatch?.[1]) {
-        return `https://map.naver.com/v5/search/${searchMatch[1]}`;
+        return `https://map.naver.com/p/search/${decodeURIComponent(searchMatch[1])}`;
       }
 
+      // 그 외 map.naver.com URL은 그대로 반환
       return value;
     }
   } catch {

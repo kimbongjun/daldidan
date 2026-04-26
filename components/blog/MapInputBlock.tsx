@@ -47,17 +47,22 @@ function MapInputView({ editor, node, getPos, deleteNode }: NodeViewProps) {
         <p className="text-sm font-semibold" style={{ color: "var(--text-muted)" }}>
           네이버 지도 삽입
         </p>
-        <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row gap-2">
           <input
             type="text"
             value={url}
-            onChange={(e) => setUrl(e.target.value)}
+            onChange={(e) => {
+              // iframe 코드 붙여넣기 시 src만 자동 추출
+              const pasted = e.target.value;
+              const iframeSrcMatch = pasted.match(/src=["']([^"']+)["']/i);
+              setUrl(iframeSrcMatch?.[1] ?? pasted);
+            }}
             onKeyDown={(e) => {
               e.stopPropagation();
               if (e.key === "Enter") { e.preventDefault(); handlePreview(); }
             }}
-            placeholder="네이버 지도 URL을 붙여넣으세요 (map.naver.com 또는 naver.me)"
-            className="flex-1 rounded-xl px-3 h-9 text-sm outline-none"
+            placeholder="URL 또는 iframe 코드를 붙여넣으세요"
+            className="min-w-0 flex-1 rounded-xl px-3 h-10 text-sm outline-none"
             style={{
               background: "var(--bg-input)",
               border: "1px solid var(--border)",
@@ -67,7 +72,7 @@ function MapInputView({ editor, node, getPos, deleteNode }: NodeViewProps) {
           <button
             type="button"
             onClick={handlePreview}
-            className="pressable px-4 h-9 rounded-xl text-sm font-semibold shrink-0"
+            className="pressable px-4 h-10 rounded-xl text-sm font-semibold shrink-0 w-full sm:w-auto"
             style={{
               background: "rgba(234,88,12,0.15)",
               color: "#EA580C",
@@ -98,11 +103,11 @@ function MapInputView({ editor, node, getPos, deleteNode }: NodeViewProps) {
           </div>
         )}
 
-        <div className="flex gap-2 justify-end">
+        <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
           <button
             type="button"
             onClick={() => deleteNode()}
-            className="pressable px-4 h-9 rounded-xl text-sm font-semibold"
+            className="pressable px-4 h-10 rounded-xl text-sm font-semibold w-full sm:w-auto"
             style={{
               background: "var(--bg-input)",
               color: "var(--text-muted)",
@@ -115,7 +120,7 @@ function MapInputView({ editor, node, getPos, deleteNode }: NodeViewProps) {
             type="button"
             onClick={handleInsert}
             disabled={!embedSrc}
-            className="pressable px-4 h-9 rounded-xl text-sm font-semibold"
+            className="pressable px-4 h-10 rounded-xl text-sm font-semibold w-full sm:w-auto"
             style={{
               background: embedSrc ? "#EA580C" : "var(--bg-input)",
               color: embedSrc ? "#fff" : "var(--text-muted)",
