@@ -1,48 +1,11 @@
 import { Node, mergeAttributes } from "@tiptap/core";
 
-export function parseNaverMapEmbedUrl(input: string): string | null {
-  const value = input.trim();
-  if (!value) return null;
+export function createGoogleMapEmbedSrc(place: string): string | null {
+  const key = process.env.NEXT_PUBLIC_GOOGLE_MAPS_EMBED_API_KEY?.trim();
+  if (!key) return null;
+  if (!place.trim()) return null;
 
-  // iframe 코드에서 src 추출 (<iframe ... src="https://..." ...>)
-  const iframeSrcMatch = value.match(/src=["']([^"']+)["']/i);
-  if (iframeSrcMatch?.[1]) {
-    return parseNaverMapEmbedUrl(iframeSrcMatch[1]);
-  }
-
-  try {
-    const url = new URL(value);
-    const host = url.hostname.replace(/^www\./, "");
-
-    // naver.me 단축 URL → 바로 iframe src로 사용 (redirect 허용)
-    if (host === "naver.me") {
-      return value;
-    }
-
-    if (host === "map.naver.com") {
-      // /p/entry/place/ID 또는 /v5/entry/place/ID
-      const placeMatch = url.pathname.match(/\/(?:p|v5)\/entry\/place\/(\d+)/);
-      if (placeMatch?.[1]) {
-        return `https://map.naver.com/p/entry/place/${placeMatch[1]}?c=16.00,0,0,0,dh`;
-      }
-
-      // /p/search/ 또는 /v5/search/
-      const searchMatch = url.pathname.match(/\/(?:p|v5)\/search\/([^/?]+)/);
-      if (searchMatch?.[1]) {
-        return `https://map.naver.com/p/search/${decodeURIComponent(searchMatch[1])}?c=16.00,0,0,0,dh`;
-      }
-
-      // 그 외 map.naver.com URL — 기존 c 파라미터가 없으면 zoom 16 주입
-      if (!url.searchParams.has("c")) {
-        url.searchParams.set("c", "16.00,0,0,0,dh");
-      }
-      return url.toString();
-    }
-  } catch {
-    return null;
-  }
-
-  return null;
+  return `https://www.google.com/maps/embed/v1/place?key=${encodeURIComponent(key)}&q=${encodeURIComponent(place.trim())}&language=ko&zoom=16`;
 }
 
 export function parseYouTubeEmbedUrl(input: string) {
