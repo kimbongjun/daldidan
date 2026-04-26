@@ -15,6 +15,7 @@ import {
   LoaderCircle,
   Link2,
   List,
+  MapPin,
   X,
   ListOrdered,
   Quote,
@@ -23,6 +24,7 @@ import {
   Video,
 } from "lucide-react";
 import { EmbedBlock, parseYouTubeEmbedUrl } from "@/lib/blog-embeds";
+import { MapInputBlock } from "@/components/blog/MapInputBlock";
 import { uploadImagesToStorage } from "@/lib/image-upload";
 
 export const DEFAULT_EDITOR_HTML = "";
@@ -59,6 +61,7 @@ export default function BlogEditor({
         defaultProtocol: "https",
       }),
       EmbedBlock,
+      MapInputBlock,
       Image.configure({
         inline: false,
         allowBase64: true,
@@ -147,6 +150,10 @@ export default function BlogEditor({
     editor.chain().focus().extendMarkRange("link").setLink({ href: url.trim() }).run();
   };
 
+  const insertMap = () => {
+    editor.chain().focus().insertContent({ type: "mapInputBlock" }).run();
+  };
+
   const insertYouTube = () => {
     const url = window.prompt("유튜브 링크를 입력하세요");
     if (!url?.trim()) return;
@@ -221,6 +228,9 @@ export default function BlogEditor({
         <ToolbarButton label="유튜브" onClick={insertYouTube} active={false}>
           <Video size={15} />
         </ToolbarButton>
+        <ToolbarButton label="네이버 지도" onClick={insertMap} active={false}>
+          <MapPin size={15} />
+        </ToolbarButton>
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
@@ -273,7 +283,7 @@ export default function BlogEditor({
           className="px-5 py-4 text-xs font-semibold"
           style={{ color: "var(--text-muted)", borderBottom: "1px solid var(--border)", background: "rgba(234,88,12,0.08)" }}
         >
-          이미지는 드래그/업로드, 유튜브는 툴바 버튼으로 바로 삽입하세요
+          이미지는 드래그/업로드, 유튜브·네이버 지도는 툴바 버튼으로 삽입하세요
         </div>
 
         {uploadProgress ? (
@@ -327,6 +337,13 @@ export default function BlogEditor({
             className="pressable blog-editor-dock-button"
           >
             유튜브
+          </button>
+          <button
+            type="button"
+            onClick={insertMap}
+            className="pressable blog-editor-dock-button"
+          >
+            지도
           </button>
         </div>
       </div>

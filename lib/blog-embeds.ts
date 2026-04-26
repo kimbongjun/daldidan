@@ -1,5 +1,37 @@
 import { Node, mergeAttributes } from "@tiptap/core";
 
+export function parseNaverMapEmbedUrl(input: string): string | null {
+  const value = input.trim();
+  if (!value) return null;
+
+  try {
+    const url = new URL(value);
+    const host = url.hostname.replace(/^www\./, "");
+
+    if (host === "naver.me") {
+      return value;
+    }
+
+    if (host === "map.naver.com") {
+      const placeMatch = url.pathname.match(/\/entry\/place\/(\d+)/);
+      if (placeMatch?.[1]) {
+        return `https://map.naver.com/v5/entry/place/${placeMatch[1]}?c=15.00,0,0,0,dh`;
+      }
+
+      const searchMatch = url.pathname.match(/\/search\/([^/?]+)/);
+      if (searchMatch?.[1]) {
+        return `https://map.naver.com/v5/search/${searchMatch[1]}`;
+      }
+
+      return value;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
 export function parseYouTubeEmbedUrl(input: string) {
   const value = input.trim();
   if (!value) return null;
@@ -79,7 +111,7 @@ export const EmbedBlock = Node.create({
         "iframe",
         {
           src: HTMLAttributes.src,
-          title: HTMLAttributes.title || (kind === "map" ? "Google Map" : "YouTube video"),
+          title: HTMLAttributes.title || (kind === "map" ? "네이버 지도" : "YouTube video"),
           loading: "lazy",
           allowfullscreen: "true",
           referrerpolicy: "no-referrer-when-downgrade",
