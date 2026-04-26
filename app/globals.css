@@ -344,7 +344,9 @@ input[type="reset"]:not(:disabled):active,
 }
 
 .blog-embed-map {
-  aspect-ratio: 16 / 10;
+  aspect-ratio: 4 / 3;
+  min-height: 280px;
+  max-height: 520px;
 }
 
 .blog-editor-dock {

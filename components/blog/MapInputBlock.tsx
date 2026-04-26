@@ -15,7 +15,7 @@ function MapInputView({ editor, node, getPos, deleteNode }: NodeViewProps) {
     setError("");
     const src = parseNaverMapEmbedUrl(url);
     if (!src) {
-      setError("유효한 네이버 지도 링크가 아닙니다. (map.naver.com 또는 naver.me 링크를 붙여넣으세요)");
+      setError("유효한 네이버 지도 링크가 아닙니다. (naver.me 또는 map.naver.com 링크를 붙여넣으세요)");
       setEmbedSrc(null);
       return;
     }
@@ -61,7 +61,7 @@ function MapInputView({ editor, node, getPos, deleteNode }: NodeViewProps) {
               e.stopPropagation();
               if (e.key === "Enter") { e.preventDefault(); handlePreview(); }
             }}
-            placeholder="URL 또는 iframe 코드를 붙여넣으세요"
+            placeholder="naver.me/... 또는 map.naver.com 링크를 붙여넣으세요"
             className="min-w-0 flex-1 rounded-xl px-3 h-10 text-sm outline-none"
             style={{
               background: "var(--bg-input)",
