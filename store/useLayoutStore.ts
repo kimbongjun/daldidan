@@ -19,6 +19,6 @@ export const useLayoutStore = create<LayoutState>()(
       setSidebarOrder: (sidebarOrder) => set({ sidebarOrder }),
       setFullOrder: (fullOrder) => set({ fullOrder }),
     }),
-    { name: "daldidan-layout" },
+    { name: "daldidan-layout", skipHydration: true },
   ),
 );

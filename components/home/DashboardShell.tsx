@@ -132,6 +132,10 @@ function BentoGrid({
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
   );
 
+  useEffect(() => {
+    void useLayoutStore.persist.rehydrate();
+  }, []);
+
   function getSidebarContent(id: SidebarWidgetId): React.ReactNode {
     switch (id) {
       case "budget":   return <ErrorBoundary><BudgetWidget /></ErrorBoundary>;
