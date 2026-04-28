@@ -1,0 +1,403 @@
+import "server-only";
+
+import {
+  STOCK_RANKING_KINDS,
+  type StockIpoItem,
+  type StockOverviewResponse,
+  type StockQuote,
+  type StockRankingItem,
+  type StockRankingKind,
+  type StockTheme,
+} from "@/lib/stocks/types";
+
+const KRX_DOMAIN = "https://data-dbg.krx.co.kr";
+const DEFAULT_SYMBOLS = ["005930", "000660", "035420", "005380"];
+
+const MARKET_ENDPOINTS = [
+  { market: "KOSPI", tradePath: "/svc/apis/sto/stk_bydd_trd", basePath: "/svc/apis/sto/stk_isu_base_info" },
+  { market: "KOSDAQ", tradePath: "/svc/apis/sto/ksq_bydd_trd", basePath: "/svc/apis/sto/ksq_isu_base_info" },
+  { market: "KONEX", tradePath: "/svc/apis/sto/knx_bydd_trd", basePath: "/svc/apis/sto/knx_isu_base_info" },
+] as const;
+
+type KrxConfig = {
+  authKey: string;
+  domain: string;
+};
+
+type KrxApiResponse = {
+  OutBlock_1?: Record<string, unknown>[];
+  output?: Record<string, unknown>[];
+};
+
+function readConfig(): KrxConfig | null {
+  const authKey =
+    process.env.KRX_OPENAPI_KEY?.trim() ||
+    process.env.KRX_AUTH_KEY?.trim() ||
+    process.env.STOCK_KRX_AUTH_KEY?.trim() ||
+    "";
+  const domain = process.env.KRX_OPENAPI_BASE_URL?.trim() || KRX_DOMAIN;
+
+  if (!authKey) return null;
+  return { authKey, domain };
+}
+
+export function defaultStockSymbols(): string[] {
+  const raw = process.env.KRX_DEFAULT_SYMBOLS ?? "";
+  const symbols = raw
+    .split(",")
+    .map((value) => sanitizeSymbol(value))
+    .filter((value): value is string => Boolean(value));
+  return symbols.length > 0 ? symbols.slice(0, 12) : DEFAULT_SYMBOLS;
+}
+
+function sanitizeSymbol(value: string): string | null {
+  const symbol = value.trim().toUpperCase();
+  if (/^\d{6}$/.test(symbol)) return symbol;
+  return null;
+}
+
+function compactSymbols(symbols: string[]): string[] {
+  return [...new Set(symbols.map((value) => sanitizeSymbol(value)).filter((value): value is string => Boolean(value)))].slice(0, 12);
+}
+
+function toNumber(value: unknown): number {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  if (typeof value !== "string") return 0;
+  const normalized = value.replace(/,/g, "").replace(/−/g, "-").trim();
+  if (!normalized || normalized === "-") return 0;
+  const num = Number(normalized);
+  return Number.isFinite(num) ? num : 0;
+}
+
+function firstText(record: Record<string, unknown>, keys: string[]): string {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  }
+  return "";
+}
+
+function formatKrxDate(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}${month}${day}`;
+}
+
+function normalizeDate(value: string): string {
+  const digits = value.replace(/\D/g, "");
+  if (digits.length !== 8) return value;
+  return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}`;
+}
+
+function toRows(data: KrxApiResponse): Record<string, unknown>[] {
+  const rows = data.OutBlock_1 ?? data.output ?? [];
+  return Array.isArray(rows) ? rows.filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null) : [];
+}
+
+async function krxGet(config: KrxConfig, path: string, params: Record<string, string>): Promise<Record<string, unknown>[]> {
+  const url = new URL(path, config.domain);
+  Object.entries(params).forEach(([key, value]) => url.searchParams.set(key, value));
+
+  const res = await fetch(url, {
+    method: "GET",
+    headers: {
+      AUTH_KEY: config.authKey,
+      accept: "application/json",
+    },
+    cache: "no-store",
+    signal: AbortSignal.timeout(10_000),
+  });
+
+  if (!res.ok) throw new Error(`KRX Open API HTTP ${res.status}`);
+  const data = (await res.json()) as KrxApiResponse;
+  return toRows(data);
+}
+
+async function fetchMarketRows(config: KrxConfig, baseDate: string): Promise<Record<string, unknown>[]> {
+  const results = await Promise.allSettled(
+    MARKET_ENDPOINTS.map(async ({ market, tradePath }) => {
+      const rows = await krxGet(config, tradePath, { basDd: baseDate });
+      return rows.map((row) => ({ ...row, _market: market }));
+    }),
+  );
+
+  const rows: Record<string, unknown>[] = [];
+  const errors: string[] = [];
+  results.forEach((result, index) => {
+    if (result.status === "fulfilled") {
+      rows.push(...result.value);
+    } else {
+      errors.push(`${MARKET_ENDPOINTS[index].market}: ${result.reason instanceof Error ? result.reason.message : "조회 실패"}`);
+    }
+  });
+
+  if (rows.length === 0 && errors.length > 0) throw new Error(errors.join(" / "));
+  return rows;
+}
+
+async function fetchLatestMarketRows(config: KrxConfig): Promise<{ baseDate: string; rows: Record<string, unknown>[] }> {
+  const today = new Date();
+  for (let offset = 0; offset < 14; offset += 1) {
+    const target = new Date(today.getTime() - offset * 86_400_000);
+    const day = target.getDay();
+    if (day === 0 || day === 6) continue;
+
+    const baseDate = formatKrxDate(target);
+    const rows = await fetchMarketRows(config, baseDate);
+    if (rows.length > 0) return { baseDate, rows };
+  }
+
+  throw new Error("최근 14일 안에 조회 가능한 KRX 일별 매매정보가 없습니다.");
+}
+
+async function fetchHistory(config: KrxConfig, symbol: string, maxPoints = 18): Promise<number[]> {
+  const today = new Date();
+  const values: number[] = [];
+
+  for (let offset = 0; offset < 45 && values.length < maxPoints; offset += 1) {
+    const target = new Date(today.getTime() - offset * 86_400_000);
+    const day = target.getDay();
+    if (day === 0 || day === 6) continue;
+
+    const baseDate = formatKrxDate(target);
+    try {
+      const rows = await fetchMarketRows(config, baseDate);
+      const row = rows.find((item) => firstText(item, ["ISU_CD", "isuCd"]) === symbol);
+      const close = row ? toNumber(row.TDD_CLSPRC ?? row.tddClsprc) : 0;
+      if (close > 0) values.push(close);
+    } catch {
+      // 휴장일 또는 미승인 시장 응답은 차트 보강에서만 건너뛴다.
+    }
+  }
+
+  return values.reverse();
+}
+
+function mapQuote(record: Record<string, unknown>, baseDate: string): StockQuote {
+  const symbol = firstText(record, ["ISU_CD", "isuCd"]);
+  const change = toNumber(record.CMPPREVDD_PRC ?? record.cmpprevddPrc);
+  const price = toNumber(record.TDD_CLSPRC ?? record.tddClsprc);
+
+  return {
+    symbol,
+    name: firstText(record, ["ISU_ABBRV", "ISU_NM", "isuAbrv", "isuNm"]) || symbol,
+    market: firstText(record, ["MKT_NM", "_market", "mktNm"]) || "KRX",
+    price,
+    change,
+    changePct: toNumber(record.FLUC_RT ?? record.flucRt),
+    volume: toNumber(record.ACC_TRDVOL ?? record.accTrdvol),
+    tradingValue: toNumber(record.ACC_TRDVAL ?? record.accTrdval),
+    open: toNumber(record.TDD_OPNPRC ?? record.tddOpnprc),
+    high: toNumber(record.TDD_HGPRC ?? record.tddHgprc),
+    low: toNumber(record.TDD_LWPRC ?? record.tddLwprc),
+    previousClose: price - change,
+    sparkline: [],
+    fetchedAt: new Date().toISOString(),
+    baseDate: normalizeDate(baseDate),
+    source: "KRX",
+  };
+}
+
+function mapRanking(row: StockQuote, kind: StockRankingKind, index: number): StockRankingItem {
+  const scoreValue =
+    kind === "amount" ? row.tradingValue :
+    kind === "volume" ? row.volume :
+    kind === "popular" ? row.tradingValue + row.volume * Math.max(row.price, 1) :
+    row.changePct;
+
+  const scoreLabel =
+    kind === "amount" ? "거래대금" :
+    kind === "volume" ? "거래량" :
+    kind === "popular" ? "시장관심" :
+    "등락률";
+
+  return {
+    kind,
+    rank: index + 1,
+    symbol: row.symbol,
+    name: row.name,
+    price: row.price,
+    change: row.change,
+    changePct: row.changePct,
+    volume: row.volume,
+    tradingValue: row.tradingValue,
+    scoreLabel,
+    scoreValue,
+  };
+}
+
+function buildRankings(quotes: StockQuote[], requestedKinds: StockRankingKind[]): Record<StockRankingKind, StockRankingItem[]> {
+  const rankings = emptyRankings();
+  const common = quotes.filter((quote) => quote.symbol && quote.price > 0);
+
+  requestedKinds.forEach((kind) => {
+    const sorted = [...common].sort((a, b) => {
+      if (kind === "amount") return b.tradingValue - a.tradingValue;
+      if (kind === "volume") return b.volume - a.volume;
+      if (kind === "rise") return b.changePct - a.changePct;
+      if (kind === "fall") return a.changePct - b.changePct;
+      return (b.tradingValue + b.volume * Math.max(b.price, 1)) - (a.tradingValue + a.volume * Math.max(a.price, 1));
+    });
+    rankings[kind] = sorted.slice(0, 20).map((quote, index) => mapRanking(quote, kind, index));
+  });
+
+  return rankings;
+}
+
+async function fetchIpos(config: KrxConfig, baseDate: string): Promise<StockIpoItem[]> {
+  const rows = (
+    await Promise.allSettled(
+      MARKET_ENDPOINTS.map(async ({ market, basePath }) => {
+        const data = await krxGet(config, basePath, { basDd: baseDate });
+        return data.map((row) => ({ ...row, _market: market }));
+      }),
+    )
+  ).flatMap((result) => result.status === "fulfilled" ? result.value : []);
+
+  const cutoff = Date.now() - 180 * 86_400_000;
+  return rows
+    .map((row, index) => {
+      const symbol = firstText(row, ["ISU_CD", "isuCd"]);
+      const listingDate = normalizeDate(firstText(row, ["LIST_DD", "listDd", "LIST_DT", "lstgDt"]));
+      const listingTime = Date.parse(listingDate);
+      return {
+        id: `${symbol || "listing"}-${listingDate || index}`,
+        symbol,
+        name: firstText(row, ["ISU_ABBRV", "ISU_NM", "isuAbrv", "isuNm"]) || symbol || "신규 상장",
+        market: firstText(row, ["MKT_NM", "_market", "mktNm"]) || "KRX",
+        category: firstText(row, ["SECUGRP_NM", "SECT_TP_NM", "secugrpNm", "sectTpNm"]) || "신규상장",
+        listingDate,
+        detailUrl: symbol ? `https://kind.krx.co.kr/corpgeneral/corpList.do?method=loadInitPage&searchText=${encodeURIComponent(symbol)}` : "https://kind.krx.co.kr",
+        _listingTime: Number.isFinite(listingTime) ? listingTime : 0,
+      };
+    })
+    .filter((item) => item._listingTime >= cutoff)
+    .sort((a, b) => b._listingTime - a._listingTime)
+    .slice(0, 12)
+    .map((item) => ({
+      id: item.id,
+      symbol: item.symbol,
+      name: item.name,
+      market: item.market,
+      category: item.category,
+      listingDate: item.listingDate,
+      detailUrl: item.detailUrl,
+    }));
+}
+
+const THEME_RULES = [
+  { label: "반도체", keywords: ["삼성", "하이닉스", "반도체", "한미반도체", "DB하이텍", "리노공업"] },
+  { label: "2차전지", keywords: ["에코프로", "포스코", "LG에너지", "삼성SDI", "엘앤에프", "천보"] },
+  { label: "바이오", keywords: ["바이오", "셀트리온", "제약", "신약", "헬스", "메디"] },
+  { label: "AI/소프트웨어", keywords: ["NAVER", "카카오", "AI", "소프트", "데이터", "더존"] },
+  { label: "자동차", keywords: ["현대차", "기아", "모비스", "만도", "타이어"] },
+  { label: "금융", keywords: ["금융", "은행", "증권", "보험", "KB", "신한", "하나"] },
+  { label: "방산/조선", keywords: ["한화", "현대로템", "조선", "중공업", "방산", "LIG"] },
+];
+
+function buildThemes(rankings: Record<StockRankingKind, StockRankingItem[]>): StockTheme[] {
+  const source = [...rankings.rise, ...rankings.amount].filter((item) => item.name);
+  return THEME_RULES.map((rule) => {
+    const matches = source.filter((item) => rule.keywords.some((keyword) => item.name.toUpperCase().includes(keyword.toUpperCase())));
+    const avgChangePct = matches.length > 0
+      ? matches.reduce((sum, item) => sum + item.changePct, 0) / matches.length
+      : 0;
+    return {
+      label: rule.label,
+      count: matches.length,
+      avgChangePct,
+      leaders: matches.slice(0, 3).map((item) => item.name),
+      tone: avgChangePct > 0.5 ? "hot" : avgChangePct < -0.5 ? "cool" : "neutral",
+    } satisfies StockTheme;
+  })
+    .filter((theme) => theme.count > 0)
+    .sort((a, b) => b.count - a.count || b.avgChangePct - a.avgChangePct)
+    .slice(0, 5);
+}
+
+function emptyRankings(): Record<StockRankingKind, StockRankingItem[]> {
+  return {
+    amount: [],
+    volume: [],
+    rise: [],
+    fall: [],
+    popular: [],
+  };
+}
+
+export async function fetchStockOverview(
+  requestedSymbols: string[],
+  requestedRankingKinds: StockRankingKind[] = [...STOCK_RANKING_KINDS],
+): Promise<StockOverviewResponse> {
+  const fetchedAt = new Date().toISOString();
+  const config = readConfig();
+  const symbols = compactSymbols(requestedSymbols.length > 0 ? requestedSymbols : defaultStockSymbols());
+
+  if (!config) {
+    return {
+      status: "not_configured",
+      provider: "KRX Open API",
+      fetchedAt,
+      marketDivCode: "KRX",
+      quotes: [],
+      rankings: emptyRankings(),
+      themes: [],
+      ipos: [],
+      message: "KRX_OPENAPI_KEY 또는 KRX_AUTH_KEY를 설정해야 한국거래소 일별 매매정보를 조회할 수 있습니다.",
+    };
+  }
+
+  try {
+    const { baseDate, rows } = await fetchLatestMarketRows(config);
+    const allQuotes = rows.map((row) => mapQuote(row, baseDate));
+    const quoteMap = new Map(allQuotes.map((quote) => [quote.symbol, quote]));
+    const quotes = symbols.map((symbol) => quoteMap.get(symbol)).filter((quote): quote is StockQuote => Boolean(quote));
+
+    const historyResults = await Promise.allSettled(quotes.map((quote) => fetchHistory(config, quote.symbol)));
+    const quotesWithHistory = quotes.map((quote, index) => ({
+      ...quote,
+      sparkline: historyResults[index]?.status === "fulfilled" ? historyResults[index].value : [],
+    }));
+
+    const rankings = buildRankings(allQuotes, requestedRankingKinds);
+    const errors = historyResults.flatMap((result, index) =>
+      result.status === "rejected"
+        ? [`${quotes[index].symbol}: ${result.reason instanceof Error ? result.reason.message : "차트 조회 실패"}`]
+        : [],
+    );
+
+    let ipos: StockIpoItem[] = [];
+    try {
+      ipos = await fetchIpos(config, baseDate);
+    } catch (error) {
+      errors.push(`listing: ${error instanceof Error ? error.message : "상장정보 조회 실패"}`);
+    }
+
+    return {
+      status: "live",
+      provider: "KRX Open API",
+      fetchedAt: new Date().toISOString(),
+      baseDate: normalizeDate(baseDate),
+      marketDivCode: "KRX",
+      quotes: quotesWithHistory,
+      rankings,
+      themes: buildThemes(rankings),
+      ipos,
+      ...(errors.length > 0 ? { errors, message: errors[0] } : {}),
+    };
+  } catch (error) {
+    return {
+      status: "error",
+      provider: "KRX Open API",
+      fetchedAt: new Date().toISOString(),
+      marketDivCode: "KRX",
+      quotes: [],
+      rankings: emptyRankings(),
+      themes: [],
+      ipos: [],
+      message: error instanceof Error ? error.message : "한국거래소 데이터를 불러오지 못했습니다.",
+    };
+  }
+}

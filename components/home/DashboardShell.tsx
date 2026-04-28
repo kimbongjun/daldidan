@@ -18,6 +18,7 @@ import BudgetWidget from "@/components/widgets/BudgetWidget";
 import BlogWidget from "@/components/widgets/BlogWidget";
 import FestivalWidget from "@/components/widgets/FestivalWidget";
 import RealEstateWidget from "@/components/widgets/RealEstateWidget";
+import StockWidget from "@/components/widgets/StockWidget";
 import CalendarWidget from "@/components/widgets/CalendarWidget";
 import FortuneWidget from "@/components/widgets/FortuneWidget";
 import LottoWidget from "@/components/widgets/LottoWidget";
@@ -41,9 +42,18 @@ const MAIN_STYLES: Record<MainWidgetId, CSSProperties> = {
 };
 
 const FULL_STYLES: Record<FullWidgetId, { height: number }> = {
+  stock:      { height: 380 },
   festival:   { height: 300 },
   realestate: { height: 340 },
 };
+
+const ALL_FULL_WIDGETS: FullWidgetId[] = ["stock", "festival", "realestate"];
+
+function normalizeFullOrder(order: FullWidgetId[]): FullWidgetId[] {
+  const known = order.filter((id): id is FullWidgetId => ALL_FULL_WIDGETS.includes(id));
+  const missing = ALL_FULL_WIDGETS.filter((id) => !known.includes(id));
+  return [...known, ...missing];
+}
 
 export default function DashboardShell({ initialBlogPosts }: DashboardShellProps) {
   const [currentLocation, setCurrentLocation] = useState<string | null>(null);
@@ -138,6 +148,13 @@ function BentoGrid({
     void useLayoutStore.persist.rehydrate();
   }, []);
 
+  useEffect(() => {
+    const normalized = normalizeFullOrder(fullOrder);
+    if (normalized.join(",") !== fullOrder.join(",")) {
+      setFullOrder(normalized);
+    }
+  }, [fullOrder, setFullOrder]);
+
   function getMainContent(id: MainWidgetId): React.ReactNode {
     switch (id) {
       case "blog":     return blog;
@@ -150,6 +167,7 @@ function BentoGrid({
 
   function getFullContent(id: FullWidgetId): React.ReactNode {
     switch (id) {
+      case "stock":      return <ErrorBoundary><StockWidget /></ErrorBoundary>;
       case "festival":   return <FestivalWidget />;
       case "realestate": return <RealEstateWidget />;
     }
