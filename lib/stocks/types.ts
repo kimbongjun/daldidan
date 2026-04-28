@@ -4,10 +4,18 @@ export type StockRankingKind = (typeof STOCK_RANKING_KINDS)[number];
 
 export type StockApiStatus = "live" | "not_configured" | "error";
 
+export type AssetType = "stock" | "etf" | "index";
+
+export interface WatchlistItem {
+  symbol: string;
+  assetType: AssetType;
+}
+
 export interface StockQuote {
   symbol: string;
   name: string;
   market: string;
+  assetType: AssetType;
   price: number;
   change: number;
   changePct: number;
@@ -62,6 +70,7 @@ export interface StockSearchResult {
   symbol: string;
   name: string;
   market: string;
+  assetType: AssetType;
 }
 
 export interface StockOverviewResponse {

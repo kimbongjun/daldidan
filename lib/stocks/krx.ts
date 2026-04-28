@@ -2,6 +2,7 @@ import "server-only";
 
 import {
   STOCK_RANKING_KINDS,
+  type AssetType,
   type StockIpoItem,
   type StockOverviewResponse,
   type StockQuote,
@@ -9,6 +10,7 @@ import {
   type StockRankingKind,
   type StockSearchResult,
   type StockTheme,
+  type WatchlistItem,
 } from "@/lib/stocks/types";
 
 const KRX_DOMAIN = "https://data-dbg.krx.co.kr";
@@ -19,6 +21,24 @@ const MARKET_ENDPOINTS = [
   { market: "KOSDAQ", tradePath: "/svc/apis/sto/ksq_bydd_trd", basePath: "/svc/apis/sto/ksq_isu_base_info" },
   { market: "KONEX", tradePath: "/svc/apis/sto/knx_bydd_trd", basePath: "/svc/apis/sto/knx_isu_base_info" },
 ] as const;
+
+const ETF_ENDPOINT = { market: "ETF", tradePath: "/svc/apis/etf/etf_bydd_trd" } as const;
+
+const MAJOR_INDICES: { code: string; symbol: string; name: string }[] = [
+  { code: "1", symbol: "IDX_1", name: "KOSPI 종합" },
+  { code: "2", symbol: "IDX_2", name: "KOSDAQ 종합" },
+  { code: "4", symbol: "IDX_4", name: "KOSPI 200" },
+  { code: "5", symbol: "IDX_5", name: "KRX 300" },
+];
+
+const STATIC_INDEX_RESULTS: StockSearchResult[] = [
+  { symbol: "IDX_1", name: "KOSPI 종합지수", market: "KRX", assetType: "index" },
+  { symbol: "IDX_2", name: "KOSDAQ 종합지수", market: "KRX", assetType: "index" },
+  { symbol: "IDX_4", name: "KOSPI 200", market: "KRX", assetType: "index" },
+  { symbol: "IDX_5", name: "KRX 300", market: "KRX", assetType: "index" },
+];
+
+const INDEX_SEARCH_KEYWORDS = ["kospi", "kosdaq", "코스피", "코스닥", "지수", "krx", "200", "300"];
 
 type KrxConfig = {
   authKey: string;
@@ -42,19 +62,30 @@ function readConfig(): KrxConfig | null {
   return { authKey, domain };
 }
 
-export function defaultStockSymbols(): string[] {
+export function defaultStockWatchlist(): WatchlistItem[] {
   const raw = process.env.KRX_DEFAULT_SYMBOLS ?? "";
   const symbols = raw
     .split(",")
     .map((value) => sanitizeSymbol(value))
     .filter((value): value is string => Boolean(value));
-  return symbols.length > 0 ? symbols.slice(0, 12) : DEFAULT_SYMBOLS;
+  const list = symbols.length > 0 ? symbols.slice(0, 12) : DEFAULT_SYMBOLS;
+  return list.map((symbol) => ({ symbol, assetType: "stock" as AssetType }));
+}
+
+/** @deprecated Use defaultStockWatchlist() instead */
+export function defaultStockSymbols(): string[] {
+  return defaultStockWatchlist().map((item) => item.symbol);
 }
 
 function sanitizeSymbol(value: string): string | null {
   const symbol = value.trim().toUpperCase();
   if (/^\d{6}$/.test(symbol)) return symbol;
   return null;
+}
+
+function sanitizeIndexSymbol(value: string): string | null {
+  const sym = value.trim().toUpperCase();
+  return /^IDX_\d+$/.test(sym) ? sym : null;
 }
 
 function compactSymbols(symbols: string[]): string[] {
@@ -127,7 +158,7 @@ async function fetchMarketRows(config: KrxConfig, baseDate: string): Promise<Rec
   const results = await Promise.allSettled(
     MARKET_ENDPOINTS.map(async ({ market, tradePath }) => {
       const rows = await krxGet(config, tradePath, { basDd: baseDate });
-      return rows.map((row) => ({ ...row, _market: market }));
+      return rows.map((row) => ({ ...row, _market: market, _assetType: "stock" }));
     }),
   );
 
@@ -143,6 +174,29 @@ async function fetchMarketRows(config: KrxConfig, baseDate: string): Promise<Rec
 
   if (rows.length === 0 && errors.length > 0) throw new Error(errors.join(" / "));
   return rows;
+}
+
+async function fetchEtfRows(config: KrxConfig, baseDate: string): Promise<Record<string, unknown>[]> {
+  try {
+    const rows = await krxGet(config, ETF_ENDPOINT.tradePath, { basDd: baseDate });
+    return rows.map((row) => ({ ...row, _market: ETF_ENDPOINT.market, _assetType: "etf" }));
+  } catch {
+    return [];
+  }
+}
+
+async function fetchIndexQuotes(config: KrxConfig, baseDate: string, indexCodes: string[]): Promise<StockQuote[]> {
+  if (indexCodes.length === 0) return [];
+  const results = await Promise.allSettled(
+    indexCodes.map(async (code) => {
+      const rows = await krxGet(config, "/svc/apis/idx/idx_ind_dd_trd", { basDd: baseDate, idxIndCd: code });
+      return rows.flatMap((row) => {
+        const quote = mapIndexQuote(row, baseDate, code);
+        return quote.price > 0 ? [quote] : [];
+      });
+    }),
+  );
+  return results.flatMap((result) => (result.status === "fulfilled" ? result.value : []));
 }
 
 // 날짜별 마켓 rows 캐시 — 과거 날짜 데이터는 불변이므로 당일 자정까지 보존
@@ -221,7 +275,7 @@ async function fetchHistory(config: KrxConfig, symbol: string, maxPoints = 18): 
   return values.reverse();
 }
 
-function mapQuote(record: Record<string, unknown>, baseDate: string): StockQuote {
+function mapQuote(record: Record<string, unknown>, baseDate: string, assetType: AssetType = "stock"): StockQuote {
   const symbol = firstText(record, ["ISU_CD", "isuCd"]);
   const change = toNumber(record.CMPPREVDD_PRC ?? record.cmpprevddPrc);
   const price = toNumber(record.TDD_CLSPRC ?? record.tddClsprc);
@@ -230,6 +284,7 @@ function mapQuote(record: Record<string, unknown>, baseDate: string): StockQuote
     symbol,
     name: firstText(record, ["ISU_ABBRV", "ISU_NM", "isuAbrv", "isuNm"]) || symbol,
     market: firstText(record, ["MKT_NM", "_market", "mktNm"]) || "KRX",
+    assetType,
     price,
     change,
     changePct: toNumber(record.FLUC_RT ?? record.flucRt),
@@ -238,6 +293,32 @@ function mapQuote(record: Record<string, unknown>, baseDate: string): StockQuote
     open: toNumber(record.TDD_OPNPRC ?? record.tddOpnprc),
     high: toNumber(record.TDD_HGPRC ?? record.tddHgprc),
     low: toNumber(record.TDD_LWPRC ?? record.tddLwprc),
+    previousClose: price - change,
+    sparkline: [],
+    fetchedAt: new Date().toISOString(),
+    baseDate: normalizeDate(baseDate),
+    source: "KRX",
+  };
+}
+
+function mapIndexQuote(record: Record<string, unknown>, baseDate: string, indexCode: string): StockQuote {
+  const change = toNumber(record.CMPPREVDD_IDX ?? record.cmpprevddIdx);
+  const price = toNumber(record.CLSPRC_IDX ?? record.clsprcIdx);
+  const idx = MAJOR_INDICES.find((i) => i.code === indexCode);
+
+  return {
+    symbol: `IDX_${indexCode}`,
+    name: firstText(record, ["IDX_IND_NM", "idxIndNm"]) || idx?.name || `IDX_${indexCode}`,
+    market: "KRX",
+    assetType: "index",
+    price,
+    change,
+    changePct: toNumber(record.FLUC_RT ?? record.flucRt),
+    volume: toNumber(record.ACC_TRDVOL ?? record.accTrdvol),
+    tradingValue: toNumber(record.ACC_TRDVAL ?? record.accTrdval),
+    open: toNumber(record.OPNPRC_IDX ?? record.opnprcIdx),
+    high: toNumber(record.HGPRC_IDX ?? record.hgprcIdx),
+    low: toNumber(record.LWPRC_IDX ?? record.lwprcIdx),
     previousClose: price - change,
     sparkline: [],
     fetchedAt: new Date().toISOString(),
@@ -276,7 +357,8 @@ function mapRanking(row: StockQuote, kind: StockRankingKind, index: number): Sto
 
 function buildRankings(quotes: StockQuote[], requestedKinds: StockRankingKind[]): Record<StockRankingKind, StockRankingItem[]> {
   const rankings = emptyRankings();
-  const common = quotes.filter((quote) => quote.symbol && quote.price > 0);
+  // 랭킹은 주식 종목만 포함 (ETF·지수 제외)
+  const common = quotes.filter((quote) => quote.symbol && quote.price > 0 && quote.assetType === "stock");
 
   requestedKinds.forEach((kind) => {
     const sorted = [...common].sort((a, b) => {
@@ -376,17 +458,19 @@ function emptyRankings(): Record<StockRankingKind, StockRankingItem[]> {
 // 5분 TTL 모듈 캐시 — fetchStockOverview 결과 캐싱
 const _overviewCache = new Map<string, { data: StockOverviewResponse; expiry: number }>();
 
-function makeOverviewCacheKey(symbols: string[], kinds: StockRankingKind[]): string {
-  return `${[...symbols].sort().join(",")}_${[...kinds].sort().join(",")}`;
+function makeOverviewCacheKey(items: WatchlistItem[], kinds: StockRankingKind[]): string {
+  const itemKey = [...items].sort((a, b) => a.symbol.localeCompare(b.symbol)).map((i) => `${i.symbol}:${i.assetType}`).join(",");
+  return `${itemKey}_${[...kinds].sort().join(",")}`;
 }
 
 export async function fetchStockOverview(
-  requestedSymbols: string[],
+  watchlistItems: WatchlistItem[],
   requestedRankingKinds: StockRankingKind[] = [...STOCK_RANKING_KINDS],
 ): Promise<StockOverviewResponse> {
   const fetchedAt = new Date().toISOString();
   const config = readConfig();
-  const symbols = compactSymbols(requestedSymbols.length > 0 ? requestedSymbols : defaultStockSymbols());
+
+  const resolvedItems = watchlistItems.length > 0 ? watchlistItems : defaultStockWatchlist();
 
   if (!config) {
     return {
@@ -403,26 +487,59 @@ export async function fetchStockOverview(
   }
 
   // 5분 캐시 확인
-  const cacheKey = makeOverviewCacheKey(symbols, requestedRankingKinds);
+  const cacheKey = makeOverviewCacheKey(resolvedItems, requestedRankingKinds);
   const cachedOverview = _overviewCache.get(cacheKey);
   if (cachedOverview && cachedOverview.expiry > Date.now()) return cachedOverview.data;
 
   try {
     const { baseDate, rows } = await fetchLatestMarketRows(config);
-    const allQuotes = rows.map((row) => mapQuote(row, baseDate));
-    const quoteMap = new Map(allQuotes.map((quote) => [quote.symbol, quote]));
-    const quotes = symbols.map((symbol) => quoteMap.get(symbol)).filter((quote): quote is StockQuote => Boolean(quote));
 
-    const historyResults = await Promise.allSettled(quotes.map((quote) => fetchHistory(config, quote.symbol)));
-    const quotesWithHistory = quotes.map((quote, index) => ({
+    // ETF rows 병렬 취득
+    const etfRows = await fetchEtfRows(config, baseDate);
+    const allRows = [...rows, ...etfRows];
+
+    // 전체 quote map (주식 + ETF)
+    const allQuotes = allRows.map((row) => {
+      const at: AssetType = row._assetType === "etf" ? "etf" : "stock";
+      return mapQuote(row, baseDate, at);
+    });
+    const quoteMap = new Map(allQuotes.map((quote) => [quote.symbol, quote]));
+
+    // 주식/ETF watchlist 심볼 quotes
+    const stockEtfItems = resolvedItems.filter((item) => item.assetType !== "index");
+    const stockEtfSymbols = compactSymbols(stockEtfItems.map((item) => item.symbol));
+    const stockEtfQuotes = stockEtfSymbols
+      .map((symbol) => quoteMap.get(symbol))
+      .filter((quote): quote is StockQuote => Boolean(quote));
+
+    // 지수 watchlist
+    const indexCodes = resolvedItems
+      .filter((item) => item.assetType === "index")
+      .map((item) => item.symbol.replace("IDX_", ""))
+      .filter((code) => /^\d+$/.test(code));
+
+    // 스파크라인 — 주식/ETF만 (지수는 별도 처리 필요)
+    const historyResults = await Promise.allSettled(stockEtfQuotes.map((quote) => fetchHistory(config, quote.symbol)));
+    const quotesWithHistory = stockEtfQuotes.map((quote, index) => ({
       ...quote,
       sparkline: historyResults[index]?.status === "fulfilled" ? historyResults[index].value : [],
     }));
 
+    // 지수 quotes
+    const indexQuotes = await fetchIndexQuotes(config, baseDate, indexCodes);
+
+    // watchlist 순서 유지 (주식/ETF → 지수)
+    const symbolOrder = new Map(resolvedItems.map((item, i) => [item.symbol, i]));
+    const allWatchlistQuotes = [...quotesWithHistory, ...indexQuotes].sort((a, b) => {
+      const ia = symbolOrder.get(a.symbol) ?? 999;
+      const ib = symbolOrder.get(b.symbol) ?? 999;
+      return ia - ib;
+    });
+
     const rankings = buildRankings(allQuotes, requestedRankingKinds);
     const errors = historyResults.flatMap((result, index) =>
       result.status === "rejected"
-        ? [`${quotes[index].symbol}: ${result.reason instanceof Error ? result.reason.message : "차트 조회 실패"}`]
+        ? [`${stockEtfQuotes[index].symbol}: ${result.reason instanceof Error ? result.reason.message : "차트 조회 실패"}`]
         : [],
     );
 
@@ -439,7 +556,7 @@ export async function fetchStockOverview(
       fetchedAt: new Date().toISOString(),
       baseDate: normalizeDate(baseDate),
       marketDivCode: "KRX",
-      quotes: quotesWithHistory,
+      quotes: allWatchlistQuotes,
       rankings,
       themes: buildThemes(rankings),
       ipos,
@@ -464,14 +581,16 @@ export async function fetchStockOverview(
   }
 }
 
-// 1시간 TTL 모듈 캐시 — 검색 전용
+// 1시간 TTL 모듈 캐시 — 검색 전용 (주식 + ETF 통합)
 let _rowCache: { rows: Record<string, unknown>[]; expiry: number } | null = null;
 
 async function getCachedRows(config: KrxConfig): Promise<Record<string, unknown>[]> {
   if (_rowCache && _rowCache.expiry > Date.now()) return _rowCache.rows;
-  const { rows } = await fetchLatestMarketRows(config);
-  _rowCache = { rows, expiry: Date.now() + 3_600_000 };
-  return rows;
+  const { baseDate, rows: stockRows } = await fetchLatestMarketRows(config);
+  const etfRows = await fetchEtfRows(config, baseDate);
+  const allRows = [...stockRows, ...etfRows];
+  _rowCache = { rows: allRows, expiry: Date.now() + 3_600_000 };
+  return allRows;
 }
 
 export async function searchStocks(query: string, limit = 8): Promise<StockSearchResult[]> {
@@ -490,6 +609,7 @@ export async function searchStocks(query: string, limit = 8): Promise<StockSearc
     const market = firstText(row, ["MKT_NM", "_market", "mktNm"]) || "KRX";
     if (!symbol || !name) continue;
 
+    const rowAssetType: AssetType = row._assetType === "etf" ? "etf" : "stock";
     const nameUpper = name.toUpperCase();
     const symbolMatch = symbol === upper;
     const symbolContains = symbol.includes(upper);
@@ -499,11 +619,29 @@ export async function searchStocks(query: string, limit = 8): Promise<StockSearc
     if (!symbolMatch && !symbolContains && !nameContains) continue;
 
     const score = symbolMatch ? 100 : nameStarts ? 60 : symbolContains ? 40 : 10;
-    scored.push({ symbol, name, market, score });
+    scored.push({ symbol, name, market, assetType: rowAssetType, score });
   }
 
-  return scored
+  const stockEtfResults = scored
     .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name, "ko"))
     .slice(0, limit)
-    .map(({ symbol, name, market }) => ({ symbol, name, market }));
+    .map(({ symbol, name, market, assetType }) => ({ symbol, name, market, assetType }));
+
+  // 지수 관련 검색어면 정적 지수 목록 추가
+  const lowerQ = q.toLowerCase();
+  const includesIndexKeyword = INDEX_SEARCH_KEYWORDS.some((kw) => lowerQ.includes(kw));
+  if (includesIndexKeyword) {
+    const matchedIndices = STATIC_INDEX_RESULTS.filter(
+      (idx) => idx.name.toLowerCase().includes(lowerQ) || idx.symbol.toLowerCase().includes(lowerQ) || lowerQ.includes(idx.name.toLowerCase().split(" ")[0]),
+    );
+    const combined = [...stockEtfResults, ...matchedIndices];
+    const seen = new Set<string>();
+    return combined
+      .filter((r) => { if (seen.has(r.symbol)) return false; seen.add(r.symbol); return true; })
+      .slice(0, limit);
+  }
+
+  return stockEtfResults;
 }
+
+export { sanitizeIndexSymbol };

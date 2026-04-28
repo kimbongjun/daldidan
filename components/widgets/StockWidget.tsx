@@ -20,18 +20,25 @@ import {
 import Sparkline from "@/components/Sparkline";
 import {
   STOCK_RANKING_KINDS,
+  type AssetType,
   type StockOverviewResponse,
   type StockQuote,
   type StockRankingItem,
   type StockRankingKind,
   type StockSearchResult,
   type StockTheme,
+  type WatchlistItem,
 } from "@/lib/stocks/types";
 
 const ACCENT = "#F43F5E";
 const DOWN = "#10B981";
 const STORAGE_KEY = "daldidan-stock-watchlist";
-const DEFAULT_WATCHLIST = ["005930", "000660", "035420", "005380"];
+const DEFAULT_WATCHLIST: WatchlistItem[] = [
+  { symbol: "005930", assetType: "stock" },
+  { symbol: "000660", assetType: "stock" },
+  { symbol: "035420", assetType: "stock" },
+  { symbol: "005380", assetType: "stock" },
+];
 
 type Tab = "watch" | "rank" | "ipo";
 
@@ -48,9 +55,14 @@ function sanitizeSymbol(value: string): string | null {
   return /^Q?\d{6}$/.test(symbol) ? symbol : null;
 }
 
+function sanitizeIndexSymbol(value: string): string | null {
+  const sym = value.trim().toUpperCase();
+  return /^IDX_\d+$/.test(sym) ? sym : null;
+}
+
 function formatPrice(value: number): string {
   if (!Number.isFinite(value) || value <= 0) return "-";
-  return `${value.toLocaleString()}원`;
+  return `${value.toLocaleString()}`;
 }
 
 function formatVolume(value: number): string {
@@ -103,6 +115,23 @@ function ChangeBadge({ change, changePct }: { change: number; changePct: number 
   );
 }
 
+function AssetTypeBadge({ assetType }: { assetType: AssetType }) {
+  const config: Record<AssetType, { label: string; bg: string; color: string }> = {
+    stock: { label: "주식", bg: "rgba(255,255,255,0.08)", color: "var(--text-muted)" },
+    etf:   { label: "ETF",  bg: "rgba(99,102,241,0.18)",  color: "#6366F1" },
+    index: { label: "지수", bg: "rgba(245,158,11,0.18)",  color: "#F59E0B" },
+  };
+  const { label, bg, color } = config[assetType];
+  return (
+    <span
+      className="shrink-0 rounded px-1.5 py-0.5 text-[9px] font-black uppercase"
+      style={{ background: bg, color }}
+    >
+      {label}
+    </span>
+  );
+}
+
 function SkeletonRows() {
   return (
     <div className="flex flex-col gap-2">
@@ -135,7 +164,7 @@ function StatusPill({ data, loading }: { data: StockOverviewResponse | null; loa
 
 function EmptyState({ title, detail }: { title: string; detail: string }) {
   return (
-    <div className="flex h-full min-h-[160px] flex-col items-center justify-center gap-2 rounded-xl px-4 text-center"
+    <div className="flex min-h-[160px] flex-col items-center justify-center gap-2 rounded-xl px-4 text-center"
       style={{ background: "rgba(255,255,255,0.04)", border: "1px solid var(--border)" }}>
       <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{title}</p>
       <p className="text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>{detail}</p>
@@ -145,26 +174,34 @@ function EmptyState({ title, detail }: { title: string; detail: string }) {
 
 function QuoteRow({ quote, onRemove }: { quote: StockQuote; onRemove: (symbol: string) => void }) {
   const color = changeColor(quote.changePct);
+  const isIndex = quote.assetType === "index";
   return (
     <div
       className="grid min-h-[64px] grid-cols-[minmax(0,1.3fr)_auto_auto_auto] items-center gap-3 rounded-xl px-3 py-2.5"
       style={{ background: "rgba(255,255,255,0.045)", border: "1px solid var(--border)" }}
     >
       <div className="min-w-0">
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
           <p className="truncate text-sm font-black" style={{ color: "var(--text-primary)" }}>{quote.name}</p>
-          <span className="rounded-md px-1.5 py-0.5 text-[10px] font-bold" style={{ background: "rgba(255,255,255,0.07)", color: "var(--text-muted)" }}>
-            {quote.symbol}
-          </span>
+          <AssetTypeBadge assetType={quote.assetType} />
+          {!isIndex && (
+            <span className="rounded-md px-1.5 py-0.5 text-[10px] font-bold" style={{ background: "rgba(255,255,255,0.07)", color: "var(--text-muted)" }}>
+              {quote.symbol}
+            </span>
+          )}
         </div>
-        <p className="mt-0.5 text-[11px]" style={{ color: "var(--text-muted)" }}>
-          거래량 {formatVolume(quote.volume)} · 대금 {formatTradingValue(quote.tradingValue)}
-        </p>
+        {!isIndex && (
+          <p className="mt-0.5 text-[11px]" style={{ color: "var(--text-muted)" }}>
+            거래량 {formatVolume(quote.volume)} · 대금 {formatTradingValue(quote.tradingValue)}
+          </p>
+        )}
       </div>
-      <div className="hidden w-[92px] justify-end sm:flex">
-        <Sparkline data={quote.sparkline} color={color} width={88} height={34} />
-      </div>
-      <div className="text-right">
+      {!isIndex && (
+        <div className="hidden w-[92px] justify-end sm:flex">
+          <Sparkline data={quote.sparkline} color={color} width={88} height={34} />
+        </div>
+      )}
+      <div className={isIndex ? "col-span-1 text-right" : "text-right"}>
         <p className="text-sm font-black tabular-nums" style={{ color: "var(--text-primary)" }}>{formatPrice(quote.price)}</p>
         <ChangeBadge change={quote.change} changePct={quote.changePct} />
       </div>
@@ -241,13 +278,12 @@ function ThemeStrip({ themes }: { themes: StockTheme[] }) {
 export default function StockWidget() {
   const [activeTab, setActiveTab] = useState<Tab>("watch");
   const [activeRank, setActiveRank] = useState<StockRankingKind>("amount");
-  const [watchlist, setWatchlist] = useState<string[]>(DEFAULT_WATCHLIST);
+  const [watchlist, setWatchlist] = useState<WatchlistItem[]>(DEFAULT_WATCHLIST);
   const [input, setInput] = useState("");
   const [data, setData] = useState<StockOverviewResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshNonce, setRefreshNonce] = useState(0);
 
-  // 종목 검색 자동완성
   const [searchResults, setSearchResults] = useState<StockSearchResult[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -257,16 +293,35 @@ export default function StockWidget() {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const feedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // localStorage 로드 (구형 string[] 포맷 마이그레이션 포함)
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (!saved) return;
       const parsed = JSON.parse(saved) as unknown;
       if (!Array.isArray(parsed)) return;
-      const next = [...new Set(parsed.map((value) => sanitizeSymbol(String(value))).filter((value): value is string => Boolean(value)))];
+
+      const next: WatchlistItem[] = parsed
+        .map((item): WatchlistItem | null => {
+          if (typeof item === "string") {
+            const sym = sanitizeSymbol(item);
+            return sym ? { symbol: sym, assetType: "stock" } : null;
+          }
+          if (typeof item === "object" && item !== null && "symbol" in item) {
+            const raw = item as Record<string, unknown>;
+            const rawSym = typeof raw.symbol === "string" ? raw.symbol : "";
+            const validSym = sanitizeSymbol(rawSym) ?? sanitizeIndexSymbol(rawSym) ?? null;
+            const rawAt = raw.assetType;
+            const validAt: AssetType = rawAt === "etf" || rawAt === "index" ? rawAt : "stock";
+            return validSym ? { symbol: validSym, assetType: validAt } : null;
+          }
+          return null;
+        })
+        .filter((item): item is WatchlistItem => item !== null);
+
       if (next.length > 0) setWatchlist(next.slice(0, 10));
     } catch {
-      // 저장된 관심종목 형식이 깨졌으면 기본값을 사용한다.
+      // 깨진 저장값은 기본값 사용
     }
   }, []);
 
@@ -283,7 +338,7 @@ export default function StockWidget() {
   const fetchStocks = useCallback((signal?: AbortSignal) => {
     setLoading(true);
     const params = new URLSearchParams({
-      symbols: watchlist.join(","),
+      items: watchlist.map(({ symbol, assetType }) => `${symbol}:${assetType}`).join(","),
       rankings: STOCK_RANKING_KINDS.join(","),
     });
     fetch(`/api/stocks?${params.toString()}`, { cache: "no-store", signal })
@@ -318,10 +373,9 @@ export default function StockWidget() {
 
   const quotes = useMemo(() => {
     const map = new Map((data?.quotes ?? []).map((quote) => [quote.symbol, quote]));
-    return watchlist.map((symbol) => map.get(symbol)).filter((quote): quote is StockQuote => Boolean(quote));
+    return watchlist.map(({ symbol }) => map.get(symbol)).filter((quote): quote is StockQuote => Boolean(quote));
   }, [data?.quotes, watchlist]);
 
-  // 드롭다운 외부 클릭 시 닫기
   useEffect(() => {
     function onPointerDown(event: PointerEvent) {
       if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
@@ -333,7 +387,6 @@ export default function StockWidget() {
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, []);
 
-  // 디바운스 검색 (300ms)
   const handleInputChange = useCallback((value: string) => {
     setInput(value);
     setFocusedIndex(-1);
@@ -363,12 +416,12 @@ export default function StockWidget() {
   }, []);
 
   const selectResult = useCallback((result: StockSearchResult) => {
-    if (watchlist.includes(result.symbol)) {
+    if (watchlist.some((item) => item.symbol === result.symbol)) {
       showFeedback("이미 관심종목에 있습니다", "warn");
     } else if (watchlist.length >= 10) {
       showFeedback("관심종목은 최대 10개까지 추가할 수 있습니다", "error");
     } else {
-      setWatchlist((prev) => [...prev, result.symbol]);
+      setWatchlist((prev) => [...prev, { symbol: result.symbol, assetType: result.assetType }]);
       showFeedback(`${result.name} 추가됨`, "success");
     }
     setInput("");
@@ -385,12 +438,12 @@ export default function StockWidget() {
     }
     const symbol = sanitizeSymbol(input);
     if (!symbol) return;
-    if (watchlist.includes(symbol)) {
+    if (watchlist.some((item) => item.symbol === symbol)) {
       showFeedback("이미 관심종목에 있습니다", "warn");
     } else if (watchlist.length >= 10) {
       showFeedback("관심종목은 최대 10개까지 추가할 수 있습니다", "error");
     } else {
-      setWatchlist((prev) => [...prev, symbol]);
+      setWatchlist((prev) => [...prev, { symbol, assetType: "stock" }]);
       showFeedback(`${symbol} 추가됨`, "success");
     }
     setInput("");
@@ -424,14 +477,14 @@ export default function StockWidget() {
   }, [dropdownOpen, searchResults, focusedIndex, addSymbol, selectResult]);
 
   const removeSymbol = useCallback((symbol: string) => {
-    setWatchlist((prev) => prev.filter((item) => item !== symbol));
+    setWatchlist((prev) => prev.filter((item) => item.symbol !== symbol));
   }, []);
 
   const currentRankings = data?.rankings[activeRank] ?? [];
   const isConfigured = data?.status !== "not_configured";
 
   return (
-    <div className="bento-card gradient-rose h-full flex flex-col p-5 gap-3">
+    <div className="bento-card gradient-rose flex flex-col p-5 gap-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: ACCENT }}>
@@ -499,9 +552,9 @@ export default function StockWidget() {
           detail="KRX_OPENAPI_KEY 또는 KRX_AUTH_KEY를 .env.local에 설정하면 한국거래소 기준일 매매정보를 표시합니다. 임의 샘플 시세는 사용하지 않습니다."
         />
       ) : (
-        <div className="flex-1 min-h-0 overflow-hidden">
+        <div className="flex flex-col gap-3">
           {activeTab === "watch" && (
-            <div className="flex h-full flex-col gap-3" ref={searchRef}>
+            <div className="flex flex-col gap-3" ref={searchRef}>
               <div className="flex gap-2">
                 <div className="relative min-w-0 flex-1">
                   <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text-muted)" }} />
@@ -510,7 +563,7 @@ export default function StockWidget() {
                     onChange={(event) => handleInputChange(event.target.value)}
                     onKeyDown={handleKeyDown}
                     onFocus={() => { if (searchResults.length > 0) setDropdownOpen(true); }}
-                    placeholder="종목명 또는 코드 검색"
+                    placeholder="종목·ETF·지수명 또는 코드 검색"
                     autoComplete="off"
                     className="h-9 w-full rounded-lg border bg-transparent pl-8 pr-8 text-xs outline-none"
                     style={{ borderColor: "var(--border)", color: "var(--text-primary)" }}
@@ -542,7 +595,7 @@ export default function StockWidget() {
                 </div>
               )}
 
-              <div className="flex-1 overflow-y-auto scrollbar-hide pr-0.5">
+              <div className="pr-0.5">
                 {dropdownOpen && searchResults.length > 0 ? (
                   <div className="flex flex-col gap-1.5">
                     <p className="px-1 pb-0.5 text-[10px] font-semibold" style={{ color: "var(--text-muted)" }}>
@@ -562,7 +615,10 @@ export default function StockWidget() {
                           }}
                         >
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-xs font-bold" style={{ color: "var(--text-primary)" }}>{result.name}</p>
+                            <div className="flex items-center gap-1.5">
+                              <p className="truncate text-xs font-bold" style={{ color: "var(--text-primary)" }}>{result.name}</p>
+                              <AssetTypeBadge assetType={result.assetType} />
+                            </div>
                             <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>
                               {result.symbol} · {result.market}
                             </p>
@@ -580,7 +636,7 @@ export default function StockWidget() {
                 ) : loading && !data ? (
                   <SkeletonRows />
                 ) : quotes.length === 0 ? (
-                  <EmptyState title="관심종목 매매정보가 없습니다" detail="종목명이나 코드를 검색해서 추가하세요." />
+                  <EmptyState title="관심종목 매매정보가 없습니다" detail="종목명·ETF·지수명을 검색해서 추가하세요." />
                 ) : (
                   <div className="flex flex-col gap-2">
                     {quotes.map((quote) => <QuoteRow key={quote.symbol} quote={quote} onRemove={removeSymbol} />)}
@@ -591,7 +647,7 @@ export default function StockWidget() {
           )}
 
           {activeTab === "rank" && (
-            <div className="flex h-full flex-col gap-3">
+            <div className="flex flex-col gap-3">
               <div className="flex gap-1.5 overflow-x-auto scrollbar-hide">
                 {STOCK_RANKING_KINDS.map((kind) => {
                   const active = activeRank === kind;
@@ -610,7 +666,7 @@ export default function StockWidget() {
                 })}
               </div>
               <ThemeStrip themes={data?.themes ?? []} />
-              <div className="flex-1 overflow-y-auto scrollbar-hide pr-0.5">
+              <div className="pr-0.5">
                 {loading && !data ? (
                   <SkeletonRows />
                 ) : currentRankings.length === 0 ? (
@@ -627,7 +683,7 @@ export default function StockWidget() {
           )}
 
           {activeTab === "ipo" && (
-            <div className="h-full overflow-y-auto scrollbar-hide pr-0.5">
+            <div className="pr-0.5">
               {data?.ipos.length ? (
                 <div className="grid gap-2 md:grid-cols-2">
                   {data.ipos.map((item) => (
