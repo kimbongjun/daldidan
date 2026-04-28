@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowRight,
@@ -8,6 +8,7 @@ import {
   BarChart3,
   Bell,
   LineChart,
+  Loader2,
   Plus,
   RefreshCw,
   Search,
@@ -23,6 +24,7 @@ import {
   type StockQuote,
   type StockRankingItem,
   type StockRankingKind,
+  type StockSearchResult,
   type StockTheme,
 } from "@/lib/stocks/types";
 
@@ -245,6 +247,14 @@ export default function StockWidget() {
   const [loading, setLoading] = useState(true);
   const [refreshNonce, setRefreshNonce] = useState(0);
 
+  // 종목 검색 자동완성
+  const [searchResults, setSearchResults] = useState<StockSearchResult[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [focusedIndex, setFocusedIndex] = useState(-1);
+  const searchRef = useRef<HTMLDivElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -303,13 +313,95 @@ export default function StockWidget() {
     return watchlist.map((symbol) => map.get(symbol)).filter((quote): quote is StockQuote => Boolean(quote));
   }, [data?.quotes, watchlist]);
 
+  // 드롭다운 외부 클릭 시 닫기
+  useEffect(() => {
+    function onPointerDown(event: PointerEvent) {
+      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+        setDropdownOpen(false);
+        setFocusedIndex(-1);
+      }
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, []);
+
+  // 디바운스 검색 (300ms)
+  const handleInputChange = useCallback((value: string) => {
+    setInput(value);
+    setFocusedIndex(-1);
+
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    if (!value.trim()) {
+      setSearchResults([]);
+      setDropdownOpen(false);
+      return;
+    }
+
+    debounceRef.current = setTimeout(async () => {
+      setSearchLoading(true);
+      try {
+        const res = await fetch(`/api/stocks/search?q=${encodeURIComponent(value.trim())}&limit=8`);
+        const json = (await res.json()) as { results: StockSearchResult[] };
+        setSearchResults(json.results ?? []);
+        setDropdownOpen((json.results ?? []).length > 0);
+      } catch {
+        setSearchResults([]);
+        setDropdownOpen(false);
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 300);
+  }, []);
+
+  const selectResult = useCallback((result: StockSearchResult) => {
+    setWatchlist((prev) => prev.includes(result.symbol) ? prev : [...prev, result.symbol].slice(0, 10));
+    setInput("");
+    setSearchResults([]);
+    setDropdownOpen(false);
+    setFocusedIndex(-1);
+    setActiveTab("watch");
+  }, []);
+
   const addSymbol = useCallback(() => {
+    // 드롭다운에서 포커스 중인 항목 선택
+    if (dropdownOpen && focusedIndex >= 0 && searchResults[focusedIndex]) {
+      selectResult(searchResults[focusedIndex]);
+      return;
+    }
+    // 직접 6자리 코드 입력
     const symbol = sanitizeSymbol(input);
     if (!symbol) return;
     setWatchlist((prev) => prev.includes(symbol) ? prev : [...prev, symbol].slice(0, 10));
     setInput("");
+    setSearchResults([]);
+    setDropdownOpen(false);
     setActiveTab("watch");
-  }, [input]);
+  }, [input, dropdownOpen, focusedIndex, searchResults, selectResult]);
+
+  const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!dropdownOpen || searchResults.length === 0) {
+      if (event.key === "Enter") addSymbol();
+      return;
+    }
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setFocusedIndex((prev) => Math.min(prev + 1, searchResults.length - 1));
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setFocusedIndex((prev) => Math.max(prev - 1, -1));
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      if (focusedIndex >= 0 && searchResults[focusedIndex]) {
+        selectResult(searchResults[focusedIndex]);
+      } else {
+        addSymbol();
+      }
+    } else if (event.key === "Escape") {
+      setDropdownOpen(false);
+      setFocusedIndex(-1);
+    }
+  }, [dropdownOpen, searchResults, focusedIndex, addSymbol, selectResult]);
 
   const removeSymbol = useCallback((symbol: string) => {
     setWatchlist((prev) => prev.filter((item) => item !== symbol));
@@ -390,29 +482,62 @@ export default function StockWidget() {
         <div className="flex-1 min-h-0 overflow-hidden">
           {activeTab === "watch" && (
             <div className="flex h-full flex-col gap-3">
-              <div className="flex gap-2">
-                <div className="relative min-w-0 flex-1">
-                  <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text-muted)" }} />
-                  <input
-                    value={input}
-                    onChange={(event) => setInput(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") addSymbol();
-                    }}
-                    placeholder="종목코드 6자리"
-                    className="h-9 w-full rounded-lg border bg-transparent pl-8 pr-3 text-xs outline-none"
-                    style={{ borderColor: "var(--border)", color: "var(--text-primary)" }}
-                  />
+              <div className="relative" ref={searchRef}>
+                <div className="flex gap-2">
+                  <div className="relative min-w-0 flex-1">
+                    <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text-muted)" }} />
+                    <input
+                      value={input}
+                      onChange={(event) => handleInputChange(event.target.value)}
+                      onKeyDown={handleKeyDown}
+                      onFocus={() => { if (searchResults.length > 0) setDropdownOpen(true); }}
+                      placeholder="종목명 또는 코드 검색"
+                      autoComplete="off"
+                      className="h-9 w-full rounded-lg border bg-transparent pl-8 pr-8 text-xs outline-none"
+                      style={{ borderColor: "var(--border)", color: "var(--text-primary)" }}
+                    />
+                    {searchLoading && (
+                      <Loader2 size={12} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin" style={{ color: "var(--text-muted)" }} />
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={addSymbol}
+                    aria-label="관심종목 추가"
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
+                    style={{ background: ACCENT, color: "#fff" }}
+                  >
+                    <Plus size={15} />
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={addSymbol}
-                  aria-label="관심종목 추가"
-                  className="flex h-9 w-9 items-center justify-center rounded-lg"
-                  style={{ background: ACCENT, color: "#fff" }}
-                >
-                  <Plus size={15} />
-                </button>
+
+                {dropdownOpen && searchResults.length > 0 && (
+                  <div
+                    className="absolute left-0 right-9 top-full z-50 mt-1 overflow-hidden rounded-xl"
+                    style={{ background: "var(--bg-card)", border: "1px solid var(--border)", boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}
+                  >
+                    {searchResults.map((result, index) => {
+                      const isFocused = focusedIndex === index;
+                      return (
+                        <button
+                          key={result.symbol}
+                          type="button"
+                          onPointerDown={(event) => { event.preventDefault(); selectResult(result); }}
+                          className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors"
+                          style={{ background: isFocused ? "rgba(255,255,255,0.08)" : "transparent" }}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-xs font-bold" style={{ color: "var(--text-primary)" }}>{result.name}</p>
+                            <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+                              {result.symbol} · {result.market}
+                            </p>
+                          </div>
+                          <Plus size={11} style={{ color: ACCENT, flexShrink: 0 }} />
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               <div className="flex-1 overflow-y-auto scrollbar-hide pr-0.5">

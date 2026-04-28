@@ -7,6 +7,7 @@ import {
   type StockQuote,
   type StockRankingItem,
   type StockRankingKind,
+  type StockSearchResult,
   type StockTheme,
 } from "@/lib/stocks/types";
 
@@ -400,4 +401,48 @@ export async function fetchStockOverview(
       message: error instanceof Error ? error.message : "한국거래소 데이터를 불러오지 못했습니다.",
     };
   }
+}
+
+// 1시간 TTL 모듈 캐시 — 검색 전용
+let _rowCache: { rows: Record<string, unknown>[]; expiry: number } | null = null;
+
+async function getCachedRows(config: KrxConfig): Promise<Record<string, unknown>[]> {
+  if (_rowCache && _rowCache.expiry > Date.now()) return _rowCache.rows;
+  const { rows } = await fetchLatestMarketRows(config);
+  _rowCache = { rows, expiry: Date.now() + 3_600_000 };
+  return rows;
+}
+
+export async function searchStocks(query: string, limit = 8): Promise<StockSearchResult[]> {
+  const config = readConfig();
+  const q = query.trim();
+  if (!config || !q) return [];
+
+  const rows = await getCachedRows(config);
+  const upper = q.toUpperCase();
+
+  const scored: (StockSearchResult & { score: number })[] = [];
+
+  for (const row of rows) {
+    const symbol = firstText(row, ["ISU_CD", "isuCd"]);
+    const name = firstText(row, ["ISU_ABBRV", "ISU_NM", "isuAbrv", "isuNm"]);
+    const market = firstText(row, ["MKT_NM", "_market", "mktNm"]) || "KRX";
+    if (!symbol || !name) continue;
+
+    const nameUpper = name.toUpperCase();
+    const symbolMatch = symbol === upper;
+    const symbolContains = symbol.includes(upper);
+    const nameStarts = nameUpper.startsWith(upper);
+    const nameContains = nameUpper.includes(upper);
+
+    if (!symbolMatch && !symbolContains && !nameContains) continue;
+
+    const score = symbolMatch ? 100 : nameStarts ? 60 : symbolContains ? 40 : 10;
+    scored.push({ symbol, name, market, score });
+  }
+
+  return scored
+    .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name, "ko"))
+    .slice(0, limit)
+    .map(({ symbol, name, market }) => ({ symbol, name, market }));
 }

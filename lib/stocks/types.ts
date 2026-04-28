@@ -58,6 +58,12 @@ export interface StockIpoItem {
   detailUrl?: string;
 }
 
+export interface StockSearchResult {
+  symbol: string;
+  name: string;
+  market: string;
+}
+
 export interface StockOverviewResponse {
   status: StockApiStatus;
   provider: string;
