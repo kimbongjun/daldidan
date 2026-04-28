@@ -11,7 +11,7 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { SortableContext, arrayMove, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { SortableContext, arrayMove, rectSortingStrategy } from "@dnd-kit/sortable";
 import Footer from "@/components/Footer";
 import Header from "@/components/Header";
 import BudgetWidget from "@/components/widgets/BudgetWidget";
@@ -24,14 +24,16 @@ import LottoWidget from "@/components/widgets/LottoWidget";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { SortableWidgetItem } from "@/components/home/SortableWidgetItem";
 import type { BlogPostSummary } from "@/lib/blog-shared";
-import type { SidebarWidgetId, FullWidgetId } from "@/store/useLayoutStore";
+import type { MainWidgetId, FullWidgetId } from "@/store/useLayoutStore";
 import { useLayoutStore } from "@/store/useLayoutStore";
+import type { CSSProperties } from "react";
 
 type DashboardShellProps = {
   initialBlogPosts: BlogPostSummary[];
 };
 
-const SIDEBAR_STYLES: Record<SidebarWidgetId, { minHeight: number }> = {
+const MAIN_STYLES: Record<MainWidgetId, CSSProperties> = {
+  blog:     { minHeight: 480, gridColumn: "span 2" },
   budget:   { minHeight: 460 },
   calendar: { minHeight: 520 },
   fortune:  { minHeight: 420 },
@@ -124,8 +126,8 @@ function BentoGrid({
   fortune: React.ReactNode;
   lotto: React.ReactNode;
 }) {
-  const { sidebarOrder, fullOrder, setSidebarOrder, setFullOrder } = useLayoutStore();
-  const [activeSidebarId, setActiveSidebarId] = useState<SidebarWidgetId | null>(null);
+  const { mainOrder, fullOrder, setMainOrder, setFullOrder } = useLayoutStore();
+  const [activeMainId, setActiveMainId] = useState<MainWidgetId | null>(null);
   const [activeFullId, setActiveFullId] = useState<FullWidgetId | null>(null);
 
   const sensors = useSensors(
@@ -136,8 +138,9 @@ function BentoGrid({
     void useLayoutStore.persist.rehydrate();
   }, []);
 
-  function getSidebarContent(id: SidebarWidgetId): React.ReactNode {
+  function getMainContent(id: MainWidgetId): React.ReactNode {
     switch (id) {
+      case "blog":     return blog;
       case "budget":   return <ErrorBoundary><BudgetWidget /></ErrorBoundary>;
       case "calendar": return <ErrorBoundary><CalendarWidget /></ErrorBoundary>;
       case "fortune":  return fortune;
@@ -152,17 +155,17 @@ function BentoGrid({
     }
   }
 
-  function handleSidebarDragStart({ active }: DragStartEvent) {
-    setActiveSidebarId(active.id as SidebarWidgetId);
+  function handleMainDragStart({ active }: DragStartEvent) {
+    setActiveMainId(active.id as MainWidgetId);
   }
 
-  function handleSidebarDragEnd({ active, over }: DragEndEvent) {
+  function handleMainDragEnd({ active, over }: DragEndEvent) {
     if (over && active.id !== over.id) {
-      const from = sidebarOrder.indexOf(active.id as SidebarWidgetId);
-      const to = sidebarOrder.indexOf(over.id as SidebarWidgetId);
-      setSidebarOrder(arrayMove(sidebarOrder, from, to));
+      const from = mainOrder.indexOf(active.id as MainWidgetId);
+      const to = mainOrder.indexOf(over.id as MainWidgetId);
+      setMainOrder(arrayMove(mainOrder, from, to));
     }
-    setActiveSidebarId(null);
+    setActiveMainId(null);
   }
 
   function handleFullDragStart({ active }: DragStartEvent) {
@@ -192,48 +195,34 @@ function BentoGrid({
           .bento-tablet  { display: none; }
           .bento-desktop { display: block; }
         }
-        .bento-desktop-cols {
-          display: grid;
-          gap: 1rem;
-          grid-template-columns: minmax(0,2fr) minmax(0,1fr);
-        }
       `}</style>
 
-      {/* ── 데스크톱 (≥1100px) ── */}
+      {/* ── 데스크톱 (≥1100px) — 3열 그리드, blog는 2칸 ── */}
       <div className="bento-desktop">
-        <div className="bento-desktop-cols">
-          {/* 좌: 블로그 고정 */}
-          <div style={{ minWidth: 0 }}>{blog}</div>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={handleMainDragStart}
+          onDragEnd={handleMainDragEnd}
+        >
+          <SortableContext items={mainOrder} strategy={rectSortingStrategy}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: "1rem" }}>
+              {mainOrder.map((id) => (
+                <SortableWidgetItem key={id} id={id} containerStyle={MAIN_STYLES[id]}>
+                  {getMainContent(id)}
+                </SortableWidgetItem>
+              ))}
+            </div>
+          </SortableContext>
+          <DragOverlay dropAnimation={{ duration: 180, easing: "ease" }}>
+            {activeMainId && (
+              <div style={{ opacity: 0.85, minHeight: (MAIN_STYLES[activeMainId] as { minHeight: number }).minHeight }}>
+                {getMainContent(activeMainId)}
+              </div>
+            )}
+          </DragOverlay>
+        </DndContext>
 
-          {/* 우: 사이드바 정렬 가능 */}
-          <div style={{ minWidth: 0 }}>
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragStart={handleSidebarDragStart}
-              onDragEnd={handleSidebarDragEnd}
-            >
-              <SortableContext items={sidebarOrder} strategy={verticalListSortingStrategy}>
-                <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-                  {sidebarOrder.map((id) => (
-                    <SortableWidgetItem key={id} id={id} containerStyle={SIDEBAR_STYLES[id]}>
-                      {getSidebarContent(id)}
-                    </SortableWidgetItem>
-                  ))}
-                </div>
-              </SortableContext>
-              <DragOverlay dropAnimation={{ duration: 180, easing: "ease" }}>
-                {activeSidebarId && (
-                  <div style={{ opacity: 0.85, ...SIDEBAR_STYLES[activeSidebarId] }}>
-                    {getSidebarContent(activeSidebarId)}
-                  </div>
-                )}
-              </DragOverlay>
-            </DndContext>
-          </div>
-        </div>
-
-        {/* 하단: 풀-와이드 정렬 가능 */}
         <div style={{ marginTop: "1rem" }}>
           <DndContext
             sensors={sensors}
@@ -241,7 +230,7 @@ function BentoGrid({
             onDragStart={handleFullDragStart}
             onDragEnd={handleFullDragEnd}
           >
-            <SortableContext items={fullOrder} strategy={verticalListSortingStrategy}>
+            <SortableContext items={fullOrder} strategy={rectSortingStrategy}>
               <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
                 {fullOrder.map((id) => (
                   <SortableWidgetItem key={id} id={id} containerStyle={FULL_STYLES[id]}>
@@ -261,33 +250,27 @@ function BentoGrid({
         </div>
       </div>
 
-      {/* ── 태블릿 (640–1099px) ── */}
+      {/* ── 태블릿 (640–1099px) — 2열 그리드, blog는 2칸(전체 폭) ── */}
       <div className="bento-tablet">
-        <div style={{ minWidth: 0, marginBottom: "1rem" }}>{blog}</div>
-
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
-          onDragStart={handleSidebarDragStart}
-          onDragEnd={handleSidebarDragEnd}
+          onDragStart={handleMainDragStart}
+          onDragEnd={handleMainDragEnd}
         >
-          <SortableContext items={sidebarOrder} strategy={verticalListSortingStrategy}>
-            <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-              {sidebarOrder.map((id) => (
-                <SortableWidgetItem
-                  key={`tablet-${id}`}
-                  id={id}
-                  containerStyle={SIDEBAR_STYLES[id]}
-                >
-                  {getSidebarContent(id)}
+          <SortableContext items={mainOrder} strategy={rectSortingStrategy}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0,1fr))", gap: "1rem" }}>
+              {mainOrder.map((id) => (
+                <SortableWidgetItem key={`tablet-${id}`} id={id} containerStyle={MAIN_STYLES[id]}>
+                  {getMainContent(id)}
                 </SortableWidgetItem>
               ))}
             </div>
           </SortableContext>
           <DragOverlay dropAnimation={{ duration: 180, easing: "ease" }}>
-            {activeSidebarId && (
-              <div style={{ opacity: 0.85, ...SIDEBAR_STYLES[activeSidebarId] }}>
-                {getSidebarContent(activeSidebarId)}
+            {activeMainId && (
+              <div style={{ opacity: 0.85, minHeight: (MAIN_STYLES[activeMainId] as { minHeight: number }).minHeight }}>
+                {getMainContent(activeMainId)}
               </div>
             )}
           </DragOverlay>
@@ -300,14 +283,10 @@ function BentoGrid({
             onDragStart={handleFullDragStart}
             onDragEnd={handleFullDragEnd}
           >
-            <SortableContext items={fullOrder} strategy={verticalListSortingStrategy}>
+            <SortableContext items={fullOrder} strategy={rectSortingStrategy}>
               <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
                 {fullOrder.map((id) => (
-                  <SortableWidgetItem
-                    key={`tablet-${id}`}
-                    id={id}
-                    containerStyle={FULL_STYLES[id]}
-                  >
+                  <SortableWidgetItem key={`tablet-full-${id}`} id={id} containerStyle={FULL_STYLES[id]}>
                     {getFullContent(id)}
                   </SortableWidgetItem>
                 ))}
@@ -326,17 +305,16 @@ function BentoGrid({
 
       {/* ── 모바일 (<640px) — 드래그 비활성 ── */}
       <div className="bento-mobile">
-        <div style={{ minWidth: 0 }}>{blog}</div>
-        <div style={{ minWidth: 0, minHeight: 460 }}>
-          <ErrorBoundary><BudgetWidget /></ErrorBoundary>
-        </div>
-        <div style={{ minWidth: 0, minHeight: 520 }}>
-          <ErrorBoundary><CalendarWidget /></ErrorBoundary>
-        </div>
-        <div style={{ minWidth: 0, minHeight: 420 }}>{fortune}</div>
-        <div style={{ minWidth: 0, minHeight: 380 }}>{lotto}</div>
-        <div style={{ minWidth: 0, height: 300 }}><FestivalWidget /></div>
-        <div style={{ minWidth: 0, height: 340 }}><RealEstateWidget /></div>
+        {mainOrder.map((id) => (
+          <div key={`mobile-${id}`} style={{ minWidth: 0, minHeight: (MAIN_STYLES[id] as { minHeight: number }).minHeight }}>
+            {getMainContent(id)}
+          </div>
+        ))}
+        {fullOrder.map((id) => (
+          <div key={`mobile-full-${id}`} style={{ minWidth: 0, ...FULL_STYLES[id] }}>
+            {getFullContent(id)}
+          </div>
+        ))}
       </div>
     </div>
   );
