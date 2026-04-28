@@ -42,7 +42,7 @@ const MAIN_STYLES: Record<MainWidgetId, CSSProperties> = {
 };
 
 const FULL_STYLES: Record<FullWidgetId, { height: number }> = {
-  stock:      { height: 380 },
+  stock:      { height: 760 },
   festival:   { height: 300 },
   realestate: { height: 340 },
 };

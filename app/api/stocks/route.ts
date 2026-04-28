@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { fetchStockOverview } from "@/lib/stocks/krx";
 import { STOCK_RANKING_KINDS, type StockRankingKind } from "@/lib/stocks/types";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+export const revalidate = 300; // 5분 — 모듈 캐시와 동일한 TTL
 
 function parseSymbols(value: string | null): string[] {
   if (!value) return [];
@@ -32,7 +31,7 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json(data, {
     headers: {
-      "Cache-Control": "no-store, max-age=0",
+      "Cache-Control": "public, s-maxage=300, stale-while-revalidate=60",
     },
   });
 }

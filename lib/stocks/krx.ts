@@ -92,6 +92,13 @@ function normalizeDate(value: string): string {
   return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}`;
 }
 
+function endOfDayTimestamp(baseDate: string): number {
+  const year = parseInt(baseDate.slice(0, 4), 10);
+  const month = parseInt(baseDate.slice(4, 6), 10) - 1;
+  const day = parseInt(baseDate.slice(6, 8), 10);
+  return new Date(year, month, day, 23, 59, 59, 999).getTime();
+}
+
 function toRows(data: KrxApiResponse): Record<string, unknown>[] {
   const rows = data.OutBlock_1 ?? data.output ?? [];
   return Array.isArray(rows) ? rows.filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null) : [];
@@ -138,6 +145,34 @@ async function fetchMarketRows(config: KrxConfig, baseDate: string): Promise<Rec
   return rows;
 }
 
+// 날짜별 마켓 rows 캐시 — 과거 날짜 데이터는 불변이므로 당일 자정까지 보존
+const _dateRowCache = new Map<string, { rows: Record<string, unknown>[]; expiry: number }>();
+const _dateRowFetching = new Map<string, Promise<Record<string, unknown>[]>>();
+
+async function getCachedMarketRows(config: KrxConfig, baseDate: string): Promise<Record<string, unknown>[]> {
+  const cached = _dateRowCache.get(baseDate);
+  if (cached && cached.expiry > Date.now()) return cached.rows;
+
+  const inflight = _dateRowFetching.get(baseDate);
+  if (inflight) return inflight;
+
+  const promise = fetchMarketRows(config, baseDate)
+    .then((rows) => {
+      if (rows.length > 0) {
+        _dateRowCache.set(baseDate, { rows, expiry: endOfDayTimestamp(baseDate) });
+      }
+      _dateRowFetching.delete(baseDate);
+      return rows;
+    })
+    .catch((err: unknown) => {
+      _dateRowFetching.delete(baseDate);
+      throw err;
+    });
+
+  _dateRowFetching.set(baseDate, promise);
+  return promise;
+}
+
 async function fetchLatestMarketRows(config: KrxConfig): Promise<{ baseDate: string; rows: Record<string, unknown>[] }> {
   const today = new Date();
   for (let offset = 0; offset < 14; offset += 1) {
@@ -146,8 +181,12 @@ async function fetchLatestMarketRows(config: KrxConfig): Promise<{ baseDate: str
     if (day === 0 || day === 6) continue;
 
     const baseDate = formatKrxDate(target);
-    const rows = await fetchMarketRows(config, baseDate);
-    if (rows.length > 0) return { baseDate, rows };
+    try {
+      const rows = await getCachedMarketRows(config, baseDate);
+      if (rows.length > 0) return { baseDate, rows };
+    } catch {
+      // 해당 날짜 데이터 없음, 다음 날짜 시도
+    }
   }
 
   throw new Error("최근 14일 안에 조회 가능한 KRX 일별 매매정보가 없습니다.");
@@ -155,22 +194,28 @@ async function fetchLatestMarketRows(config: KrxConfig): Promise<{ baseDate: str
 
 async function fetchHistory(config: KrxConfig, symbol: string, maxPoints = 18): Promise<number[]> {
   const today = new Date();
-  const values: number[] = [];
 
-  for (let offset = 0; offset < 45 && values.length < maxPoints; offset += 1) {
+  // 후보 거래일 수집 (주말 제외, 버퍼 포함)
+  const candidateDates: string[] = [];
+  for (let offset = 0; offset < 45 && candidateDates.length < maxPoints + 10; offset += 1) {
     const target = new Date(today.getTime() - offset * 86_400_000);
     const day = target.getDay();
     if (day === 0 || day === 6) continue;
+    candidateDates.push(formatKrxDate(target));
+  }
 
-    const baseDate = formatKrxDate(target);
-    try {
-      const rows = await fetchMarketRows(config, baseDate);
-      const row = rows.find((item) => firstText(item, ["ISU_CD", "isuCd"]) === symbol);
-      const close = row ? toNumber(row.TDD_CLSPRC ?? row.tddClsprc) : 0;
-      if (close > 0) values.push(close);
-    } catch {
-      // 휴장일 또는 미승인 시장 응답은 차트 보강에서만 건너뛴다.
-    }
+  // 캐시를 공유하는 병렬 fetch — 여러 심볼이 같은 날짜를 재사용
+  const results = await Promise.allSettled(
+    candidateDates.map((baseDate) => getCachedMarketRows(config, baseDate)),
+  );
+
+  const values: number[] = [];
+  for (let i = 0; i < results.length && values.length < maxPoints; i += 1) {
+    const result = results[i];
+    if (result.status !== "fulfilled" || result.value.length === 0) continue;
+    const row = result.value.find((item) => firstText(item, ["ISU_CD", "isuCd"]) === symbol);
+    const close = row ? toNumber(row.TDD_CLSPRC ?? row.tddClsprc) : 0;
+    if (close > 0) values.push(close);
   }
 
   return values.reverse();
@@ -328,6 +373,13 @@ function emptyRankings(): Record<StockRankingKind, StockRankingItem[]> {
   };
 }
 
+// 5분 TTL 모듈 캐시 — fetchStockOverview 결과 캐싱
+const _overviewCache = new Map<string, { data: StockOverviewResponse; expiry: number }>();
+
+function makeOverviewCacheKey(symbols: string[], kinds: StockRankingKind[]): string {
+  return `${[...symbols].sort().join(",")}_${[...kinds].sort().join(",")}`;
+}
+
 export async function fetchStockOverview(
   requestedSymbols: string[],
   requestedRankingKinds: StockRankingKind[] = [...STOCK_RANKING_KINDS],
@@ -349,6 +401,11 @@ export async function fetchStockOverview(
       message: "KRX_OPENAPI_KEY 또는 KRX_AUTH_KEY를 설정해야 한국거래소 일별 매매정보를 조회할 수 있습니다.",
     };
   }
+
+  // 5분 캐시 확인
+  const cacheKey = makeOverviewCacheKey(symbols, requestedRankingKinds);
+  const cachedOverview = _overviewCache.get(cacheKey);
+  if (cachedOverview && cachedOverview.expiry > Date.now()) return cachedOverview.data;
 
   try {
     const { baseDate, rows } = await fetchLatestMarketRows(config);
@@ -376,7 +433,7 @@ export async function fetchStockOverview(
       errors.push(`listing: ${error instanceof Error ? error.message : "상장정보 조회 실패"}`);
     }
 
-    return {
+    const overviewResult: StockOverviewResponse = {
       status: "live",
       provider: "KRX Open API",
       fetchedAt: new Date().toISOString(),
@@ -388,6 +445,10 @@ export async function fetchStockOverview(
       ipos,
       ...(errors.length > 0 ? { errors, message: errors[0] } : {}),
     };
+
+    // 성공 결과만 캐시 저장 (5분)
+    _overviewCache.set(cacheKey, { data: overviewResult, expiry: Date.now() + 300_000 });
+    return overviewResult;
   } catch (error) {
     return {
       status: "error",

@@ -16,8 +16,8 @@ export async function GET() {
   });
 
   const swContent = `
-importScripts('https://www.gstatic.com/firebasejs/10.14.0/firebase-app-compat.js');
-importScripts('https://www.gstatic.com/firebasejs/10.14.0/firebase-messaging-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/11.0.0/firebase-app-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/11.0.0/firebase-messaging-compat.js');
 
 // SW 수명 주기: 새 버전이 있으면 waiting 없이 즉시 활성화
 // iOS에서 SW가 "waiting" 상태에 걸려 토큰 수집이 안 되는 문제 해결
