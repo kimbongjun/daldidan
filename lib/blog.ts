@@ -16,7 +16,8 @@ function mapSummary(post: {
   blog_comments?: { created_at: string }[] | null;
   category?: string | null;
 }): BlogPostSummary {
-  const fallbackThumbnail = extractFirstImageFromHtml(post.content_html ?? "");
+  // DB에 thumbnail_url이 있으면 HTML 파싱 생략 (성능)
+  const fallbackThumbnail = post.thumbnail_url ? null : extractFirstImageFromHtml(post.content_html ?? "");
   const comments = post.blog_comments ?? [];
   const latestCommentAt = comments.length > 0
     ? comments.reduce((latest, c) => c.created_at > latest ? c.created_at : latest, comments[0].created_at)

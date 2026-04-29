@@ -16,6 +16,8 @@
 | `POST` | `/api/blog/images` | 이미지 업로드 | Form: `image` |
 | `POST` | `/api/blog/views` | 조회수 증가 | Body: `{ slug }` |
 | `GET` | `/api/blog/alarm` | 알림 구독 상태 | `?post_id=&email=` |
+| `GET` | `/api/blog/thumbnails/batch` | 썸네일 없는 글 수 조회 | 인증 필요 → `{ remaining: N }` |
+| `POST` | `/api/blog/thumbnails/batch` | 일괄 썸네일 자동 생성 | Body: `{ batchSize?: 1-5 }` → `{ processed, failed, remaining }` |
 
 ---
 

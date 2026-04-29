@@ -2,9 +2,10 @@ import { after, NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { ensureUniqueBlogSlug, extractFirstImageFromHtml, getPublishedBlogPosts } from "@/lib/blog";
 import { extractDescriptionFromHtml } from "@/lib/blog-shared";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { sendBlogPublishNotification } from "@/lib/resend";
 import { sendPushToAllSubscribers } from "@/lib/push-notification";
+import { generateAutoThumbnail } from "@/lib/blog-thumbnail";
 
 export const runtime = "nodejs";
 
@@ -82,19 +83,35 @@ export async function POST(request: NextRequest) {
   revalidatePath(`/blog/${slug}`);
 
   after(async () => {
+    // 썸네일 없으면 자동 생성 후 DB 업데이트
+    let finalThumbnail = resolvedThumbnail;
+    if (!resolvedThumbnail) {
+      const autoThumb = await generateAutoThumbnail(title, contentHtml, slug);
+      if (autoThumb) {
+        const adminClient = createAdminClient();
+        await adminClient
+          .from("blog_posts")
+          .update({ thumbnail_url: autoThumb })
+          .eq("slug", slug);
+        finalThumbnail = autoThumb;
+        revalidatePath("/blog");
+        revalidatePath(`/blog/${slug}`);
+      }
+    }
+
     await Promise.allSettled([
       sendBlogPublishNotification({
         title,
         description,
         slug,
         authorName,
-        thumbnailUrl: resolvedThumbnail,
+        thumbnailUrl: finalThumbnail,
       }),
       sendPushToAllSubscribers({
         title,
         body: description || "새 글을 확인해보세요.",
         url: `/blog/${encodeURIComponent(slug)}`,
-        icon: resolvedThumbnail ?? undefined,
+        icon: finalThumbnail ?? undefined,
         origin: request.nextUrl.origin,
       }),
     ]);
@@ -173,6 +190,23 @@ export async function PATCH(request: NextRequest) {
   revalidatePath("/blog");
   revalidatePath(`/blog/${existing.slug}`);
   revalidatePath(`/blog/${slug}`);
+
+  // 본문에 이미지 없으면 자동 썸네일 생성 (비동기)
+  if (!resolvedThumbnail) {
+    const capturedId = id;
+    const capturedSlug = slug;
+    after(async () => {
+      const autoThumb = await generateAutoThumbnail(title, contentHtml, capturedSlug);
+      if (!autoThumb) return;
+      const adminClient = createAdminClient();
+      await adminClient
+        .from("blog_posts")
+        .update({ thumbnail_url: autoThumb })
+        .eq("id", capturedId);
+      revalidatePath("/blog");
+      revalidatePath(`/blog/${capturedSlug}`);
+    });
+  }
 
   return NextResponse.json({ slug }, { status: 200 });
 }

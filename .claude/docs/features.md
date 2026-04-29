@@ -11,8 +11,25 @@
   → 임시저장 (로컬스토리지)
   → 발행: POST /api/blog/posts
     → 썸네일 자동 추출 (첫 이미지)
-    → 발행 성공 → 구독자에게 푸시 알림 broadcast
+    → 발행 성공 → after() 비동기:
+        1) 이미지 없으면 generateAutoThumbnail(title, html, slug):
+           - Pollinations.ai AI 이미지 (28s timeout)
+           - Unsplash Source 스톡 사진 (12s timeout)
+           - Picsum Photos 슬러그 seed 폴백 (항상 성공)
+           - 성공 시 Supabase Storage 업로드 → DB 업데이트
+        2) 구독자에게 이메일 + 푸시 알림 broadcast
     → /blog/[slug] 로 이동
+```
+
+### 기존 글 썸네일 일괄 생성
+```
+/blog 페이지 → ThumbnailBatchButton (로그인 시에만 표시)
+  → GET /api/blog/thumbnails/batch → remaining 카운트
+  → 버튼 클릭 → POST /api/blog/thumbnails/batch (batchSize=3) 반복
+    → thumbnail_url IS NULL인 글 최대 3개 처리
+    → extractFirstImageFromHtml → generateAutoThumbnail 순으로 시도
+    → DB 업데이트 + revalidatePath
+    → remaining=0 까지 루프 반복
 ```
 
 ### 영수증 OCR

@@ -31,6 +31,13 @@ import {
   type StockTheme,
   type WatchlistItem,
 } from "@/lib/stocks/types";
+import {
+  sanitizeSymbol,
+  sanitizeIndexSymbol,
+  formatPrice,
+  formatVolume,
+  formatTradingValue,
+} from "@/lib/stocks/utils";
 
 const ACCENT = "#F43F5E";
 const DOWN = "#10B981";
@@ -53,35 +60,6 @@ const RANK_META: Record<StockRankingKind, { label: string; icon: React.ReactNode
   fall: { label: "급하락", icon: <TrendingDown size={11} /> },
   popular: { label: "인기", icon: <Star size={11} /> },
 };
-
-function sanitizeSymbol(value: string): string | null {
-  const symbol = value.trim().toUpperCase();
-  return /^Q?\d{6}$/.test(symbol) ? symbol : null;
-}
-
-function sanitizeIndexSymbol(value: string): string | null {
-  const sym = value.trim().toUpperCase();
-  return /^IDX_\d+$/.test(sym) ? sym : null;
-}
-
-function formatPrice(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) return "-";
-  return value.toLocaleString();
-}
-
-function formatVolume(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) return "-";
-  if (value >= 100_000_000) return `${(value / 100_000_000).toFixed(1)}억주`;
-  if (value >= 10_000) return `${Math.round(value / 10_000).toLocaleString()}만주`;
-  return `${value.toLocaleString()}주`;
-}
-
-function formatTradingValue(value: number): string {
-  if (!Number.isFinite(value) || value <= 0) return "-";
-  if (value >= 1_000_000_000_000) return `${(value / 1_000_000_000_000).toFixed(1)}조`;
-  if (value >= 100_000_000) return `${Math.round(value / 100_000_000).toLocaleString()}억`;
-  return `${Math.round(value / 10_000).toLocaleString()}만`;
-}
 
 function formatDateTime(value?: string): string {
   if (!value) return "";
