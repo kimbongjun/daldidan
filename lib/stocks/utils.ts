@@ -2,7 +2,7 @@
 
 export function sanitizeSymbol(value: string): string | null {
   const symbol = value.trim().toUpperCase();
-  return /^Q?\d{6}$/.test(symbol) ? symbol : null;
+  return /^Q?\d{6}$/.test(symbol) || /^[A-Z0-9]{6}$/.test(symbol) ? symbol : null;
 }
 
 export function sanitizeIndexSymbol(value: string): string | null {

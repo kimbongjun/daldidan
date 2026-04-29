@@ -16,6 +16,10 @@ describe("sanitizeSymbol", () => {
     expect(sanitizeSymbol("Q263750")).toBe("Q263750");
   });
 
+  it("accepts alphanumeric ETF short codes", () => {
+    expect(sanitizeSymbol("0184E0")).toBe("0184E0");
+  });
+
   it("uppercases the result", () => {
     expect(sanitizeSymbol("q263750")).toBe("Q263750");
   });
@@ -24,7 +28,7 @@ describe("sanitizeSymbol", () => {
     expect(sanitizeSymbol("  005930  ")).toBe("005930");
   });
 
-  it("rejects non-numeric codes", () => {
+  it("rejects symbols outside KRX short-code shape", () => {
     expect(sanitizeSymbol("AAPL")).toBeNull();
   });
 

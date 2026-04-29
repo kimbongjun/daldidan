@@ -22,13 +22,19 @@ const MARKET_ENDPOINTS = [
   { market: "KONEX", tradePath: "/svc/apis/sto/knx_bydd_trd", basePath: "/svc/apis/sto/knx_isu_base_info" },
 ] as const;
 
-const ETF_ENDPOINT = { market: "ETF", tradePath: "/svc/apis/etf/etf_bydd_trd" } as const;
+const ETF_ENDPOINT = { market: "ETF", tradePath: "/svc/apis/etp/etf_bydd_trd" } as const;
 
-const MAJOR_INDICES: { code: string; symbol: string; name: string }[] = [
-  { code: "1", symbol: "IDX_1", name: "KOSPI 종합" },
-  { code: "2", symbol: "IDX_2", name: "KOSDAQ 종합" },
-  { code: "4", symbol: "IDX_4", name: "KOSPI 200" },
-  { code: "5", symbol: "IDX_5", name: "KRX 300" },
+const INDEX_ENDPOINTS = [
+  { market: "KRX", tradePath: "/svc/apis/idx/krx_dd_trd" },
+  { market: "KOSPI", tradePath: "/svc/apis/idx/kospi_dd_trd" },
+  { market: "KOSDAQ", tradePath: "/svc/apis/idx/kosdaq_dd_trd" },
+] as const;
+
+const MAJOR_INDICES: { code: string; symbol: string; name: string; aliases: string[] }[] = [
+  { code: "1", symbol: "IDX_1", name: "KOSPI 종합", aliases: ["KOSPI", "코스피", "코스피지수"] },
+  { code: "2", symbol: "IDX_2", name: "KOSDAQ 종합", aliases: ["KOSDAQ", "코스닥", "코스닥지수"] },
+  { code: "4", symbol: "IDX_4", name: "KOSPI 200", aliases: ["KOSPI 200", "코스피 200"] },
+  { code: "5", symbol: "IDX_5", name: "KRX 300", aliases: ["KRX 300"] },
 ];
 
 const STATIC_INDEX_RESULTS: StockSearchResult[] = [
@@ -48,6 +54,10 @@ type KrxConfig = {
 type KrxApiResponse = {
   OutBlock_1?: Record<string, unknown>[];
   output?: Record<string, unknown>[];
+};
+
+type NaverIntegrationResponse = {
+  totalInfos?: { code?: string; value?: string }[];
 };
 
 function readConfig(): KrxConfig | null {
@@ -79,7 +89,7 @@ export function defaultStockSymbols(): string[] {
 
 function sanitizeSymbol(value: string): string | null {
   const symbol = value.trim().toUpperCase();
-  if (/^\d{6}$/.test(symbol)) return symbol;
+  if (/^Q?\d{6}$/.test(symbol) || /^[A-Z0-9]{6}$/.test(symbol)) return symbol;
   return null;
 }
 
@@ -99,6 +109,33 @@ function toNumber(value: unknown): number {
   if (!normalized || normalized === "-") return 0;
   const num = Number(normalized);
   return Number.isFinite(num) ? num : 0;
+}
+
+function infoValue(items: { code?: string; value?: string }[], code: string): string {
+  return items.find((item) => item.code === code)?.value?.trim() ?? "";
+}
+
+async function fetchNaverIntegration(symbol: string): Promise<Partial<StockQuote>> {
+  const res = await fetch(`https://m.stock.naver.com/api/stock/${encodeURIComponent(symbol)}/integration`, {
+    method: "GET",
+    headers: { accept: "application/json" },
+    cache: "no-store",
+    signal: AbortSignal.timeout(5_000),
+  });
+  if (!res.ok) throw new Error(`Naver integration HTTP ${res.status}`);
+  const data = (await res.json()) as NaverIntegrationResponse;
+  const infos = Array.isArray(data.totalInfos) ? data.totalInfos : [];
+  const high52 = toNumber(infoValue(infos, "highPriceOf52Weeks"));
+  const low52 = toNumber(infoValue(infos, "lowPriceOf52Weeks"));
+  return {
+    ...(high52 > 0 ? { fiftyTwoWeekHigh: high52 } : {}),
+    ...(low52 > 0 ? { fiftyTwoWeekLow: low52 } : {}),
+    per: infoValue(infos, "per") || infoValue(infos, "cnsPer"),
+    pbr: infoValue(infos, "pbr"),
+    eps: infoValue(infos, "eps") || infoValue(infos, "cnsEps"),
+    dividendYield: infoValue(infos, "dividendYieldRatio"),
+    foreignRate: infoValue(infos, "foreignRate"),
+  };
 }
 
 function firstText(record: Record<string, unknown>, keys: string[]): string {
@@ -187,21 +224,103 @@ async function fetchEtfRows(config: KrxConfig, baseDate: string): Promise<Record
 
 async function fetchIndexQuotes(config: KrxConfig, baseDate: string, indexCodes: string[]): Promise<StockQuote[]> {
   if (indexCodes.length === 0) return [];
+  const wanted = new Set(indexCodes);
   const results = await Promise.allSettled(
-    indexCodes.map(async (code) => {
-      const rows = await krxGet(config, "/svc/apis/idx/idx_ind_dd_trd", { basDd: baseDate, idxIndCd: code });
+    INDEX_ENDPOINTS.map(async ({ tradePath }) => {
+      const rows = await krxGet(config, tradePath, { basDd: baseDate });
       return rows.flatMap((row) => {
-        const quote = mapIndexQuote(row, baseDate, code);
-        return quote.price > 0 ? [quote] : [];
+        const quote = mapIndexQuote(row, baseDate);
+        if (!quote.symbol || quote.price <= 0) return [];
+        const code = quote.symbol.replace("IDX_", "");
+        return wanted.has(code) ? [quote] : [];
       });
     }),
   );
-  return results.flatMap((result) => (result.status === "fulfilled" ? result.value : []));
+  const seen = new Set<string>();
+  return results
+    .flatMap((result) => (result.status === "fulfilled" ? result.value : []))
+    .filter((quote) => {
+      if (seen.has(quote.symbol)) return false;
+      seen.add(quote.symbol);
+      return true;
+    });
+}
+
+function stripHtml(value: string): string {
+  return value.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+}
+
+async function fetchMainPageIndexQuotes(baseDate: string, indexCodes: string[]): Promise<StockQuote[]> {
+  if (indexCodes.length === 0) return [];
+  const wanted = new Set(indexCodes);
+  const response = await fetch("https://indices.krx.co.kr/main/main.jsp", {
+    method: "GET",
+    headers: { accept: "text/html" },
+    cache: "no-store",
+    signal: AbortSignal.timeout(8_000),
+  });
+  if (!response.ok) throw new Error(`KRX index fallback HTTP ${response.status}`);
+  const html = await response.text();
+  const results: StockQuote[] = [];
+  const blockRe = /<div class="index-info_wap">([\s\S]*?)<\/div>\s*<\/div>\s*<\/div>/g;
+  let match: RegExpExecArray | null;
+  while ((match = blockRe.exec(html)) !== null) {
+    const block = match[1];
+    const name = stripHtml(block.match(/<span class="index-name">([\s\S]*?)<\/span>/)?.[1] ?? "");
+    if (!name) continue;
+    const meta = MAJOR_INDICES.find((idx) => idx.aliases.some((alias) => alias.toUpperCase() === name.toUpperCase()));
+    if (!meta || !wanted.has(meta.code)) continue;
+
+    const price = toNumber(stripHtml(block.match(/<span class="index-price">([\s\S]*?)<\/span>/)?.[1] ?? ""));
+    const changeText = stripHtml(block.match(/<span class="index-(?:up|down|same)">([\s\S]*?)<\/span>/)?.[1] ?? "");
+    const sign = changeText.includes("▼") ? -1 : 1;
+    const numbers = changeText.match(/[\d,.]+/g) ?? [];
+    const change = sign * toNumber(numbers[0] ?? "0");
+    const changePct = sign * toNumber(numbers[1] ?? "0");
+    if (price <= 0) continue;
+
+    results.push({
+      symbol: meta.symbol,
+      name: meta.name,
+      market: "KRX",
+      assetType: "index",
+      price,
+      change,
+      changePct,
+      volume: 0,
+      tradingValue: 0,
+      open: 0,
+      high: Math.max(price, price - change),
+      low: Math.min(price, price - change),
+      previousClose: price - change,
+      sparkline: [],
+      fetchedAt: new Date().toISOString(),
+      baseDate: normalizeDate(baseDate),
+      source: "KRX",
+    });
+  }
+  return results;
+}
+
+async function fetchIndexQuotesWithFallback(config: KrxConfig, baseDate: string, indexCodes: string[]): Promise<StockQuote[]> {
+  const requested = [...new Set(indexCodes)].filter((code) => /^\d+$/.test(code));
+  if (requested.length === 0) return [];
+  const openApiQuotes = await fetchIndexQuotes(config, baseDate, requested);
+  const missing = requested.filter((code) => !openApiQuotes.some((quote) => quote.symbol === `IDX_${code}`));
+  if (missing.length === 0) return openApiQuotes;
+  try {
+    const fallbackQuotes = await fetchMainPageIndexQuotes(baseDate, missing);
+    return [...openApiQuotes, ...fallbackQuotes];
+  } catch {
+    return openApiQuotes;
+  }
 }
 
 // 날짜별 마켓 rows 캐시 — 과거 날짜 데이터는 불변이므로 당일 자정까지 보존
 const _dateRowCache = new Map<string, { rows: Record<string, unknown>[]; expiry: number }>();
 const _dateRowFetching = new Map<string, Promise<Record<string, unknown>[]>>();
+const _dateEtfRowCache = new Map<string, { rows: Record<string, unknown>[]; expiry: number }>();
+const _dateEtfRowFetching = new Map<string, Promise<Record<string, unknown>[]>>();
 
 async function getCachedMarketRows(config: KrxConfig, baseDate: string): Promise<Record<string, unknown>[]> {
   const cached = _dateRowCache.get(baseDate);
@@ -227,6 +346,30 @@ async function getCachedMarketRows(config: KrxConfig, baseDate: string): Promise
   return promise;
 }
 
+async function getCachedEtfRows(config: KrxConfig, baseDate: string): Promise<Record<string, unknown>[]> {
+  const cached = _dateEtfRowCache.get(baseDate);
+  if (cached && cached.expiry > Date.now()) return cached.rows;
+
+  const inflight = _dateEtfRowFetching.get(baseDate);
+  if (inflight) return inflight;
+
+  const promise = fetchEtfRows(config, baseDate)
+    .then((rows) => {
+      if (rows.length > 0) {
+        _dateEtfRowCache.set(baseDate, { rows, expiry: endOfDayTimestamp(baseDate) });
+      }
+      _dateEtfRowFetching.delete(baseDate);
+      return rows;
+    })
+    .catch((err: unknown) => {
+      _dateEtfRowFetching.delete(baseDate);
+      throw err;
+    });
+
+  _dateEtfRowFetching.set(baseDate, promise);
+  return promise;
+}
+
 async function fetchLatestMarketRows(config: KrxConfig): Promise<{ baseDate: string; rows: Record<string, unknown>[] }> {
   const today = new Date();
   for (let offset = 0; offset < 14; offset += 1) {
@@ -246,7 +389,7 @@ async function fetchLatestMarketRows(config: KrxConfig): Promise<{ baseDate: str
   throw new Error("최근 14일 안에 조회 가능한 KRX 일별 매매정보가 없습니다.");
 }
 
-async function fetchHistory(config: KrxConfig, symbol: string, maxPoints = 10): Promise<number[]> {
+async function fetchHistory(config: KrxConfig, symbol: string, assetType: AssetType = "stock", maxPoints = 10): Promise<number[]> {
   const today = new Date();
 
   // 후보 거래일 수집 (주말 제외, 버퍼 포함)
@@ -260,7 +403,7 @@ async function fetchHistory(config: KrxConfig, symbol: string, maxPoints = 10): 
 
   // 캐시를 공유하는 병렬 fetch — 여러 심볼이 같은 날짜를 재사용
   const results = await Promise.allSettled(
-    candidateDates.map((baseDate) => getCachedMarketRows(config, baseDate)),
+    candidateDates.map((baseDate) => assetType === "etf" ? getCachedEtfRows(config, baseDate) : getCachedMarketRows(config, baseDate)),
   );
 
   const values: number[] = [];
@@ -279,6 +422,8 @@ function mapQuote(record: Record<string, unknown>, baseDate: string, assetType: 
   const symbol = firstText(record, ["ISU_CD", "isuCd"]);
   const change = toNumber(record.CMPPREVDD_PRC ?? record.cmpprevddPrc);
   const price = toNumber(record.TDD_CLSPRC ?? record.tddClsprc);
+  const high = toNumber(record.TDD_HGPRC ?? record.tddHgprc);
+  const low = toNumber(record.TDD_LWPRC ?? record.tddLwprc);
 
   return {
     symbol,
@@ -291,24 +436,37 @@ function mapQuote(record: Record<string, unknown>, baseDate: string, assetType: 
     volume: toNumber(record.ACC_TRDVOL ?? record.accTrdvol),
     tradingValue: toNumber(record.ACC_TRDVAL ?? record.accTrdval),
     open: toNumber(record.TDD_OPNPRC ?? record.tddOpnprc),
-    high: toNumber(record.TDD_HGPRC ?? record.tddHgprc),
-    low: toNumber(record.TDD_LWPRC ?? record.tddLwprc),
+    high,
+    low,
     previousClose: price - change,
     sparkline: [],
+    fiftyTwoWeekHigh: Math.max(price, high),
+    fiftyTwoWeekLow: Math.min(price, low || price),
+    marketCap: toNumber(record.MKTCAP ?? record.mktcap),
+    listedShares: toNumber(record.LIST_SHRS ?? record.listShrs),
+    nav: toNumber(record.NAV ?? record.nav),
+    aum: toNumber(record.INVSTASST_NETASST_TOTAMT ?? record.invstasstNetasstTotamt),
+    underlyingIndex: firstText(record, ["IDX_IND_NM", "idxIndNm"]),
     fetchedAt: new Date().toISOString(),
     baseDate: normalizeDate(baseDate),
     source: "KRX",
   };
 }
 
-function mapIndexQuote(record: Record<string, unknown>, baseDate: string, indexCode: string): StockQuote {
-  const change = toNumber(record.CMPPREVDD_IDX ?? record.cmpprevddIdx);
-  const price = toNumber(record.CLSPRC_IDX ?? record.clsprcIdx);
-  const idx = MAJOR_INDICES.find((i) => i.code === indexCode);
+function mapIndexQuote(record: Record<string, unknown>, baseDate: string): StockQuote {
+  const rawName = firstText(record, ["IDX_NM", "IDX_IND_NM", "idxNm", "idxIndNm"]);
+  const idx = MAJOR_INDICES.find((i) => {
+    const upperName = rawName.toUpperCase();
+    return i.aliases.some((alias) => alias.toUpperCase() === upperName);
+  });
+  const change = toNumber(record.CMPPREVDD_IDX ?? record.cmpprevddIdx ?? record.CMPPREVDD_PRC ?? record.cmpprevddPrc);
+  const price = toNumber(record.CLSPRC_IDX ?? record.clsprcIdx ?? record.TDD_CLSPRC ?? record.tddClsprc);
+  const high = toNumber(record.HGPRC_IDX ?? record.hgprcIdx ?? record.TDD_HGPRC ?? record.tddHgprc);
+  const low = toNumber(record.LWPRC_IDX ?? record.lwprcIdx ?? record.TDD_LWPRC ?? record.tddLwprc);
 
   return {
-    symbol: `IDX_${indexCode}`,
-    name: firstText(record, ["IDX_IND_NM", "idxIndNm"]) || idx?.name || `IDX_${indexCode}`,
+    symbol: idx?.symbol ?? "",
+    name: idx?.name ?? rawName,
     market: "KRX",
     assetType: "index",
     price,
@@ -317,10 +475,12 @@ function mapIndexQuote(record: Record<string, unknown>, baseDate: string, indexC
     volume: toNumber(record.ACC_TRDVOL ?? record.accTrdvol),
     tradingValue: toNumber(record.ACC_TRDVAL ?? record.accTrdval),
     open: toNumber(record.OPNPRC_IDX ?? record.opnprcIdx),
-    high: toNumber(record.HGPRC_IDX ?? record.hgprcIdx),
-    low: toNumber(record.LWPRC_IDX ?? record.lwprcIdx),
+    high,
+    low,
     previousClose: price - change,
     sparkline: [],
+    fiftyTwoWeekHigh: Math.max(price, high),
+    fiftyTwoWeekLow: Math.min(price, low || price),
     fetchedAt: new Date().toISOString(),
     baseDate: normalizeDate(baseDate),
     source: "KRX",
@@ -437,6 +597,7 @@ function buildThemes(rankings: Record<StockRankingKind, StockRankingItem[]>): St
       count: matches.length,
       avgChangePct,
       leaders: matches.slice(0, 3).map((item) => item.name),
+      members: matches.slice(0, 8),
       tone: avgChangePct > 0.5 ? "hot" : avgChangePct < -0.5 ? "cool" : "neutral",
     } satisfies StockTheme;
   })
@@ -459,7 +620,7 @@ function emptyRankings(): Record<StockRankingKind, StockRankingItem[]> {
 const _overviewCache = new Map<string, { data: StockOverviewResponse; expiry: number }>();
 
 function makeOverviewCacheKey(items: WatchlistItem[], kinds: StockRankingKind[], noSparkline = false): string {
-  const itemKey = [...items].sort((a, b) => a.symbol.localeCompare(b.symbol)).map((i) => `${i.symbol}:${i.assetType}`).join(",");
+  const itemKey = items.map((i) => `${i.symbol}:${i.assetType}`).join(",");
   return `${itemKey}_${[...kinds].sort().join(",")}_ns${noSparkline ? 1 : 0}`;
 }
 
@@ -480,6 +641,7 @@ export async function fetchStockOverview(
       fetchedAt,
       marketDivCode: "KRX",
       quotes: [],
+      marketIndices: [],
       rankings: emptyRankings(),
       themes: [],
       ipos: [],
@@ -513,11 +675,13 @@ export async function fetchStockOverview(
       .map((symbol) => quoteMap.get(symbol))
       .filter((quote): quote is StockQuote => Boolean(quote));
 
-    // 지수 watchlist
-    const indexCodes = resolvedItems
+    // 지수 watchlist + 관심 탭 상단 고정 지수
+    const requestedIndexCodes = resolvedItems
       .filter((item) => item.assetType === "index")
       .map((item) => item.symbol.replace("IDX_", ""))
       .filter((code) => /^\d+$/.test(code));
+    const fixedIndexCodes = ["1", "2"];
+    const indexCodes = [...new Set([...fixedIndexCodes, ...requestedIndexCodes])];
 
     // 스파크라인 — noSparkline 모드면 스킵해서 빠르게 반환
     let quotesWithHistory: StockQuote[];
@@ -525,24 +689,36 @@ export async function fetchStockOverview(
     if (options.noSparkline) {
       quotesWithHistory = stockEtfQuotes.map((quote) => ({ ...quote, sparkline: [] }));
     } else {
-      const historyResults = await Promise.allSettled(stockEtfQuotes.map((quote) => fetchHistory(config, quote.symbol)));
+      const historyResults = await Promise.allSettled(stockEtfQuotes.map((quote) => fetchHistory(config, quote.symbol, quote.assetType)));
       quotesWithHistory = stockEtfQuotes.map((quote, index) => ({
         ...quote,
         sparkline: historyResults[index]?.status === "fulfilled" ? historyResults[index].value : [],
+        fiftyTwoWeekHigh: Math.max(quote.fiftyTwoWeekHigh ?? quote.price, ...(historyResults[index]?.status === "fulfilled" ? historyResults[index].value : [])),
+        fiftyTwoWeekLow: Math.min(quote.fiftyTwoWeekLow ?? quote.price, ...(historyResults[index]?.status === "fulfilled" ? historyResults[index].value : [])),
       }));
       historyResults.forEach((result, index) => {
         if (result.status === "rejected") {
           errors.push(`${stockEtfQuotes[index].symbol}: ${result.reason instanceof Error ? result.reason.message : "차트 조회 실패"}`);
         }
       });
+      const integrationResults = await Promise.allSettled(stockEtfQuotes.map((quote) => fetchNaverIntegration(quote.symbol)));
+      quotesWithHistory = quotesWithHistory.map((quote, index) => ({
+        ...quote,
+        ...(integrationResults[index]?.status === "fulfilled" ? integrationResults[index].value : {}),
+      }));
     }
 
     // 지수 quotes
-    const indexQuotes = await fetchIndexQuotes(config, baseDate, indexCodes);
+    const indexQuotes = await fetchIndexQuotesWithFallback(config, baseDate, indexCodes);
+    const marketIndices = indexQuotes
+      .filter((quote) => fixedIndexCodes.includes(quote.symbol.replace("IDX_", "")))
+      .sort((a, b) => fixedIndexCodes.indexOf(a.symbol.replace("IDX_", "")) - fixedIndexCodes.indexOf(b.symbol.replace("IDX_", "")));
 
     // watchlist 순서 유지 (주식/ETF → 지수)
     const symbolOrder = new Map(resolvedItems.map((item, i) => [item.symbol, i]));
-    const allWatchlistQuotes = [...quotesWithHistory, ...indexQuotes].sort((a, b) => {
+    const requestedIndexSymbols = new Set(resolvedItems.filter((item) => item.assetType === "index").map((item) => item.symbol));
+    const watchlistIndexQuotes = indexQuotes.filter((quote) => requestedIndexSymbols.has(quote.symbol));
+    const allWatchlistQuotes = [...quotesWithHistory, ...watchlistIndexQuotes].sort((a, b) => {
       const ia = symbolOrder.get(a.symbol) ?? 999;
       const ib = symbolOrder.get(b.symbol) ?? 999;
       return ia - ib;
@@ -564,6 +740,7 @@ export async function fetchStockOverview(
       baseDate: normalizeDate(baseDate),
       marketDivCode: "KRX",
       quotes: allWatchlistQuotes,
+      marketIndices,
       rankings,
       themes: buildThemes(rankings),
       ipos,
@@ -580,6 +757,7 @@ export async function fetchStockOverview(
       fetchedAt: new Date().toISOString(),
       marketDivCode: "KRX",
       quotes: [],
+      marketIndices: [],
       rankings: emptyRankings(),
       themes: [],
       ipos: [],

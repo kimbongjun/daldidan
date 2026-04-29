@@ -26,6 +26,18 @@ export interface StockQuote {
   low: number;
   previousClose: number;
   sparkline: number[];
+  fiftyTwoWeekHigh?: number;
+  fiftyTwoWeekLow?: number;
+  marketCap?: number;
+  listedShares?: number;
+  nav?: number;
+  aum?: number;
+  underlyingIndex?: string;
+  per?: string;
+  pbr?: string;
+  eps?: string;
+  dividendYield?: string;
+  foreignRate?: string;
   fetchedAt: string;
   baseDate: string;
   source: "KRX";
@@ -50,6 +62,7 @@ export interface StockTheme {
   count: number;
   avgChangePct: number;
   leaders: string[];
+  members: StockRankingItem[];
   tone: "hot" | "cool" | "neutral";
 }
 
@@ -80,6 +93,7 @@ export interface StockOverviewResponse {
   baseDate?: string;
   marketDivCode: string;
   quotes: StockQuote[];
+  marketIndices: StockQuote[];
   rankings: Record<StockRankingKind, StockRankingItem[]>;
   themes: StockTheme[];
   ipos: StockIpoItem[];

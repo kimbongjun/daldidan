@@ -2,22 +2,37 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  DndContext,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import {
   ArrowDown,
   ArrowRight,
   ArrowUp,
+  Activity,
   BarChart3,
   Bell,
   ChevronLeft,
   ChevronRight,
+  GripVertical,
   LineChart,
   Loader2,
   Plus,
   RefreshCw,
   Search,
+  Settings2,
   Star,
   Trash2,
   TrendingDown,
   TrendingUp,
+  WalletCards,
+  X,
 } from "lucide-react";
 import Sparkline from "@/components/Sparkline";
 import {
@@ -42,7 +57,9 @@ import {
 const ACCENT = "#F43F5E";
 const DOWN = "#10B981";
 const STORAGE_KEY = "daldidan-stock-watchlist";
+const PORTFOLIO_STORAGE_KEY = "daldidan-stock-portfolio";
 const PAGE_SIZE = 5;
+const FIXED_INDEX_SYMBOLS = ["IDX_1", "IDX_2"];
 const DEFAULT_WATCHLIST: WatchlistItem[] = [
   { symbol: "005930", assetType: "stock" },
   { symbol: "000660", assetType: "stock" },
@@ -52,6 +69,9 @@ const DEFAULT_WATCHLIST: WatchlistItem[] = [
 
 type Tab = "watch" | "rank" | "ipo";
 type LoadPhase = "idle" | "quotes" | "charts" | "done" | "error";
+type WatchSort = "manual" | "change" | "value" | "name";
+type FlashDirection = "up" | "down";
+type PortfolioMap = Record<string, { avgPrice: number }>;
 
 const RANK_META: Record<StockRankingKind, { label: string; icon: React.ReactNode }> = {
   amount: { label: "거래대금", icon: <BarChart3 size={11} /> },
@@ -73,6 +93,52 @@ function formatDate(value?: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleDateString("ko-KR", { month: "2-digit", day: "2-digit" });
+}
+
+function formatMoney(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return "-";
+  if (value >= 1_000_000_000_000) return `${(value / 1_000_000_000_000).toFixed(1)}조`;
+  if (value >= 100_000_000) return `${Math.round(value / 100_000_000).toLocaleString()}억`;
+  return `${Math.round(value / 10_000).toLocaleString()}만`;
+}
+
+function formatSignedPrice(value: number): string {
+  if (!Number.isFinite(value)) return "-";
+  const sign = value > 0 ? "+" : value < 0 ? "-" : "";
+  return `${sign}${Math.abs(Math.round(value)).toLocaleString()}`;
+}
+
+function getRangePosition(quote: StockQuote): { low: number; high: number; pct: number } {
+  const values = [
+    quote.price,
+    quote.low,
+    quote.high,
+    quote.fiftyTwoWeekLow,
+    quote.fiftyTwoWeekHigh,
+    ...quote.sparkline,
+  ].filter((value): value is number => typeof value === "number" && Number.isFinite(value) && value > 0);
+  if (values.length === 0) return { low: 0, high: 0, pct: 50 };
+  const low = Math.min(...values);
+  const high = Math.max(...values);
+  const pct = high > low ? ((quote.price - low) / (high - low)) * 100 : 50;
+  return { low, high, pct: Math.min(100, Math.max(0, pct)) };
+}
+
+function getKrxMarketStatus(now = new Date()): { open: boolean; label: string } {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Seoul",
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(now);
+  const weekday = parts.find((part) => part.type === "weekday")?.value ?? "";
+  const hour = Number(parts.find((part) => part.type === "hour")?.value ?? "0");
+  const minute = Number(parts.find((part) => part.type === "minute")?.value ?? "0");
+  const total = hour * 60 + minute;
+  const weekdayOpen = weekday !== "Sat" && weekday !== "Sun";
+  const open = weekdayOpen && total >= 9 * 60 && total < 15 * 60 + 30;
+  return { open, label: open ? "장중" : "마감" };
 }
 
 function changeColor(value: number): string {
@@ -129,23 +195,24 @@ function SkeletonRows({ count = 3 }: { count?: number }) {
   );
 }
 
-function StatusPill({ data, phase }: { data: StockOverviewResponse | null; phase: LoadPhase }) {
+function StatusPill({ data, phase, marketStatus }: { data: StockOverviewResponse | null; phase: LoadPhase; marketStatus: { open: boolean; label: string } }) {
   const isLive = data?.status === "live";
   const isLoading = phase === "quotes" || phase === "charts";
   const label =
     phase === "quotes" ? "시세 수신 중..." :
     phase === "charts" ? "차트 준비 중..." :
-    isLive ? "KRX 실시간" :
+    isLive ? `KRX ${marketStatus.label}` :
     data?.status === "not_configured" ? "API 설정 필요" : "오류";
   const color =
     isLoading ? "#F59E0B" :
-    isLive ? "#10B981" :
+    isLive && marketStatus.open ? "#10B981" :
+    isLive ? "var(--text-muted)" :
     phase === "error" ? ACCENT : "var(--text-muted)";
 
   return (
     <span
       className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold"
-      style={{ background: isLive && !isLoading ? "rgba(16,185,129,0.14)" : "rgba(255,255,255,0.05)", color }}
+      style={{ background: isLive && marketStatus.open && !isLoading ? "rgba(16,185,129,0.14)" : "rgba(255,255,255,0.05)", color }}
     >
       {isLoading
         ? <Loader2 size={10} className="animate-spin" />
@@ -215,14 +282,57 @@ function Pagination({ page, total, onChange }: { page: number; total: number; on
 // 행 컴포넌트
 // ──────────────────────────────────────────────
 
-function QuoteRow({ quote, onRemove }: { quote: StockQuote; onRemove: (symbol: string) => void }) {
+function QuoteRow({
+  quote,
+  onRemove,
+  onOpen,
+  flash,
+  dragHandle,
+  portfolioMode,
+  portfolio,
+  onPortfolioChange,
+}: {
+  quote: StockQuote;
+  onRemove: (symbol: string) => void;
+  onOpen: (quote: StockQuote) => void;
+  flash?: FlashDirection;
+  dragHandle?: React.ReactNode;
+  portfolioMode: boolean;
+  portfolio?: { avgPrice: number };
+  onPortfolioChange: (symbol: string, avgPrice: number) => void;
+}) {
   const color = changeColor(quote.changePct);
   const isIndex = quote.assetType === "index";
+  const range = getRangePosition(quote);
+  const avgPrice = portfolio?.avgPrice ?? 0;
+  const profit = avgPrice > 0 ? quote.price - avgPrice : 0;
+  const profitPct = avgPrice > 0 ? (profit / avgPrice) * 100 : 0;
+  const profitColor = changeColor(profitPct);
+  const rowColumns = dragHandle
+    ? "grid-cols-[auto_minmax(0,1.3fr)_auto_auto_auto]"
+    : "grid-cols-[minmax(0,1.3fr)_auto_auto_auto]";
   return (
     <div
-      className="grid min-h-[64px] grid-cols-[minmax(0,1.3fr)_auto_auto_auto] items-center gap-3 rounded-xl px-3 py-2.5"
+      role="button"
+      tabIndex={0}
+      onClick={() => onOpen(quote)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onOpen(quote);
+        }
+      }}
+      className={[
+        `grid w-full min-h-[74px] cursor-pointer ${rowColumns} items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors`,
+        flash === "up" ? "animate-stock-flash-up" : flash === "down" ? "animate-stock-flash-down" : "",
+      ].filter(Boolean).join(" ")}
       style={{ background: "rgba(255,255,255,0.045)", border: "1px solid var(--border)" }}
     >
+      {dragHandle && (
+        <div onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()} className="flex h-full items-center">
+          {dragHandle}
+        </div>
+      )}
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-1.5">
           <p className="truncate text-sm font-black" style={{ color: "var(--text-primary)" }}>{quote.name}</p>
@@ -238,6 +348,34 @@ function QuoteRow({ quote, onRemove }: { quote: StockQuote; onRemove: (symbol: s
             거래량 {formatVolume(quote.volume)} · 대금 {formatTradingValue(quote.tradingValue)}
           </p>
         )}
+        {range.high > range.low && (
+          <div className="mt-1.5 grid grid-cols-[34px_minmax(0,1fr)_34px] items-center gap-1.5">
+            <span className="text-[9px] tabular-nums" style={{ color: "var(--text-muted)" }}>{formatPrice(range.low)}</span>
+            <div className="h-1.5 overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,0.08)" }}>
+              <div className="h-full rounded-full" style={{ width: `${range.pct}%`, background: color }} />
+            </div>
+            <span className="text-right text-[9px] tabular-nums" style={{ color: "var(--text-muted)" }}>{formatPrice(range.high)}</span>
+          </div>
+        )}
+        {portfolioMode && !isIndex && (
+          <div className="mt-2 grid grid-cols-[86px_minmax(0,1fr)] items-center gap-2">
+            <input
+              value={avgPrice > 0 ? String(avgPrice) : ""}
+              onClick={(event) => event.stopPropagation()}
+              onKeyDown={(event) => event.stopPropagation()}
+              onChange={(event) => onPortfolioChange(quote.symbol, Number(event.target.value.replace(/[^\d.]/g, "")))}
+              inputMode="decimal"
+              placeholder="매입가"
+              className="h-7 rounded-md border bg-transparent px-2 text-[11px] outline-none"
+              style={{ borderColor: "var(--border)", color: "var(--text-primary)" }}
+            />
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-[10px] font-bold">
+              <span style={{ color: "var(--text-muted)" }}>평단 {avgPrice > 0 ? formatPrice(avgPrice) : "-"}</span>
+              <span className="tabular-nums" style={{ color: profitColor }}>{avgPrice > 0 ? `${profitPct > 0 ? "+" : ""}${profitPct.toFixed(2)}%` : "-%"}</span>
+              <span className="tabular-nums" style={{ color: profitColor }}>{avgPrice > 0 ? formatSignedPrice(profit) : "-"}</span>
+            </div>
+          </div>
+        )}
       </div>
       {!isIndex && (
         <div className="hidden w-[88px] justify-end sm:flex">
@@ -250,13 +388,49 @@ function QuoteRow({ quote, onRemove }: { quote: StockQuote; onRemove: (symbol: s
       </div>
       <button
         type="button"
-        onClick={() => onRemove(quote.symbol)}
+        onClick={(event) => { event.stopPropagation(); onRemove(quote.symbol); }}
+        onKeyDown={(event) => event.stopPropagation()}
         aria-label={`${quote.name} 관심종목 제거`}
         className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-opacity hover:opacity-70"
         style={{ background: "rgba(255,255,255,0.05)", color: "var(--text-muted)" }}
       >
         <Trash2 size={13} />
       </button>
+    </div>
+  );
+}
+
+function SortableQuoteRow({
+  quote,
+  children,
+}: {
+  quote: StockQuote;
+  children: (dragHandle: React.ReactNode) => React.ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: quote.symbol });
+  const dragHandle = (
+    <button
+      type="button"
+      {...attributes}
+      {...listeners}
+      aria-label={`${quote.name} 순서 변경`}
+      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-opacity hover:opacity-70"
+      style={{ background: "rgba(255,255,255,0.05)", color: "var(--text-muted)", cursor: isDragging ? "grabbing" : "grab" }}
+    >
+      <GripVertical size={13} />
+    </button>
+  );
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.45 : 1,
+      }}
+    >
+      {children(dragHandle)}
     </div>
   );
 }
@@ -294,30 +468,60 @@ function RankingRow({ item }: { item: StockRankingItem }) {
   );
 }
 
-function ThemeStrip({ themes }: { themes: StockTheme[] }) {
+function ThemeStrip({
+  themes,
+  expandedTheme,
+  onToggle,
+}: {
+  themes: StockTheme[];
+  expandedTheme: string | null;
+  onToggle: (label: string) => void;
+}) {
   if (themes.length === 0) return null;
+  const selected = themes.find((theme) => theme.label === expandedTheme);
   return (
-    <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-0.5">
-      {themes.map((theme) => {
-        const color = theme.tone === "hot" ? ACCENT : theme.tone === "cool" ? DOWN : "var(--text-muted)";
-        return (
-          <div
-            key={theme.label}
-            className="min-w-[124px] rounded-xl px-3 py-2"
-            style={{ background: "rgba(255,255,255,0.045)", border: "1px solid var(--border)" }}
-          >
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-xs font-bold" style={{ color: "var(--text-primary)" }}>{theme.label}</span>
-              <span className="text-[11px] font-black tabular-nums" style={{ color }}>
-                {theme.avgChangePct > 0 ? "+" : ""}{theme.avgChangePct.toFixed(1)}%
+    <div className="flex flex-col gap-2">
+      <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-0.5">
+        {themes.map((theme) => {
+          const color = theme.tone === "hot" ? ACCENT : theme.tone === "cool" ? DOWN : "var(--text-muted)";
+          const active = expandedTheme === theme.label;
+          return (
+            <button
+              key={theme.label}
+              type="button"
+              onClick={() => onToggle(theme.label)}
+              className="min-w-[124px] rounded-xl px-3 py-2 text-left transition-colors"
+              style={{ background: active ? `${ACCENT}15` : "rgba(255,255,255,0.045)", border: `1px solid ${active ? `${ACCENT}44` : "var(--border)"}` }}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-bold" style={{ color: "var(--text-primary)" }}>{theme.label}</span>
+                <span className="text-[11px] font-black tabular-nums" style={{ color }}>
+                  {theme.avgChangePct > 0 ? "+" : ""}{theme.avgChangePct.toFixed(1)}%
+                </span>
+              </div>
+              <p className="mt-1 truncate text-[10px]" style={{ color: "var(--text-muted)" }}>
+                {theme.leaders.join(" · ")}
+              </p>
+            </button>
+          );
+        })}
+      </div>
+      {selected && selected.members.length > 0 && (
+        <div className="grid gap-1.5 sm:grid-cols-2">
+          {selected.members.map((item) => (
+            <div
+              key={`${selected.label}-${item.symbol}`}
+              className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-lg px-2.5 py-1.5"
+              style={{ background: "rgba(255,255,255,0.04)", border: "1px solid var(--border)" }}
+            >
+              <span className="truncate text-[11px] font-bold" style={{ color: "var(--text-primary)" }}>{item.name}</span>
+              <span className="text-[11px] font-black tabular-nums" style={{ color: changeColor(item.changePct) }}>
+                {item.changePct > 0 ? "+" : ""}{item.changePct.toFixed(2)}%
               </span>
             </div>
-            <p className="mt-1 truncate text-[10px]" style={{ color: "var(--text-muted)" }}>
-              {theme.leaders.join(" · ")}
-            </p>
-          </div>
-        );
-      })}
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -372,6 +576,138 @@ function SearchResultGroup({
   );
 }
 
+function IndexSummaryCards({ indices }: { indices: StockQuote[] }) {
+  const bySymbol = new Map(indices.map((quote) => [quote.symbol, quote]));
+  const cards = FIXED_INDEX_SYMBOLS.map((symbol) => bySymbol.get(symbol) ?? {
+    symbol,
+    name: symbol === "IDX_1" ? "KOSPI 종합" : "KOSDAQ 종합",
+    market: "KRX",
+    assetType: "index" as AssetType,
+    price: 0,
+    change: 0,
+    changePct: 0,
+    volume: 0,
+    tradingValue: 0,
+    open: 0,
+    high: 0,
+    low: 0,
+    previousClose: 0,
+    sparkline: [],
+    fetchedAt: "",
+    baseDate: "",
+    source: "KRX" as const,
+  });
+
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      {cards.map((quote) => (
+        <div
+          key={quote.symbol}
+          className="rounded-xl px-3 py-2.5"
+          style={{ background: "rgba(245,158,11,0.10)", border: "1px solid rgba(245,158,11,0.22)" }}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <span className="truncate text-xs font-black" style={{ color: "var(--text-primary)" }}>{quote.name.replace(" 종합", "")}</span>
+            <Activity size={12} style={{ color: "#F59E0B" }} />
+          </div>
+          <p className="mt-1 text-base font-black tabular-nums" style={{ color: "var(--text-primary)" }}>{formatPrice(quote.price)}</p>
+          <ChangeBadge change={quote.change} changePct={quote.changePct} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function QuoteDetailModal({ quote, onClose }: { quote: StockQuote; onClose: () => void }) {
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  const color = changeColor(quote.changePct);
+  const range = getRangePosition(quote);
+  const stats = [
+    { label: "시가", value: formatPrice(quote.open) },
+    { label: "고가", value: formatPrice(quote.high) },
+    { label: "저가", value: formatPrice(quote.low) },
+    { label: "전일", value: formatPrice(quote.previousClose) },
+    { label: "거래량", value: formatVolume(quote.volume) },
+    { label: "거래대금", value: formatTradingValue(quote.tradingValue) },
+    { label: "시가총액", value: formatMoney(quote.marketCap ?? 0) },
+    { label: quote.assetType === "etf" ? "순자산" : "상장주식", value: quote.assetType === "etf" ? formatMoney(quote.aum ?? 0) : formatVolume(quote.listedShares ?? 0).replace("주", "") },
+    ...(quote.per ? [{ label: "PER", value: quote.per }] : []),
+    ...(quote.pbr ? [{ label: "PBR", value: quote.pbr }] : []),
+    ...(quote.dividendYield ? [{ label: "배당", value: quote.dividendYield }] : []),
+  ];
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/55 px-4 py-6" onMouseDown={onClose}>
+      <div
+        className="w-full max-w-lg rounded-2xl p-4 shadow-2xl"
+        onMouseDown={(event) => event.stopPropagation()}
+        style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <h3 className="truncate text-base font-black" style={{ color: "var(--text-primary)" }}>{quote.name}</h3>
+              <AssetTypeBadge assetType={quote.assetType} />
+            </div>
+            <p className="mt-0.5 text-[11px]" style={{ color: "var(--text-muted)" }}>
+              {quote.symbol} · {quote.market}{quote.underlyingIndex ? ` · ${quote.underlyingIndex}` : ""}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="종목 상세 닫기"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+            style={{ background: "rgba(255,255,255,0.06)", color: "var(--text-muted)" }}
+          >
+            <X size={14} />
+          </button>
+        </div>
+
+        <div className="mt-4 grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3">
+          <div>
+            <p className="text-2xl font-black tabular-nums" style={{ color: "var(--text-primary)" }}>{formatPrice(quote.price)}</p>
+            <ChangeBadge change={quote.change} changePct={quote.changePct} />
+          </div>
+          <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>{quote.baseDate}</p>
+        </div>
+
+        <div className="mt-4 overflow-hidden rounded-xl p-3" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid var(--border)" }}>
+          <Sparkline data={quote.sparkline.length > 0 ? quote.sparkline : [quote.previousClose, quote.price]} color={color} width={320} height={92} />
+        </div>
+
+        {range.high > range.low && (
+          <div className="mt-4">
+            <div className="mb-1 flex items-center justify-between text-[10px] font-bold" style={{ color: "var(--text-muted)" }}>
+              <span>52W {formatPrice(range.low)}</span>
+              <span>{formatPrice(range.high)}</span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,0.08)" }}>
+              <div className="h-full rounded-full" style={{ width: `${range.pct}%`, background: color }} />
+            </div>
+          </div>
+        )}
+
+        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {stats.map((stat) => (
+            <div key={stat.label} className="rounded-lg px-2.5 py-2" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid var(--border)" }}>
+              <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>{stat.label}</p>
+              <p className="mt-0.5 truncate text-xs font-black tabular-nums" style={{ color: "var(--text-primary)" }}>{stat.value}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ──────────────────────────────────────────────
 // 메인 위젯
 // ──────────────────────────────────────────────
@@ -379,12 +715,19 @@ function SearchResultGroup({
 export default function StockWidget() {
   const [activeTab, setActiveTab] = useState<Tab>("watch");
   const [activeRank, setActiveRank] = useState<StockRankingKind>("amount");
+  const [watchSort, setWatchSort] = useState<WatchSort>("manual");
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>(DEFAULT_WATCHLIST);
+  const [portfolioMode, setPortfolioMode] = useState(false);
+  const [portfolio, setPortfolio] = useState<PortfolioMap>({});
   // localStorage 로드가 완료되기 전까지 save를 막기 위한 플래그
   const [hydrated, setHydrated] = useState(false);
   const [data, setData] = useState<StockOverviewResponse | null>(null);
   const [loadPhase, setLoadPhase] = useState<LoadPhase>("idle");
   const [refreshNonce, setRefreshNonce] = useState(0);
+  const [flashMap, setFlashMap] = useState<Record<string, FlashDirection>>({});
+  const [marketStatus, setMarketStatus] = useState(() => getKrxMarketStatus());
+  const [selectedQuote, setSelectedQuote] = useState<StockQuote | null>(null);
+  const [expandedTheme, setExpandedTheme] = useState<string | null>(null);
 
   // 검색 상태
   const [input, setInput] = useState("");
@@ -402,6 +745,12 @@ export default function StockWidget() {
   const searchRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const feedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const previousPricesRef = useRef<Map<string, number>>(new Map());
+  const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+  );
 
   // localStorage 로드 (구형 string[] 포맷 마이그레이션 포함)
   // setHydrated(true)는 로드 성공 여부와 무관하게 항상 실행 — save effect 허용
@@ -432,6 +781,23 @@ export default function StockWidget() {
           if (next.length > 0) setWatchlist(next.slice(0, 10));
         }
       }
+      const savedPortfolio = localStorage.getItem(PORTFOLIO_STORAGE_KEY);
+      if (savedPortfolio) {
+        const parsedPortfolio = JSON.parse(savedPortfolio) as unknown;
+        if (parsedPortfolio && typeof parsedPortfolio === "object") {
+          const nextPortfolio = Object.entries(parsedPortfolio as Record<string, unknown>).reduce<PortfolioMap>((acc, [symbol, value]) => {
+            const avgPrice =
+              typeof value === "object" && value !== null && "avgPrice" in value
+                ? Number((value as { avgPrice?: unknown }).avgPrice)
+                : Number(value);
+            if (sanitizeSymbol(symbol) && Number.isFinite(avgPrice) && avgPrice > 0) {
+              acc[symbol] = { avgPrice };
+            }
+            return acc;
+          }, {});
+          setPortfolio(nextPortfolio);
+        }
+      }
     } catch {
       // 깨진 저장값은 기본값 사용
     }
@@ -444,6 +810,16 @@ export default function StockWidget() {
     if (!hydrated) return;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(watchlist));
   }, [hydrated, watchlist]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    localStorage.setItem(PORTFOLIO_STORAGE_KEY, JSON.stringify(portfolio));
+  }, [hydrated, portfolio]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setMarketStatus(getKrxMarketStatus()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   // 탭 전환 시 해당 페이지 리셋
   const changeTab = useCallback((tab: Tab) => {
@@ -482,6 +858,7 @@ export default function StockWidget() {
         fetchedAt: new Date().toISOString(),
         marketDivCode: "KRX",
         quotes: [],
+        marketIndices: [],
         rankings: { amount: [], volume: [], rise: [], fall: [], popular: [] },
         themes: [],
         ipos: [],
@@ -511,6 +888,23 @@ export default function StockWidget() {
       window.clearInterval(timer);
     };
   }, [fetchStocks, refreshNonce]);
+
+  useEffect(() => {
+    const current = data?.quotes ?? [];
+    if (current.length === 0) return;
+    const flashes: Record<string, FlashDirection> = {};
+    current.forEach((quote) => {
+      const prev = previousPricesRef.current.get(quote.symbol);
+      if (prev !== undefined && quote.price > 0 && prev > 0 && quote.price !== prev) {
+        flashes[quote.symbol] = quote.price > prev ? "up" : "down";
+      }
+      if (quote.price > 0) previousPricesRef.current.set(quote.symbol, quote.price);
+    });
+    if (Object.keys(flashes).length === 0) return;
+    setFlashMap(flashes);
+    if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+    flashTimerRef.current = setTimeout(() => setFlashMap({}), 900);
+  }, [data?.quotes]);
 
   const quotes = useMemo(() => {
     const map = new Map((data?.quotes ?? []).map((q) => [q.symbol, q]));
@@ -557,6 +951,19 @@ export default function StockWidget() {
     }, 300);
   }, []);
 
+  // 검색 결과 assetType별 그룹핑
+  const groupedSearch = useMemo(() => {
+    const stocks = searchResults.filter((r) => r.assetType === "stock");
+    const etfs   = searchResults.filter((r) => r.assetType === "etf");
+    const indices = searchResults.filter((r) => r.assetType === "index");
+    return { stocks, etfs, indices };
+  }, [searchResults]);
+
+  const visibleSearchResults = useMemo(
+    () => [...groupedSearch.stocks, ...groupedSearch.etfs, ...groupedSearch.indices],
+    [groupedSearch],
+  );
+
   const selectResult = useCallback((result: StockSearchResult) => {
     if (watchlist.some((item) => item.symbol === result.symbol)) {
       showFeedback("이미 관심종목에 있습니다", "warn");
@@ -577,8 +984,8 @@ export default function StockWidget() {
   const addSymbol = useCallback(() => {
     // 드롭다운이 열려있으면 → focused 항목 또는 첫 번째 결과를 selectResult로 처리
     // (ETF·지수 등 assetType을 정확하게 반영하기 위해 raw input 파싱 대신 result 사용)
-    if (dropdownOpen && searchResults.length > 0) {
-      const target = focusedIndex >= 0 ? searchResults[focusedIndex] : searchResults[0];
+    if (dropdownOpen && visibleSearchResults.length > 0) {
+      const target = focusedIndex >= 0 ? visibleSearchResults[focusedIndex] : visibleSearchResults[0];
       selectResult(target);
       return;
     }
@@ -601,10 +1008,10 @@ export default function StockWidget() {
     setSearchResults([]);
     setDropdownOpen(false);
     setActiveTab("watch");
-  }, [input, dropdownOpen, focusedIndex, searchResults, selectResult, watchlist, showFeedback]);
+  }, [input, dropdownOpen, focusedIndex, visibleSearchResults, selectResult, watchlist, showFeedback]);
 
   const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
-    const total = searchResults.length;
+    const total = visibleSearchResults.length;
     if (!dropdownOpen || total === 0) {
       if (event.key === "Enter") addSymbol();
       return;
@@ -617,8 +1024,8 @@ export default function StockWidget() {
       setFocusedIndex((prev) => Math.max(prev - 1, -1));
     } else if (event.key === "Enter") {
       event.preventDefault();
-      if (focusedIndex >= 0 && searchResults[focusedIndex]) {
-        selectResult(searchResults[focusedIndex]);
+      if (focusedIndex >= 0 && visibleSearchResults[focusedIndex]) {
+        selectResult(visibleSearchResults[focusedIndex]);
       } else {
         addSymbol();
       }
@@ -626,30 +1033,54 @@ export default function StockWidget() {
       setDropdownOpen(false);
       setFocusedIndex(-1);
     }
-  }, [dropdownOpen, searchResults, focusedIndex, addSymbol, selectResult]);
+  }, [dropdownOpen, visibleSearchResults, focusedIndex, addSymbol, selectResult]);
 
   const removeSymbol = useCallback((symbol: string) => {
     setWatchlist((prev) => prev.filter((item) => item.symbol !== symbol));
     setWatchPage(0);
   }, []);
 
-  // 검색 결과 assetType별 그룹핑
-  const groupedSearch = useMemo(() => {
-    const stocks = searchResults.filter((r) => r.assetType === "stock");
-    const etfs   = searchResults.filter((r) => r.assetType === "etf");
-    const indices = searchResults.filter((r) => r.assetType === "index");
-    return { stocks, etfs, indices };
-  }, [searchResults]);
-
   const currentRankings = data?.rankings[activeRank] ?? [];
   const ipos = data?.ipos ?? [];
   const isConfigured = data?.status !== "not_configured";
   const isLoading = loadPhase === "quotes" || loadPhase === "charts";
+  const marketIndices = data?.marketIndices ?? [];
+  const canManualDrag = watchSort === "manual";
+
+  const sortedQuotes = useMemo(() => {
+    const next = [...quotes];
+    if (watchSort === "change") return next.sort((a, b) => b.changePct - a.changePct);
+    if (watchSort === "value") return next.sort((a, b) => b.tradingValue - a.tradingValue);
+    if (watchSort === "name") return next.sort((a, b) => a.name.localeCompare(b.name, "ko"));
+    return next;
+  }, [quotes, watchSort]);
 
   // 페이지 슬라이스
-  const pagedQuotes = quotes.slice(watchPage * PAGE_SIZE, (watchPage + 1) * PAGE_SIZE);
+  const pagedQuotes = sortedQuotes.slice(watchPage * PAGE_SIZE, (watchPage + 1) * PAGE_SIZE);
   const pagedRankings = currentRankings.slice(rankPage * PAGE_SIZE, (rankPage + 1) * PAGE_SIZE);
   const pagedIpos = ipos.slice(ipoPage * PAGE_SIZE, (ipoPage + 1) * PAGE_SIZE);
+
+  const handleWatchDragEnd = useCallback(({ active, over }: DragEndEvent) => {
+    if (!over || active.id === over.id || watchSort !== "manual") return;
+    setWatchlist((prev) => {
+      const from = prev.findIndex((item) => item.symbol === active.id);
+      const to = prev.findIndex((item) => item.symbol === over.id);
+      if (from < 0 || to < 0) return prev;
+      return arrayMove(prev, from, to);
+    });
+  }, [watchSort]);
+
+  const updatePortfolioPrice = useCallback((symbol: string, avgPrice: number) => {
+    setPortfolio((prev) => {
+      const next = { ...prev };
+      if (!Number.isFinite(avgPrice) || avgPrice <= 0) {
+        delete next[symbol];
+      } else {
+        next[symbol] = { avgPrice };
+      }
+      return next;
+    });
+  }, []);
 
   return (
     <div className="bento-card gradient-rose flex flex-col p-5 gap-3">
@@ -659,7 +1090,7 @@ export default function StockWidget() {
           <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: ACCENT }}>증권</p>
           <h2 className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>국내 증시 포털</h2>
           <div className="mt-1 flex flex-wrap items-center gap-2">
-            <StatusPill data={data} phase={loadPhase} />
+            <StatusPill data={data} phase={loadPhase} marketStatus={marketStatus} />
             <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>
               {data?.provider ?? "KRX Open API"}
               {data?.baseDate ? ` · 기준 ${data.baseDate}` : ""}
@@ -795,17 +1226,87 @@ export default function StockWidget() {
                 </div>
               )}
 
+              <IndexSummaryCards indices={marketIndices} />
+
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex gap-1.5 overflow-x-auto scrollbar-hide">
+                  {([
+                    ["manual", "수동"],
+                    ["change", "등락률"],
+                    ["value", "대금"],
+                    ["name", "이름"],
+                  ] as const).map(([key, label]) => {
+                    const active = watchSort === key;
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => { setWatchSort(key); setWatchPage(0); }}
+                        className="tag shrink-0 gap-1"
+                        style={{ background: active ? ACCENT : `${ACCENT}15`, color: active ? "#fff" : "var(--text-muted)" }}
+                      >
+                        <Settings2 size={10} />{label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPortfolioMode((value) => !value)}
+                  className="tag shrink-0 gap-1"
+                  style={{ background: portfolioMode ? "#10B981" : "rgba(16,185,129,0.14)", color: portfolioMode ? "#fff" : "#10B981" }}
+                >
+                  <WalletCards size={10} />포트폴리오
+                </button>
+              </div>
+
               {/* 관심종목 목록 */}
               {isLoading && !data ? (
                 <SkeletonRows count={PAGE_SIZE} />
-              ) : quotes.length === 0 ? (
+              ) : sortedQuotes.length === 0 ? (
                 <EmptyState title="관심종목 매매정보가 없습니다" detail="종목명·ETF·지수명을 검색해서 추가하세요." />
               ) : (
                 <>
-                  <div className="flex flex-col gap-2">
-                    {pagedQuotes.map((q) => <QuoteRow key={q.symbol} quote={q} onRemove={removeSymbol} />)}
-                  </div>
-                  <Pagination page={watchPage} total={quotes.length} onChange={setWatchPage} />
+                  {canManualDrag ? (
+                    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleWatchDragEnd}>
+                      <SortableContext items={pagedQuotes.map((q) => q.symbol)} strategy={verticalListSortingStrategy}>
+                        <div className="flex flex-col gap-2">
+                          {pagedQuotes.map((q) => (
+                            <SortableQuoteRow key={q.symbol} quote={q}>
+                              {(dragHandle) => (
+                                <QuoteRow
+                                  quote={q}
+                                  onRemove={removeSymbol}
+                                  onOpen={setSelectedQuote}
+                                  flash={flashMap[q.symbol]}
+                                  dragHandle={dragHandle}
+                                  portfolioMode={portfolioMode}
+                                  portfolio={portfolio[q.symbol]}
+                                  onPortfolioChange={updatePortfolioPrice}
+                                />
+                              )}
+                            </SortableQuoteRow>
+                          ))}
+                        </div>
+                      </SortableContext>
+                    </DndContext>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      {pagedQuotes.map((q) => (
+                        <QuoteRow
+                          key={q.symbol}
+                          quote={q}
+                          onRemove={removeSymbol}
+                          onOpen={setSelectedQuote}
+                          flash={flashMap[q.symbol]}
+                          portfolioMode={portfolioMode}
+                          portfolio={portfolio[q.symbol]}
+                          onPortfolioChange={updatePortfolioPrice}
+                        />
+                      ))}
+                    </div>
+                  )}
+                  <Pagination page={watchPage} total={sortedQuotes.length} onChange={setWatchPage} />
                 </>
               )}
             </div>
@@ -830,7 +1331,11 @@ export default function StockWidget() {
                   );
                 })}
               </div>
-              <ThemeStrip themes={data?.themes ?? []} />
+              <ThemeStrip
+                themes={data?.themes ?? []}
+                expandedTheme={expandedTheme}
+                onToggle={(label) => setExpandedTheme((current) => current === label ? null : label)}
+              />
               {isLoading && !data ? (
                 <SkeletonRows count={PAGE_SIZE} />
               ) : currentRankings.length === 0 ? (
@@ -893,6 +1398,7 @@ export default function StockWidget() {
 
         </div>
       )}
+      {selectedQuote && <QuoteDetailModal quote={selectedQuote} onClose={() => setSelectedQuote(null)} />}
     </div>
   );
 }
