@@ -175,7 +175,7 @@ export async function sendFcmMessage(params: SendFcmMessageParams) {
               title: params.title,
               body: params.body,
               sound: "default",
-              ...(params.imageUrl ? { imageUrl: params.imageUrl } : {}),
+              ...(params.imageUrl ? { image: params.imageUrl } : {}),
             },
             data: {
               url: params.url,
