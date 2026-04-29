@@ -85,7 +85,7 @@ export default function SiteSettingsPage() {
 
       const settingsRes = await fetch("/api/site-settings");
       if (settingsRes.ok) {
-        const loaded = await settingsRes.json() as SiteSettings;
+        const loaded = (await settingsRes.json()) as SiteSettings;
         setSettings(loaded);
       }
       setLoading(false);
@@ -116,20 +116,23 @@ export default function SiteSettingsPage() {
     setUploading(true);
     setSettingsUploadError("");
     try {
-      const supabase = createClient();
-      const ext = file.name.split(".").pop()?.toLowerCase() ?? "jpg";
-      const path = `site/${field}_${Date.now()}.${ext}`;
-      const { data, error } = await supabase.storage
-        .from("blog-images")
-        .upload(path, file, {
-          upsert: true,
-          contentType: file.type || (ext === "ico" ? "image/x-icon" : undefined),
-        });
-      if (error) throw error;
-      const { data: { publicUrl } } = supabase.storage.from("blog-images").getPublicUrl(data.path);
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("field", field);
+      const res = await fetch("/api/site-settings/upload", {
+        method: "POST",
+        body: formData,
+      });
+      if (!res.ok) {
+        const json = (await res.json()) as { error?: string };
+        throw new Error(json.error ?? "업로드 실패");
+      }
+      const { publicUrl } = (await res.json()) as { publicUrl: string };
       setSettings((prev) => ({ ...prev, [field]: publicUrl }));
     } catch (err) {
-      setSettingsUploadError(err instanceof Error ? err.message : "이미지 업로드에 실패했습니다.");
+      setSettingsUploadError(
+        err instanceof Error ? err.message : "이미지 업로드에 실패했습니다.",
+      );
     } finally {
       setUploading(false);
     }
