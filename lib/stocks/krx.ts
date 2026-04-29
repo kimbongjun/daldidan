@@ -246,7 +246,7 @@ async function fetchLatestMarketRows(config: KrxConfig): Promise<{ baseDate: str
   throw new Error("최근 14일 안에 조회 가능한 KRX 일별 매매정보가 없습니다.");
 }
 
-async function fetchHistory(config: KrxConfig, symbol: string, maxPoints = 18): Promise<number[]> {
+async function fetchHistory(config: KrxConfig, symbol: string, maxPoints = 10): Promise<number[]> {
   const today = new Date();
 
   // 후보 거래일 수집 (주말 제외, 버퍼 포함)
@@ -458,14 +458,15 @@ function emptyRankings(): Record<StockRankingKind, StockRankingItem[]> {
 // 5분 TTL 모듈 캐시 — fetchStockOverview 결과 캐싱
 const _overviewCache = new Map<string, { data: StockOverviewResponse; expiry: number }>();
 
-function makeOverviewCacheKey(items: WatchlistItem[], kinds: StockRankingKind[]): string {
+function makeOverviewCacheKey(items: WatchlistItem[], kinds: StockRankingKind[], noSparkline = false): string {
   const itemKey = [...items].sort((a, b) => a.symbol.localeCompare(b.symbol)).map((i) => `${i.symbol}:${i.assetType}`).join(",");
-  return `${itemKey}_${[...kinds].sort().join(",")}`;
+  return `${itemKey}_${[...kinds].sort().join(",")}_ns${noSparkline ? 1 : 0}`;
 }
 
 export async function fetchStockOverview(
   watchlistItems: WatchlistItem[],
   requestedRankingKinds: StockRankingKind[] = [...STOCK_RANKING_KINDS],
+  options: { noSparkline?: boolean } = {},
 ): Promise<StockOverviewResponse> {
   const fetchedAt = new Date().toISOString();
   const config = readConfig();
@@ -486,8 +487,8 @@ export async function fetchStockOverview(
     };
   }
 
-  // 5분 캐시 확인
-  const cacheKey = makeOverviewCacheKey(resolvedItems, requestedRankingKinds);
+  // 5분 캐시 확인 (noSparkline 버전과 full 버전 분리)
+  const cacheKey = makeOverviewCacheKey(resolvedItems, requestedRankingKinds, options.noSparkline ?? false);
   const cachedOverview = _overviewCache.get(cacheKey);
   if (cachedOverview && cachedOverview.expiry > Date.now()) return cachedOverview.data;
 
@@ -518,12 +519,23 @@ export async function fetchStockOverview(
       .map((item) => item.symbol.replace("IDX_", ""))
       .filter((code) => /^\d+$/.test(code));
 
-    // 스파크라인 — 주식/ETF만 (지수는 별도 처리 필요)
-    const historyResults = await Promise.allSettled(stockEtfQuotes.map((quote) => fetchHistory(config, quote.symbol)));
-    const quotesWithHistory = stockEtfQuotes.map((quote, index) => ({
-      ...quote,
-      sparkline: historyResults[index]?.status === "fulfilled" ? historyResults[index].value : [],
-    }));
+    // 스파크라인 — noSparkline 모드면 스킵해서 빠르게 반환
+    let quotesWithHistory: StockQuote[];
+    const errors: string[] = [];
+    if (options.noSparkline) {
+      quotesWithHistory = stockEtfQuotes.map((quote) => ({ ...quote, sparkline: [] }));
+    } else {
+      const historyResults = await Promise.allSettled(stockEtfQuotes.map((quote) => fetchHistory(config, quote.symbol)));
+      quotesWithHistory = stockEtfQuotes.map((quote, index) => ({
+        ...quote,
+        sparkline: historyResults[index]?.status === "fulfilled" ? historyResults[index].value : [],
+      }));
+      historyResults.forEach((result, index) => {
+        if (result.status === "rejected") {
+          errors.push(`${stockEtfQuotes[index].symbol}: ${result.reason instanceof Error ? result.reason.message : "차트 조회 실패"}`);
+        }
+      });
+    }
 
     // 지수 quotes
     const indexQuotes = await fetchIndexQuotes(config, baseDate, indexCodes);
@@ -537,11 +549,6 @@ export async function fetchStockOverview(
     });
 
     const rankings = buildRankings(allQuotes, requestedRankingKinds);
-    const errors = historyResults.flatMap((result, index) =>
-      result.status === "rejected"
-        ? [`${stockEtfQuotes[index].symbol}: ${result.reason instanceof Error ? result.reason.message : "차트 조회 실패"}`]
-        : [],
-    );
 
     let ipos: StockIpoItem[] = [];
     try {
@@ -615,14 +622,27 @@ async function getCachedRows(config: KrxConfig): Promise<Record<string, unknown>
   return [...stockRows, ...etfRows];
 }
 
-export async function searchStocks(query: string, limit = 8): Promise<StockSearchResult[]> {
-  const config = readConfig();
+export async function searchStocks(query: string, limit = 10): Promise<StockSearchResult[]> {
   const q = query.trim();
-  if (!config || !q) return [];
+  if (!q) return [];
 
-  const rows = await getCachedRows(config);
+  const lowerQ = q.toLowerCase();
   const upper = q.toUpperCase();
 
+  // 지수는 config 없어도 정적 목록에서 항상 검색
+  const matchedIndices = STATIC_INDEX_RESULTS.filter((idx) => {
+    const nameLower = idx.name.toLowerCase();
+    return (
+      nameLower.includes(lowerQ) ||
+      idx.symbol.toLowerCase().includes(lowerQ) ||
+      INDEX_SEARCH_KEYWORDS.some((kw) => lowerQ.includes(kw) && nameLower.includes(kw))
+    );
+  });
+
+  const config = readConfig();
+  if (!config) return matchedIndices.slice(0, limit);
+
+  const rows = await getCachedRows(config);
   const scored: (StockSearchResult & { score: number })[] = [];
 
   for (const row of rows) {
@@ -633,14 +653,14 @@ export async function searchStocks(query: string, limit = 8): Promise<StockSearc
 
     const rowAssetType: AssetType = row._assetType === "etf" ? "etf" : "stock";
     const nameUpper = name.toUpperCase();
-    const symbolMatch = symbol === upper;
+    const symbolExact = symbol === upper;
     const symbolContains = symbol.includes(upper);
     const nameStarts = nameUpper.startsWith(upper);
     const nameContains = nameUpper.includes(upper);
 
-    if (!symbolMatch && !symbolContains && !nameContains) continue;
+    if (!symbolExact && !symbolContains && !nameContains) continue;
 
-    const score = symbolMatch ? 100 : nameStarts ? 60 : symbolContains ? 40 : 10;
+    const score = symbolExact ? 100 : nameStarts ? 60 : symbolContains ? 40 : 10;
     scored.push({ symbol, name, market, assetType: rowAssetType, score });
   }
 
@@ -649,21 +669,14 @@ export async function searchStocks(query: string, limit = 8): Promise<StockSearc
     .slice(0, limit)
     .map(({ symbol, name, market, assetType }) => ({ symbol, name, market, assetType }));
 
-  // 지수 관련 검색어면 정적 지수 목록 추가
-  const lowerQ = q.toLowerCase();
-  const includesIndexKeyword = INDEX_SEARCH_KEYWORDS.some((kw) => lowerQ.includes(kw));
-  if (includesIndexKeyword) {
-    const matchedIndices = STATIC_INDEX_RESULTS.filter(
-      (idx) => idx.name.toLowerCase().includes(lowerQ) || idx.symbol.toLowerCase().includes(lowerQ) || lowerQ.includes(idx.name.toLowerCase().split(" ")[0]),
-    );
-    const combined = [...stockEtfResults, ...matchedIndices];
-    const seen = new Set<string>();
-    return combined
-      .filter((r) => { if (seen.has(r.symbol)) return false; seen.add(r.symbol); return true; })
-      .slice(0, limit);
-  }
+  // 지수 결과 병합 (중복 제거)
+  const seen = new Set(stockEtfResults.map((r) => r.symbol));
+  const combined = [
+    ...stockEtfResults,
+    ...matchedIndices.filter((r) => !seen.has(r.symbol)),
+  ];
 
-  return stockEtfResults;
+  return combined.slice(0, limit);
 }
 
 export { sanitizeIndexSymbol };

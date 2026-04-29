@@ -51,9 +51,12 @@ export async function GET(request: NextRequest) {
     parseItems(searchParams.get("items")) ??
     parseSymbolsAsItems(searchParams.get("symbols"));
 
+  const noSparkline = searchParams.get("noSparkline") === "true";
+
   const data = await fetchStockOverview(
     watchlistItems,
     parseRankingKinds(searchParams.get("rankings")),
+    { noSparkline },
   );
 
   return NextResponse.json(data, {
