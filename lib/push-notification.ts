@@ -1,5 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/server";
-import { sendFcmMessage } from "@/lib/firebase-admin";
+import { hasFirebaseCredentials, sendFcmMessage } from "@/lib/firebase-admin";
 
 interface PushSubscriptionRow {
   fcm_token: string;
@@ -236,7 +236,7 @@ async function getAllSubscriptions(): Promise<PushSubscriptionRow[]> {
 export async function sendPushToAllSubscribers(
   params: PushDispatchParams,
 ): Promise<{ sent: number; failed: number }> {
-  if (!process.env.FIREBASE_ADMIN_PROJECT_ID && !process.env.FIREBASE_ADMIN_CREDENTIALS_JSON) {
+  if (!hasFirebaseCredentials()) {
     console.warn("[push-notification] Firebase Admin 자격증명 미설정 — 전체 구독자 알림 건너뜀");
     return { sent: 0, failed: 0 };
   }
@@ -255,7 +255,7 @@ export async function sendPushToUserIds(
   params: PushDispatchParams,
   type: "comment" | "new_post" | "all" = "comment",
 ): Promise<{ sent: number; failed: number }> {
-  if (!process.env.FIREBASE_ADMIN_PROJECT_ID && !process.env.FIREBASE_ADMIN_CREDENTIALS_JSON) {
+  if (!hasFirebaseCredentials()) {
     console.warn("[push-notification] Firebase Admin 자격증명 미설정 — 타겟 알림 건너뜀");
     return { sent: 0, failed: 0 };
   }

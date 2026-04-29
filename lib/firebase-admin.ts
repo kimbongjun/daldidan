@@ -55,6 +55,15 @@ function parseFirebaseCredentialsJson(rawJson: string): FirebaseServiceAccount {
   };
 }
 
+export function hasFirebaseCredentials(): boolean {
+  if (process.env.FIREBASE_ADMIN_CREDENTIALS_JSON?.trim()) return true;
+  return !!(
+    process.env.FIREBASE_ADMIN_PROJECT_ID?.trim() &&
+    process.env.FIREBASE_ADMIN_CLIENT_EMAIL?.trim() &&
+    process.env.FIREBASE_ADMIN_PRIVATE_KEY?.trim()
+  );
+}
+
 export function getFirebaseServiceAccount(): FirebaseServiceAccount {
   const rawJson = process.env.FIREBASE_ADMIN_CREDENTIALS_JSON?.trim();
   if (rawJson) {

@@ -95,6 +95,7 @@ export async function POST(request: NextRequest) {
   }
 
   const admin = createAdminClient();
+  const requestOrigin = request.nextUrl.origin;
 
   if (parentId) {
     const { data: parentComment, error: parentError } = await admin
@@ -145,7 +146,7 @@ export async function POST(request: NextRequest) {
           commentAuthorName: authorName,
           commenterId: user.id,
           content,
-          origin: process.env.NEXT_PUBLIC_SITE_URL ?? "",
+          origin: requestOrigin,
         });
       } catch (err) {
         console.error("[comment-notification] 댓글 알림 발송 실패:", err);
@@ -190,7 +191,7 @@ export async function POST(request: NextRequest) {
         commentAuthorName: authorName,
         commenterId: null,
         content,
-        origin: process.env.NEXT_PUBLIC_SITE_URL ?? "",
+        origin: requestOrigin,
       });
     } catch (err) {
       console.error("[comment-notification] 비로그인 댓글 알림 발송 실패:", err);
