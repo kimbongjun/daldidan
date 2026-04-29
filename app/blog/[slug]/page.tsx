@@ -90,7 +90,16 @@ export default async function BlogDetailPage({ params }: { params: Promise<{ slu
 
         <article className="grid lg:grid-cols-[minmax(0,1fr)_280px] gap-6">
           <div className="flex flex-col gap-6">
-            <section className="bento-card overflow-hidden">              
+            <section className="bento-card overflow-hidden">
+              {/* 자동 생성 무료이미지: 본문에 없는 경우에만 상단 배치 */}
+              {post.thumbnailUrl && !post.contentHtml.includes(post.thumbnailUrl) && (
+                <img
+                  src={post.thumbnailUrl}
+                  alt={post.title}
+                  className="w-full object-cover"
+                  style={{ maxHeight: "420px" }}
+                />
+              )}
               <div className="p-6 sm:p-8">
                 <BlogProseImageLightbox html={post.contentHtml} />
               </div>
