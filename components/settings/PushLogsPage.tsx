@@ -2,13 +2,21 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Bell, ChevronDown, ChevronUp, LoaderCircle, RefreshCw, Trash2 } from "lucide-react";
+import { AlertCircle, ArrowLeft, Bell, ChevronDown, ChevronUp, LoaderCircle, RefreshCw, Trash2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ko } from "date-fns/locale";
 
 const ACCENT = "#7C3AED";
 
 type OsSummary = Record<string, { sent: number; failed: number }>;
+
+type PushDetail = {
+  tokenPrefix: string;
+  deviceType?: string;
+  success: boolean;
+  errorCode: string | null;
+  errorMessage: string | null;
+};
 
 type PushLog = {
   id: string;
@@ -20,6 +28,7 @@ type PushLog = {
   sent_count: number;
   failed_count: number;
   os_summary: OsSummary;
+  details: PushDetail[] | null;
 };
 
 const TYPE_LABELS: Record<string, string> = {
@@ -68,6 +77,51 @@ function OsBreakdown({ summary }: { summary: OsSummary }) {
           )}
         </div>
       ))}
+    </div>
+  );
+}
+
+function FailureReport({ details }: { details: PushDetail[] }) {
+  const failures = details.filter((d) => !d.success);
+  if (failures.length === 0) return null;
+
+  return (
+    <div className="flex flex-col gap-1.5 mt-1">
+      <div className="flex items-center gap-1.5" style={{ color: "#F43F5E" }}>
+        <AlertCircle size={12} />
+        <span className="text-xs font-semibold">실패 리포트 ({failures.length}건)</span>
+      </div>
+      <div className="flex flex-col gap-1">
+        {failures.map((d, i) => (
+          <div
+            key={i}
+            className="flex flex-col gap-0.5 px-3 py-2 rounded-lg text-xs"
+            style={{ background: "#F43F5E12", border: "1px solid #F43F5E30" }}
+          >
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-mono" style={{ color: "var(--text-muted)" }}>
+                {d.tokenPrefix}…
+              </span>
+              {d.deviceType && (
+                <span
+                  className="px-1.5 py-0.5 rounded text-xs font-semibold"
+                  style={{ background: "var(--bg-base)", color: "var(--text-muted)" }}
+                >
+                  {OS_LABELS[d.deviceType] ?? d.deviceType}
+                </span>
+              )}
+              {d.errorCode && (
+                <span className="font-semibold" style={{ color: "#F43F5E" }}>
+                  {d.errorCode}
+                </span>
+              )}
+            </div>
+            {d.errorMessage && (
+              <span style={{ color: "var(--text-muted)" }}>{d.errorMessage}</span>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -156,6 +210,9 @@ function LogRow({ log, onDelete }: { log: PushLog; onDelete: (id: string) => voi
           <p className="text-xs" style={{ color: "var(--text-muted)" }}>
             {new Date(log.created_at).toLocaleString("ko-KR")}
           </p>
+          {log.details && log.details.length > 0 && (
+            <FailureReport details={log.details} />
+          )}
         </div>
       )}
     </div>

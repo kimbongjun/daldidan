@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
   const admin = createAdminClient();
   let query = admin
     .from("push_logs")
-    .select("id, created_at, notification_type, title, body, target_url, sent_count, failed_count, os_summary", { count: "exact" })
+    .select("id, created_at, notification_type, title, body, target_url, sent_count, failed_count, os_summary, details", { count: "exact" })
     .order("created_at", { ascending: false })
     .range(from, from + limit - 1);
 
