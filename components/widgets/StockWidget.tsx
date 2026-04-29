@@ -328,11 +328,13 @@ function SearchResultGroup({
   focusedIndex,
   globalOffset,
   onSelect,
+  onHover,
 }: {
   results: StockSearchResult[];
   focusedIndex: number;
   globalOffset: number;
   onSelect: (r: StockSearchResult) => void;
+  onHover: (idx: number) => void;
 }) {
   return (
     <>
@@ -343,7 +345,8 @@ function SearchResultGroup({
           <button
             key={result.symbol}
             type="button"
-            onClick={() => onSelect(result)}
+            onMouseDown={(e) => { e.preventDefault(); onSelect(result); }}
+            onMouseEnter={() => onHover(gIdx)}
             className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-colors"
             style={{
               background: isFocused ? `${ACCENT}18` : "rgba(255,255,255,0.04)",
@@ -572,18 +575,25 @@ export default function StockWidget() {
   }, [watchlist, showFeedback]);
 
   const addSymbol = useCallback(() => {
-    if (dropdownOpen && focusedIndex >= 0 && searchResults[focusedIndex]) {
-      selectResult(searchResults[focusedIndex]);
+    // 드롭다운이 열려있으면 → focused 항목 또는 첫 번째 결과를 selectResult로 처리
+    // (ETF·지수 등 assetType을 정확하게 반영하기 위해 raw input 파싱 대신 result 사용)
+    if (dropdownOpen && searchResults.length > 0) {
+      const target = focusedIndex >= 0 ? searchResults[focusedIndex] : searchResults[0];
+      selectResult(target);
       return;
     }
-    const symbol = sanitizeSymbol(input);
+    // 드롭다운 닫힌 상태에서 직접 코드 입력 폴백
+    const stockSym = sanitizeSymbol(input);
+    const indexSym = sanitizeIndexSymbol(input);
+    const symbol = stockSym ?? indexSym;
     if (!symbol) return;
+    const assetType: AssetType = indexSym ? "index" : "stock";
     if (watchlist.some((item) => item.symbol === symbol)) {
       showFeedback("이미 관심종목에 있습니다", "warn");
     } else if (watchlist.length >= 10) {
       showFeedback("최대 10개까지 추가할 수 있습니다", "error");
     } else {
-      setWatchlist((prev) => [...prev, { symbol, assetType: "stock" }]);
+      setWatchlist((prev) => [...prev, { symbol, assetType }]);
       showFeedback(`${symbol} 추가됨`, "success");
       setWatchPage(0);
     }
@@ -752,19 +762,19 @@ export default function StockWidget() {
                       {groupedSearch.stocks.length > 0 && (
                         <>
                           <p className="px-2 pt-1 pb-0.5 text-[9px] font-black uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>주식</p>
-                          <SearchResultGroup results={groupedSearch.stocks} focusedIndex={focusedIndex} globalOffset={0} onSelect={selectResult} />
+                          <SearchResultGroup results={groupedSearch.stocks} focusedIndex={focusedIndex} globalOffset={0} onSelect={selectResult} onHover={setFocusedIndex} />
                         </>
                       )}
                       {groupedSearch.etfs.length > 0 && (
                         <>
                           <p className="px-2 pt-2 pb-0.5 text-[9px] font-black uppercase tracking-wider" style={{ color: "#6366F1" }}>ETF</p>
-                          <SearchResultGroup results={groupedSearch.etfs} focusedIndex={focusedIndex} globalOffset={groupedSearch.stocks.length} onSelect={selectResult} />
+                          <SearchResultGroup results={groupedSearch.etfs} focusedIndex={focusedIndex} globalOffset={groupedSearch.stocks.length} onSelect={selectResult} onHover={setFocusedIndex} />
                         </>
                       )}
                       {groupedSearch.indices.length > 0 && (
                         <>
                           <p className="px-2 pt-2 pb-0.5 text-[9px] font-black uppercase tracking-wider" style={{ color: "#F59E0B" }}>지수</p>
-                          <SearchResultGroup results={groupedSearch.indices} focusedIndex={focusedIndex} globalOffset={groupedSearch.stocks.length + groupedSearch.etfs.length} onSelect={selectResult} />
+                          <SearchResultGroup results={groupedSearch.indices} focusedIndex={focusedIndex} globalOffset={groupedSearch.stocks.length + groupedSearch.etfs.length} onSelect={selectResult} onHover={setFocusedIndex} />
                         </>
                       )}
                     </div>
