@@ -35,15 +35,77 @@ const DEVICE_TYPE_COLORS: Record<PushDevice["device_type"], string> = {
   android: "#10B981",
 };
 
-function parseUserAgent(ua: string | null): string {
-  if (!ua) return "알 수 없는 기기";
-  if (ua.includes("iPhone")) return "iPhone";
-  if (ua.includes("iPad")) return "iPad";
-  if (ua.includes("Android")) return "Android";
-  if (ua.includes("Firefox")) return "Firefox";
-  if (ua.includes("Chrome")) return "Chrome";
-  if (ua.includes("Safari")) return "Safari";
-  return "알 수 없는 기기";
+type DeviceInfo = {
+  deviceName: string;
+  os: string;
+  osVersion: string;
+  browser: string;
+  browserVersion: string;
+};
+
+function parseDeviceInfo(ua: string | null): DeviceInfo {
+  if (!ua) return { deviceName: "알 수 없는 기기", os: "", osVersion: "", browser: "", browserVersion: "" };
+
+  let deviceName = "알 수 없는 기기";
+  let os = "";
+  let osVersion = "";
+  let browser = "";
+  let browserVersion = "";
+
+  if (ua.includes("iPhone")) {
+    deviceName = "iPhone";
+    os = "iOS";
+    const m = ua.match(/iPhone OS ([\d_]+)/);
+    if (m) osVersion = m[1].replace(/_/g, ".");
+  } else if (ua.includes("iPad")) {
+    deviceName = "iPad";
+    os = "iPadOS";
+    const m = ua.match(/CPU OS ([\d_]+)/);
+    if (m) osVersion = m[1].replace(/_/g, ".");
+  } else if (ua.includes("Android")) {
+    os = "Android";
+    const vm = ua.match(/Android ([\d.]+)/);
+    if (vm) osVersion = vm[1];
+    const mm = ua.match(/Android [\d.]+;\s*([^)]+)\)/);
+    deviceName = mm ? mm[1].trim() : "Android 기기";
+  } else if (ua.includes("Macintosh") || ua.includes("Mac OS X")) {
+    deviceName = "Mac";
+    os = "macOS";
+    const m = ua.match(/Mac OS X ([\d_.]+)/);
+    if (m) osVersion = m[1].replace(/_/g, ".");
+  } else if (ua.includes("Windows NT")) {
+    deviceName = "Windows PC";
+    os = "Windows";
+    const m = ua.match(/Windows NT ([\d.]+)/);
+    if (m) {
+      const v = parseFloat(m[1]);
+      osVersion = v >= 10.0 ? "10/11" : v === 6.3 ? "8.1" : v === 6.2 ? "8" : v === 6.1 ? "7" : m[1];
+    }
+  } else if (ua.includes("Linux")) {
+    deviceName = "Linux 기기";
+    os = "Linux";
+  }
+
+  const edgeM = ua.match(/Edg\/([\d.]+)/);
+  const ffM = ua.match(/Firefox\/([\d.]+)/);
+  const crM = ua.match(/Chrome\/([\d.]+)/);
+  const safM = ua.match(/Version\/([\d.]+).*Safari/);
+
+  if (edgeM) {
+    browser = "Edge"; browserVersion = edgeM[1].split(".")[0];
+  } else if (ffM) {
+    browser = "Firefox"; browserVersion = ffM[1].split(".")[0];
+  } else if (crM) {
+    browser = "Chrome"; browserVersion = crM[1].split(".")[0];
+  } else if (safM) {
+    browser = "Safari"; browserVersion = safM[1].split(".")[0];
+  } else if (ua.includes("Safari")) {
+    browser = "Safari";
+    const sv = ua.match(/Safari\/([\d.]+)/);
+    if (sv) browserVersion = sv[1].split(".")[0];
+  }
+
+  return { deviceName, os, osVersion, browser, browserVersion };
 }
 
 function DeviceIcon({ type }: { type: PushDevice["device_type"] }) {
@@ -62,7 +124,7 @@ function DeviceCard({
   const [deleting, setDeleting] = useState(false);
   const typeColor = DEVICE_TYPE_COLORS[device.device_type];
   const typeLabel = DEVICE_TYPE_LABELS[device.device_type];
-  const parsedAgent = parseUserAgent(device.user_agent);
+  const info = parseDeviceInfo(device.user_agent);
   const registeredAt = new Date(device.created_at).toLocaleDateString(
     "ko-KR",
     { year: "numeric", month: "long", day: "numeric" }
@@ -110,9 +172,30 @@ function DeviceCard({
             className="text-sm font-semibold truncate"
             style={{ color: "var(--text-primary)" }}
           >
-            {parsedAgent}
+            {info.deviceName}
           </span>
         </div>
+
+        {(info.os || info.browser) && (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {info.os && (
+              <span
+                className="px-1.5 py-0.5 rounded text-xs font-medium"
+                style={{ background: "var(--bg-card)", color: "var(--text-muted)", border: "1px solid var(--border)" }}
+              >
+                {info.os}{info.osVersion ? ` ${info.osVersion}` : ""}
+              </span>
+            )}
+            {info.browser && (
+              <span
+                className="px-1.5 py-0.5 rounded text-xs font-medium"
+                style={{ background: "var(--bg-card)", color: "var(--text-muted)", border: "1px solid var(--border)" }}
+              >
+                {info.browser}{info.browserVersion ? ` ${info.browserVersion}` : ""}
+              </span>
+            )}
+          </div>
+        )}
 
         <div className="flex items-center gap-2 flex-wrap">
           {device.notify_new_post && (
