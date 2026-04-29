@@ -41,8 +41,8 @@ const MAIN_STYLES: Record<MainWidgetId, CSSProperties> = {
   lotto:    { minHeight: 380 },
 };
 
-const FULL_STYLES: Record<FullWidgetId, { height: number }> = {
-  stock:      { height: 760 },
+const FULL_STYLES: Record<FullWidgetId, CSSProperties> = {
+  stock:      {},
   festival:   { height: 300 },
   realestate: { height: 340 },
 };

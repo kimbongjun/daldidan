@@ -581,16 +581,38 @@ export async function fetchStockOverview(
   }
 }
 
-// 1시간 TTL 모듈 캐시 — 검색 전용 (주식 + ETF 통합)
-let _rowCache: { rows: Record<string, unknown>[]; expiry: number } | null = null;
+// 1시간 TTL 모듈 캐시 — 검색 전용 (주식·ETF 분리 캐시)
+let _searchStockCache: { rows: Record<string, unknown>[]; baseDate: string; expiry: number } | null = null;
+let _searchEtfCache: { rows: Record<string, unknown>[]; baseDate: string; expiry: number } | null = null;
 
 async function getCachedRows(config: KrxConfig): Promise<Record<string, unknown>[]> {
-  if (_rowCache && _rowCache.expiry > Date.now()) return _rowCache.rows;
-  const { baseDate, rows: stockRows } = await fetchLatestMarketRows(config);
-  const etfRows = await fetchEtfRows(config, baseDate);
-  const allRows = [...stockRows, ...etfRows];
-  _rowCache = { rows: allRows, expiry: Date.now() + 3_600_000 };
-  return allRows;
+  const now = Date.now();
+
+  // 주식 rows
+  let stockRows: Record<string, unknown>[];
+  let baseDate: string;
+  if (_searchStockCache && _searchStockCache.expiry > now) {
+    stockRows = _searchStockCache.rows;
+    baseDate = _searchStockCache.baseDate;
+  } else {
+    const result = await fetchLatestMarketRows(config);
+    baseDate = result.baseDate;
+    stockRows = result.rows;
+    _searchStockCache = { rows: stockRows, baseDate, expiry: now + 3_600_000 };
+  }
+
+  // ETF rows — 별도 캐시: fetch 실패 시 다음 요청에서 재시도 허용
+  let etfRows: Record<string, unknown>[];
+  if (_searchEtfCache && _searchEtfCache.expiry > now && _searchEtfCache.baseDate === baseDate) {
+    etfRows = _searchEtfCache.rows;
+  } else {
+    etfRows = await fetchEtfRows(config, baseDate);
+    if (etfRows.length > 0) {
+      _searchEtfCache = { rows: etfRows, baseDate, expiry: now + 3_600_000 };
+    }
+  }
+
+  return [...stockRows, ...etfRows];
 }
 
 export async function searchStocks(query: string, limit = 8): Promise<StockSearchResult[]> {
