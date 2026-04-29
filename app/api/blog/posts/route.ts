@@ -4,7 +4,6 @@ import { ensureUniqueBlogSlug, extractFirstImageFromHtml, getPublishedBlogPosts 
 import { extractDescriptionFromHtml } from "@/lib/blog-shared";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { sendBlogPublishNotification } from "@/lib/resend";
-import { sendPushToAllSubscribers } from "@/lib/push-notification";
 import { generateAutoThumbnail } from "@/lib/blog-thumbnail";
 
 export const runtime = "nodejs";
@@ -99,22 +98,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    await Promise.allSettled([
-      sendBlogPublishNotification({
-        title,
-        description,
-        slug,
-        authorName,
-        thumbnailUrl: finalThumbnail,
-      }),
-      sendPushToAllSubscribers({
-        title,
-        body: description || "새 글을 확인해보세요.",
-        url: `/blog/${encodeURIComponent(slug)}`,
-        icon: finalThumbnail ?? undefined,
-        origin: request.nextUrl.origin,
-      }),
-    ]);
+    await sendBlogPublishNotification({
+      title,
+      description,
+      slug,
+      authorName,
+      thumbnailUrl: finalThumbnail,
+    });
   });
 
   return NextResponse.json({ slug }, { status: 201 });
