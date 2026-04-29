@@ -34,11 +34,11 @@ type DashboardShellProps = {
 };
 
 const MAIN_STYLES: Record<MainWidgetId, CSSProperties> = {
-  blog:     { minHeight: 480, gridColumn: "span 2" },
-  budget:   { minHeight: 460 },
-  calendar: { minHeight: 520 },
-  fortune:  { minHeight: 420 },
-  lotto:    { minHeight: 380 },
+  blog:     { minHeight: "", gridColumn: "" },
+  budget:   { minHeight: "" },
+  calendar: { minHeight: "" },
+  fortune:  { minHeight: "" },
+  lotto:    { minHeight: "" },
 };
 
 const FULL_STYLES: Record<FullWidgetId, CSSProperties> = {
