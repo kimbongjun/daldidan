@@ -377,6 +377,8 @@ export default function StockWidget() {
   const [activeTab, setActiveTab] = useState<Tab>("watch");
   const [activeRank, setActiveRank] = useState<StockRankingKind>("amount");
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>(DEFAULT_WATCHLIST);
+  // localStorage 로드가 완료되기 전까지 save를 막기 위한 플래그
+  const [hydrated, setHydrated] = useState(false);
   const [data, setData] = useState<StockOverviewResponse | null>(null);
   const [loadPhase, setLoadPhase] = useState<LoadPhase>("idle");
   const [refreshNonce, setRefreshNonce] = useState(0);
@@ -399,40 +401,46 @@ export default function StockWidget() {
   const feedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // localStorage 로드 (구형 string[] 포맷 마이그레이션 포함)
+  // setHydrated(true)는 로드 성공 여부와 무관하게 항상 실행 — save effect 허용
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
-      if (!saved) return;
-      const parsed = JSON.parse(saved) as unknown;
-      if (!Array.isArray(parsed)) return;
+      if (saved) {
+        const parsed = JSON.parse(saved) as unknown;
+        if (Array.isArray(parsed)) {
+          const next: WatchlistItem[] = parsed
+            .map((item): WatchlistItem | null => {
+              if (typeof item === "string") {
+                const sym = sanitizeSymbol(item);
+                return sym ? { symbol: sym, assetType: "stock" } : null;
+              }
+              if (typeof item === "object" && item !== null && "symbol" in item) {
+                const raw = item as Record<string, unknown>;
+                const rawSym = typeof raw.symbol === "string" ? raw.symbol : "";
+                const validSym = sanitizeSymbol(rawSym) ?? sanitizeIndexSymbol(rawSym) ?? null;
+                const rawAt = raw.assetType;
+                const validAt: AssetType = rawAt === "etf" || rawAt === "index" ? rawAt : "stock";
+                return validSym ? { symbol: validSym, assetType: validAt } : null;
+              }
+              return null;
+            })
+            .filter((item): item is WatchlistItem => item !== null);
 
-      const next: WatchlistItem[] = parsed
-        .map((item): WatchlistItem | null => {
-          if (typeof item === "string") {
-            const sym = sanitizeSymbol(item);
-            return sym ? { symbol: sym, assetType: "stock" } : null;
-          }
-          if (typeof item === "object" && item !== null && "symbol" in item) {
-            const raw = item as Record<string, unknown>;
-            const rawSym = typeof raw.symbol === "string" ? raw.symbol : "";
-            const validSym = sanitizeSymbol(rawSym) ?? sanitizeIndexSymbol(rawSym) ?? null;
-            const rawAt = raw.assetType;
-            const validAt: AssetType = rawAt === "etf" || rawAt === "index" ? rawAt : "stock";
-            return validSym ? { symbol: validSym, assetType: validAt } : null;
-          }
-          return null;
-        })
-        .filter((item): item is WatchlistItem => item !== null);
-
-      if (next.length > 0) setWatchlist(next.slice(0, 10));
+          if (next.length > 0) setWatchlist(next.slice(0, 10));
+        }
+      }
     } catch {
       // 깨진 저장값은 기본값 사용
     }
+    // React 18 batching: setWatchlist + setHydrated가 단일 re-render로 처리됨
+    setHydrated(true);
   }, []);
 
+  // hydrated 전에는 저장하지 않음 — 초기 렌더의 DEFAULT_WATCHLIST가 덮어쓰는 것을 방지
   useEffect(() => {
+    if (!hydrated) return;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(watchlist));
-  }, [watchlist]);
+  }, [hydrated, watchlist]);
 
   // 탭 전환 시 해당 페이지 리셋
   const changeTab = useCallback((tab: Tab) => {
