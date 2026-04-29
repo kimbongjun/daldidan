@@ -63,8 +63,6 @@ const FIXED_INDEX_SYMBOLS = ["IDX_1", "IDX_2"];
 const DEFAULT_WATCHLIST: WatchlistItem[] = [
   { symbol: "005930", assetType: "stock" },
   { symbol: "000660", assetType: "stock" },
-  { symbol: "035420", assetType: "stock" },
-  { symbol: "005380", assetType: "stock" },
 ];
 
 type Tab = "watch" | "rank" | "ipo";
