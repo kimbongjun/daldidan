@@ -172,6 +172,19 @@ export default function SiteSettingsPage() {
         <ArrowLeft size={13} style={{ color: "var(--text-muted)", transform: "rotate(180deg)" }} />
       </Link>
 
+      <Link
+        href="/settings/push-devices"
+        className="flex items-center gap-3 px-4 py-3 rounded-xl pressable mb-2"
+        style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+      >
+        <Smartphone size={15} style={{ color: "#7C3AED" }} />
+        <div className="flex-1">
+          <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>알림 허용 디바이스</p>
+          <p className="text-xs" style={{ color: "var(--text-muted)" }}>푸시 구독 중인 기기 목록 · 삭제 관리</p>
+        </div>
+        <ArrowLeft size={13} style={{ color: "var(--text-muted)", transform: "rotate(180deg)" }} />
+      </Link>
+
       <div className="bento-card p-6 flex flex-col gap-5">
         <div className="flex items-center justify-between gap-4">
           <div className="flex flex-col gap-0.5">
