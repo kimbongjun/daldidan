@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
+  Bell,
   Image as ImageIcon,
   LoaderCircle,
   Moon,
@@ -157,6 +158,19 @@ export default function SiteSettingsPage() {
           <p className="text-sm" style={{ color: "var(--text-muted)" }}>브랜딩, 메타데이터, PWA 자산을 별도 페이지에서 관리합니다.</p>
         </div>
       </div>
+
+      <Link
+        href="/settings/push-logs"
+        className="flex items-center gap-3 px-4 py-3 rounded-xl pressable mb-2"
+        style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+      >
+        <Bell size={15} style={{ color: "#7C3AED" }} />
+        <div className="flex-1">
+          <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>푸시 알림 로그</p>
+          <p className="text-xs" style={{ color: "var(--text-muted)" }}>전송 이력 · OS별 sent/failed 확인</p>
+        </div>
+        <ArrowLeft size={13} style={{ color: "var(--text-muted)", transform: "rotate(180deg)" }} />
+      </Link>
 
       <div className="bento-card p-6 flex flex-col gap-5">
         <div className="flex items-center justify-between gap-4">

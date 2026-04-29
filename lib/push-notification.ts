@@ -123,6 +123,31 @@ async function deleteTokens(tokens: string[]) {
     .in("fcm_token", tokens);
 }
 
+async function savePushLog(
+  logType: string,
+  params: PushDispatchParams,
+  result: PushDispatchResult,
+) {
+  const osSummary: Record<string, { sent: number; failed: number }> = {};
+  for (const d of result.details) {
+    const key = d.deviceType ?? "unknown";
+    if (!osSummary[key]) osSummary[key] = { sent: 0, failed: 0 };
+    if (d.success) osSummary[key].sent += 1;
+    else osSummary[key].failed += 1;
+  }
+  const admin = createAdminClient();
+  await admin.from("push_logs").insert({
+    notification_type: logType,
+    title: params.title,
+    body: params.body.slice(0, 500),
+    target_url: params.url ?? null,
+    sent_count: result.sent,
+    failed_count: result.failed,
+    os_summary: osSummary,
+    details: result.details,
+  });
+}
+
 async function dispatchPushToSubscriptions(
   subscriptions: PushSubscriptionRow[],
   params: PushDispatchParams,
@@ -243,6 +268,9 @@ export async function sendPushToAllSubscribers(
 
   const subscriptions = await getAllSubscriptions();
   const result = await dispatchPushToSubscriptions(subscriptions, params);
+  savePushLog("new_post", params, result).catch((err) => {
+    console.error("[push-log] 로그 저장 실패:", err);
+  });
   return { sent: result.sent, failed: result.failed };
 }
 
@@ -279,6 +307,10 @@ export async function sendPushToUserIds(
   if (!data || data.length === 0) return { sent: 0, failed: 0 };
 
   const result = await dispatchPushToSubscriptions(data, params);
+  const logType = type === "all" ? "remind" : type;
+  savePushLog(logType, params, result).catch((err) => {
+    console.error("[push-log] 로그 저장 실패:", err);
+  });
   return { sent: result.sent, failed: result.failed };
 }
 
@@ -306,5 +338,9 @@ export async function sendPushDebugToLatestSubscribers(
     };
   }
 
-  return dispatchPushToSubscriptions(subscriptions, params);
+  const result = await dispatchPushToSubscriptions(subscriptions, params);
+  savePushLog("debug", params, result).catch((err) => {
+    console.error("[push-log] 로그 저장 실패:", err);
+  });
+  return result;
 }
