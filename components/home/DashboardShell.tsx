@@ -5,6 +5,7 @@ import {
   DndContext,
   DragOverlay,
   PointerSensor,
+  TouchSensor,
   closestCenter,
   useSensor,
   useSensors,
@@ -142,6 +143,7 @@ function BentoGrid({
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
   );
 
   useEffect(() => {
@@ -321,18 +323,57 @@ function BentoGrid({
         </div>
       </div>
 
-      {/* ── 모바일 (<640px) — 드래그 비활성 ── */}
+      {/* ── 모바일 (<640px) — 터치 드래그 활성 ── */}
       <div className="bento-mobile">
-        {mainOrder.map((id) => (
-          <div key={`mobile-${id}`} style={{ minWidth: 0, minHeight: (MAIN_STYLES[id] as { minHeight: number }).minHeight }}>
-            {getMainContent(id)}
-          </div>
-        ))}
-        {fullOrder.map((id) => (
-          <div key={`mobile-full-${id}`} style={{ minWidth: 0, ...FULL_STYLES[id] }}>
-            {getFullContent(id)}
-          </div>
-        ))}
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={handleMainDragStart}
+          onDragEnd={handleMainDragEnd}
+        >
+          <SortableContext items={mainOrder} strategy={rectSortingStrategy}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+              {mainOrder.map((id) => (
+                <SortableWidgetItem key={`mobile-${id}`} id={id} containerStyle={MAIN_STYLES[id]}>
+                  {getMainContent(id)}
+                </SortableWidgetItem>
+              ))}
+            </div>
+          </SortableContext>
+          <DragOverlay dropAnimation={{ duration: 180, easing: "ease" }}>
+            {activeMainId && (
+              <div style={{ opacity: 0.85, minHeight: (MAIN_STYLES[activeMainId] as { minHeight: number }).minHeight }}>
+                {getMainContent(activeMainId)}
+              </div>
+            )}
+          </DragOverlay>
+        </DndContext>
+
+        <div style={{ marginTop: "1rem" }}>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragStart={handleFullDragStart}
+            onDragEnd={handleFullDragEnd}
+          >
+            <SortableContext items={fullOrder} strategy={rectSortingStrategy}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                {fullOrder.map((id) => (
+                  <SortableWidgetItem key={`mobile-full-${id}`} id={id} containerStyle={FULL_STYLES[id]}>
+                    {getFullContent(id)}
+                  </SortableWidgetItem>
+                ))}
+              </div>
+            </SortableContext>
+            <DragOverlay dropAnimation={{ duration: 180, easing: "ease" }}>
+              {activeFullId && (
+                <div style={{ opacity: 0.85, ...FULL_STYLES[activeFullId] }}>
+                  {getFullContent(activeFullId)}
+                </div>
+              )}
+            </DragOverlay>
+          </DndContext>
+        </div>
       </div>
     </div>
   );

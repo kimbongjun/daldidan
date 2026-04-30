@@ -758,7 +758,9 @@ export default function StockWidget() {
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );
 
-  // localStorage 로드 — 로그인 유저 ID 확인 후 유저별 키로 로드 (구형 공용 키 마이그레이션 포함)
+  const watchlistApiSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 초기 로드 — 로그인 시 Supabase 우선, 실패/비로그인 시 localStorage fallback
   useEffect(() => {
     async function init() {
       let uid: string | null = null;
@@ -775,36 +777,69 @@ export default function StockWidget() {
       const pKey = uid ? `${PORTFOLIO_STORAGE_KEY}-${uid}` : PORTFOLIO_STORAGE_KEY;
 
       try {
-        // 유저별 키 우선, 없으면 공용 키에서 마이그레이션
-        let saved = localStorage.getItem(wKey);
-        if (!saved && uid) {
-          const legacy = localStorage.getItem(STORAGE_KEY);
-          if (legacy) {
-            saved = legacy;
-            localStorage.setItem(wKey, legacy);
-          }
+        let watchlistLoaded = false;
+
+        // 로그인 유저는 Supabase에서 우선 로드
+        if (uid) {
+          try {
+            const wRes = await fetch("/api/watchlist");
+            if (wRes.ok) {
+              const wData = await wRes.json() as { items: unknown[] };
+              if (Array.isArray(wData.items) && wData.items.length > 0) {
+                const next: WatchlistItem[] = wData.items
+                  .map((item): WatchlistItem | null => {
+                    if (typeof item === "object" && item !== null && "symbol" in item) {
+                      const raw = item as Record<string, unknown>;
+                      const rawSym = typeof raw.symbol === "string" ? raw.symbol : "";
+                      const validSym = sanitizeSymbol(rawSym) ?? sanitizeIndexSymbol(rawSym) ?? null;
+                      const rawAt = raw.assetType;
+                      const validAt: AssetType = rawAt === "etf" || rawAt === "index" ? rawAt : "stock";
+                      return validSym ? { symbol: validSym, assetType: validAt } : null;
+                    }
+                    return null;
+                  })
+                  .filter((item): item is WatchlistItem => item !== null);
+                if (next.length > 0) {
+                  setWatchlist(next.slice(0, 10));
+                  watchlistLoaded = true;
+                }
+              }
+            }
+          } catch {}
         }
-        if (saved) {
-          const parsed = JSON.parse(saved) as unknown;
-          if (Array.isArray(parsed)) {
-            const next: WatchlistItem[] = parsed
-              .map((item): WatchlistItem | null => {
-                if (typeof item === "string") {
-                  const sym = sanitizeSymbol(item);
-                  return sym ? { symbol: sym, assetType: "stock" } : null;
-                }
-                if (typeof item === "object" && item !== null && "symbol" in item) {
-                  const raw = item as Record<string, unknown>;
-                  const rawSym = typeof raw.symbol === "string" ? raw.symbol : "";
-                  const validSym = sanitizeSymbol(rawSym) ?? sanitizeIndexSymbol(rawSym) ?? null;
-                  const rawAt = raw.assetType;
-                  const validAt: AssetType = rawAt === "etf" || rawAt === "index" ? rawAt : "stock";
-                  return validSym ? { symbol: validSym, assetType: validAt } : null;
-                }
-                return null;
-              })
-              .filter((item): item is WatchlistItem => item !== null);
-            if (next.length > 0) setWatchlist(next.slice(0, 10));
+
+        // Supabase 로드 실패 또는 비로그인 — localStorage fallback
+        if (!watchlistLoaded) {
+          let saved = localStorage.getItem(wKey);
+          if (!saved && uid) {
+            const legacy = localStorage.getItem(STORAGE_KEY);
+            if (legacy) {
+              saved = legacy;
+              localStorage.setItem(wKey, legacy);
+            }
+          }
+          if (saved) {
+            const parsed = JSON.parse(saved) as unknown;
+            if (Array.isArray(parsed)) {
+              const next: WatchlistItem[] = parsed
+                .map((item): WatchlistItem | null => {
+                  if (typeof item === "string") {
+                    const sym = sanitizeSymbol(item);
+                    return sym ? { symbol: sym, assetType: "stock" } : null;
+                  }
+                  if (typeof item === "object" && item !== null && "symbol" in item) {
+                    const raw = item as Record<string, unknown>;
+                    const rawSym = typeof raw.symbol === "string" ? raw.symbol : "";
+                    const validSym = sanitizeSymbol(rawSym) ?? sanitizeIndexSymbol(rawSym) ?? null;
+                    const rawAt = raw.assetType;
+                    const validAt: AssetType = rawAt === "etf" || rawAt === "index" ? rawAt : "stock";
+                    return validSym ? { symbol: validSym, assetType: validAt } : null;
+                  }
+                  return null;
+                })
+                .filter((item): item is WatchlistItem => item !== null);
+              if (next.length > 0) setWatchlist(next.slice(0, 10));
+            }
           }
         }
 
@@ -841,10 +876,21 @@ export default function StockWidget() {
   }, []);
 
   // hydrated 전에는 저장하지 않음 — 초기 렌더의 DEFAULT_WATCHLIST가 덮어쓰는 것을 방지
+  // 로그인 시 Supabase에 저장 (800ms 디바운스) + localStorage 캐시 동기화
   useEffect(() => {
     if (!hydrated) return;
     localStorage.setItem(watchlistKey, JSON.stringify(watchlist));
-  }, [hydrated, watchlist, watchlistKey]);
+    if (userId) {
+      if (watchlistApiSaveRef.current) clearTimeout(watchlistApiSaveRef.current);
+      watchlistApiSaveRef.current = setTimeout(() => {
+        void fetch("/api/watchlist", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ items: watchlist }),
+        });
+      }, 800);
+    }
+  }, [hydrated, watchlist, watchlistKey, userId]);
 
   useEffect(() => {
     if (!hydrated) return;

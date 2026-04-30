@@ -42,7 +42,7 @@ export function SortableWidgetItem({ id, children, containerStyle }: Props) {
           zIndex: 20,
           cursor: isDragging ? "grabbing" : "grab",
           color: "var(--text-muted)",
-          padding: "4px",
+          padding: "8px",
           borderRadius: "6px",
           display: "flex",
           alignItems: "center",
@@ -50,6 +50,9 @@ export function SortableWidgetItem({ id, children, containerStyle }: Props) {
           background: "var(--bg-card)",
           border: "1px solid var(--border)",
           lineHeight: 1,
+          touchAction: "none",
+          WebkitUserSelect: "none",
+          userSelect: "none",
         }}
         title="드래그하여 위치 변경"
         aria-label="위젯 이동 핸들"

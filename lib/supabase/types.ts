@@ -133,6 +133,22 @@ export type Database = {
           created_at?: string;
         };
       };
+      stock_watchlist: {
+        Row: {
+          user_id: string;
+          items: Json;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          items?: Json;
+          updated_at?: string;
+        };
+        Update: {
+          items?: Json;
+          updated_at?: string;
+        };
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
