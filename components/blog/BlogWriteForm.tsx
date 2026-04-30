@@ -239,6 +239,14 @@ export default function BlogWriteForm({
       }
 
       clearDraft();
+
+      // 새 글 발행 시에만 push 알림 자동 발송 (fire and forget)
+      if (!isEditMode) {
+        fetch(`/api/blog/posts/${encodeURIComponent(payload.slug)}/notify`, {
+          method: "POST",
+        }).catch(() => {});
+      }
+
       router.push(`/blog/${encodeURIComponent(payload.slug)}`);
       router.refresh();
     } catch (submitError) {

@@ -610,28 +610,8 @@ export default function Header({
         </button>
       </div>
 
-      <div className="flex items-center justify-between gap-4">
-        <div className="min-h-[1rem] flex items-center">
-          {locationLoading ? (
-            <div className="flex items-center gap-1.5">
-              <div
-                className="w-3 h-3 rounded-full animate-pulse shrink-0"
-                style={{ background: "var(--border)" }}
-              />
-              <div
-                className="h-3 w-32 rounded animate-pulse"
-                style={{ background: "var(--border)" }}
-              />
-            </div>
-          ) : currentLocation ? (
-            <div className="flex items-center gap-1.5 min-w-0">
-              <MapPin size={12} style={{ color: "var(--text-muted)" }} />
-              <p className="text-xs truncate" style={{ color: "var(--text-muted)" }}>
-                {currentLocation}
-              </p>
-            </div>
-          ) : null}
-        </div>
+      <div className="flex justify-end">
+        <div className="flex flex-col items-end gap-1.5">
 
         <div className="flex items-center gap-1.5 shrink-0">
         {/* 테마 토글 */}
@@ -992,6 +972,30 @@ export default function Header({
         )}
       </div>
       </div>
+      </div>
+      {/* 위치 정보 — 유틸리티 navigation 하단 */}
+        <div className="min-h-[1rem] flex justify-end">
+          {locationLoading ? (
+            <div className="flex items-center gap-1.5">
+              <div
+                className="w-3 h-3 rounded-full animate-pulse shrink-0"
+                style={{ background: "var(--border)" }}
+              />
+              <div
+                className="h-3 w-32 rounded animate-pulse"
+                style={{ background: "var(--border)" }}
+              />
+            </div>
+          ) : currentLocation ? (
+            <div className="flex items-center gap-1.5 min-w-0">
+              <MapPin size={12} style={{ color: "var(--text-muted)" }} />
+              <p className="text-xs truncate" style={{ color: "var(--text-muted)" }}>
+                {currentLocation}
+              </p>
+            </div>
+          ) : null}
+        </div>
     </header>
+    
   );
 }
