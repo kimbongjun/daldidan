@@ -15,7 +15,7 @@ import { preprocessReceiptImage } from "@/lib/image-preprocess";
 import AiSummarySubtitle from "@/components/AiSummarySubtitle";
 
 const ACCENT = "#6366F1";
-const TRANSACTIONS_PER_PAGE = 5;
+const TRANSACTIONS_PER_PAGE = 10;
 
 const CATEGORIES = ["식비", "교통", "쇼핑", "문화", "의료", "통신", "공과금", "구독비", "대출", "급여", "기타"];
 
@@ -615,6 +615,7 @@ export default function BudgetPage() {
                     totalPages={totalPages}
                     onPageChange={setCurrentPage}
                     accentColor={ACCENT}
+                    compact
                   />
                 </>
               )}

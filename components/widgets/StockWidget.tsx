@@ -717,8 +717,14 @@ export default function StockWidget() {
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>(DEFAULT_WATCHLIST);
   const [portfolioMode, setPortfolioMode] = useState(false);
   const [portfolio, setPortfolio] = useState<PortfolioMap>({});
+  const [userId, setUserId] = useState<string | null>(null);
   // localStorage 로드가 완료되기 전까지 save를 막기 위한 플래그
   const [hydrated, setHydrated] = useState(false);
+
+  // 로그인 유저별 독립 저장 키 (비로그인 시 공용 키 fallback)
+  const watchlistKey = userId ? `${STORAGE_KEY}-${userId}` : STORAGE_KEY;
+  const portfolioKey = userId ? `${PORTFOLIO_STORAGE_KEY}-${userId}` : PORTFOLIO_STORAGE_KEY;
+
   const [data, setData] = useState<StockOverviewResponse | null>(null);
   const [loadPhase, setLoadPhase] = useState<LoadPhase>("idle");
   const [refreshNonce, setRefreshNonce] = useState(0);
@@ -750,69 +756,98 @@ export default function StockWidget() {
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );
 
-  // localStorage 로드 (구형 string[] 포맷 마이그레이션 포함)
-  // setHydrated(true)는 로드 성공 여부와 무관하게 항상 실행 — save effect 허용
+  // localStorage 로드 — 로그인 유저 ID 확인 후 유저별 키로 로드 (구형 공용 키 마이그레이션 포함)
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved) as unknown;
-        if (Array.isArray(parsed)) {
-          const next: WatchlistItem[] = parsed
-            .map((item): WatchlistItem | null => {
-              if (typeof item === "string") {
-                const sym = sanitizeSymbol(item);
-                return sym ? { symbol: sym, assetType: "stock" } : null;
-              }
-              if (typeof item === "object" && item !== null && "symbol" in item) {
-                const raw = item as Record<string, unknown>;
-                const rawSym = typeof raw.symbol === "string" ? raw.symbol : "";
-                const validSym = sanitizeSymbol(rawSym) ?? sanitizeIndexSymbol(rawSym) ?? null;
-                const rawAt = raw.assetType;
-                const validAt: AssetType = rawAt === "etf" || rawAt === "index" ? rawAt : "stock";
-                return validSym ? { symbol: validSym, assetType: validAt } : null;
-              }
-              return null;
-            })
-            .filter((item): item is WatchlistItem => item !== null);
+    async function init() {
+      let uid: string | null = null;
+      try {
+        const res = await fetch("/api/me");
+        if (res.ok) {
+          const d = await res.json() as { id: string };
+          uid = d.id ?? null;
+        }
+      } catch {}
+      setUserId(uid);
 
-          if (next.length > 0) setWatchlist(next.slice(0, 10));
+      const wKey = uid ? `${STORAGE_KEY}-${uid}` : STORAGE_KEY;
+      const pKey = uid ? `${PORTFOLIO_STORAGE_KEY}-${uid}` : PORTFOLIO_STORAGE_KEY;
+
+      try {
+        // 유저별 키 우선, 없으면 공용 키에서 마이그레이션
+        let saved = localStorage.getItem(wKey);
+        if (!saved && uid) {
+          const legacy = localStorage.getItem(STORAGE_KEY);
+          if (legacy) {
+            saved = legacy;
+            localStorage.setItem(wKey, legacy);
+          }
         }
-      }
-      const savedPortfolio = localStorage.getItem(PORTFOLIO_STORAGE_KEY);
-      if (savedPortfolio) {
-        const parsedPortfolio = JSON.parse(savedPortfolio) as unknown;
-        if (parsedPortfolio && typeof parsedPortfolio === "object") {
-          const nextPortfolio = Object.entries(parsedPortfolio as Record<string, unknown>).reduce<PortfolioMap>((acc, [symbol, value]) => {
-            const avgPrice =
-              typeof value === "object" && value !== null && "avgPrice" in value
-                ? Number((value as { avgPrice?: unknown }).avgPrice)
-                : Number(value);
-            if (sanitizeSymbol(symbol) && Number.isFinite(avgPrice) && avgPrice > 0) {
-              acc[symbol] = { avgPrice };
-            }
-            return acc;
-          }, {});
-          setPortfolio(nextPortfolio);
+        if (saved) {
+          const parsed = JSON.parse(saved) as unknown;
+          if (Array.isArray(parsed)) {
+            const next: WatchlistItem[] = parsed
+              .map((item): WatchlistItem | null => {
+                if (typeof item === "string") {
+                  const sym = sanitizeSymbol(item);
+                  return sym ? { symbol: sym, assetType: "stock" } : null;
+                }
+                if (typeof item === "object" && item !== null && "symbol" in item) {
+                  const raw = item as Record<string, unknown>;
+                  const rawSym = typeof raw.symbol === "string" ? raw.symbol : "";
+                  const validSym = sanitizeSymbol(rawSym) ?? sanitizeIndexSymbol(rawSym) ?? null;
+                  const rawAt = raw.assetType;
+                  const validAt: AssetType = rawAt === "etf" || rawAt === "index" ? rawAt : "stock";
+                  return validSym ? { symbol: validSym, assetType: validAt } : null;
+                }
+                return null;
+              })
+              .filter((item): item is WatchlistItem => item !== null);
+            if (next.length > 0) setWatchlist(next.slice(0, 10));
+          }
         }
+
+        let savedPortfolio = localStorage.getItem(pKey);
+        if (!savedPortfolio && uid) {
+          const legacyPortfolio = localStorage.getItem(PORTFOLIO_STORAGE_KEY);
+          if (legacyPortfolio) {
+            savedPortfolio = legacyPortfolio;
+            localStorage.setItem(pKey, legacyPortfolio);
+          }
+        }
+        if (savedPortfolio) {
+          const parsedPortfolio = JSON.parse(savedPortfolio) as unknown;
+          if (parsedPortfolio && typeof parsedPortfolio === "object") {
+            const nextPortfolio = Object.entries(parsedPortfolio as Record<string, unknown>).reduce<PortfolioMap>((acc, [symbol, value]) => {
+              const avgPrice =
+                typeof value === "object" && value !== null && "avgPrice" in value
+                  ? Number((value as { avgPrice?: unknown }).avgPrice)
+                  : Number(value);
+              if (sanitizeSymbol(symbol) && Number.isFinite(avgPrice) && avgPrice > 0) {
+                acc[symbol] = { avgPrice };
+              }
+              return acc;
+            }, {});
+            setPortfolio(nextPortfolio);
+          }
+        }
+      } catch {
+        // 깨진 저장값은 기본값 사용
       }
-    } catch {
-      // 깨진 저장값은 기본값 사용
+      setHydrated(true);
     }
-    // React 18 batching: setWatchlist + setHydrated가 단일 re-render로 처리됨
-    setHydrated(true);
+    void init();
   }, []);
 
   // hydrated 전에는 저장하지 않음 — 초기 렌더의 DEFAULT_WATCHLIST가 덮어쓰는 것을 방지
   useEffect(() => {
     if (!hydrated) return;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(watchlist));
-  }, [hydrated, watchlist]);
+    localStorage.setItem(watchlistKey, JSON.stringify(watchlist));
+  }, [hydrated, watchlist, watchlistKey]);
 
   useEffect(() => {
     if (!hydrated) return;
-    localStorage.setItem(PORTFOLIO_STORAGE_KEY, JSON.stringify(portfolio));
-  }, [hydrated, portfolio]);
+    localStorage.setItem(portfolioKey, JSON.stringify(portfolio));
+  }, [hydrated, portfolio, portfolioKey]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setMarketStatus(getKrxMarketStatus()), 30_000);
@@ -1260,7 +1295,7 @@ export default function StockWidget() {
 
               {/* 관심종목 목록 */}
               {isLoading && !data ? (
-                <SkeletonRows count={PAGE_SIZE} />
+                <SkeletonRows count={watchlist.length || 2} />
               ) : sortedQuotes.length === 0 ? (
                 <EmptyState title="관심종목 매매정보가 없습니다" detail="종목명·ETF·지수명을 검색해서 추가하세요." />
               ) : (
@@ -1335,7 +1370,7 @@ export default function StockWidget() {
                 onToggle={(label) => setExpandedTheme((current) => current === label ? null : label)}
               />
               {isLoading && !data ? (
-                <SkeletonRows count={PAGE_SIZE} />
+                <SkeletonRows count={watchlist.length || 2} />
               ) : currentRankings.length === 0 ? (
                 <EmptyState title="랭킹 데이터가 없습니다" detail="KRX API 권한 및 호출 제한 상태를 확인하세요." />
               ) : (

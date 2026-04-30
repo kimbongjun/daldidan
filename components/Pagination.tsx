@@ -15,6 +15,8 @@ interface PaginationProps {
   /** 상태 기반 이동 (클라이언트 컴포넌트에서 사용) */
   onPageChange?: (page: number) => void;
   accentColor?: string;
+  /** 3페이지 window + 마지막 페이지만 표기하는 컴팩트 모드 */
+  compact?: boolean;
 }
 
 function buildPageList(current: number, total: number): (number | "el1" | "el2")[] {
@@ -24,12 +26,27 @@ function buildPageList(current: number, total: number): (number | "el1" | "el2")
   return [1, "el1", current - 1, current, current + 1, "el2", total];
 }
 
+function buildCompactPageList(current: number, total: number): (number | "el1" | "el2")[] {
+  if (total <= 4) return Array.from({ length: total }, (_, i) => i + 1);
+  let start = Math.max(1, current - 1);
+  let end = Math.min(total - 1, start + 2);
+  start = Math.max(1, end - 2);
+  const pages: number[] = [];
+  for (let i = start; i <= end; i++) pages.push(i);
+  if (end >= total - 1) {
+    if (pages[pages.length - 1] !== total) pages.push(total);
+    return pages;
+  }
+  return [...pages, "el1" as const, total];
+}
+
 export default function Pagination({
   currentPage,
   totalPages,
   hrefTemplate,
   onPageChange,
   accentColor = "#EA580C",
+  compact = false,
 }: PaginationProps) {
   function resolveHref(page: number): string | undefined {
     if (hrefTemplate) return hrefTemplate.replace("{page}", String(page));
@@ -37,7 +54,7 @@ export default function Pagination({
   }
   if (totalPages <= 1) return null;
 
-  const pages = buildPageList(currentPage, totalPages);
+  const pages = compact ? buildCompactPageList(currentPage, totalPages) : buildPageList(currentPage, totalPages);
   const base = "w-9 h-9 rounded-lg flex items-center justify-center text-sm font-semibold transition-opacity";
   const idleStyle = { background: "var(--bg-card)", color: "var(--text-muted)", border: "1px solid var(--border)" };
   const activeStyle = { background: accentColor, color: "#fff" };
