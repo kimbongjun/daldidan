@@ -130,6 +130,7 @@ function toNumber(text: string): number {
 // ── 금액 파싱 ───────────────────────────────────────────────────
 const STRONG_AMOUNT_KEYWORDS = [
   "합계금액",
+  "합계 금액",
   "총결제금액",
   "총 결제금액",
   "결제금액",
@@ -141,6 +142,7 @@ const STRONG_AMOUNT_KEYWORDS = [
   "실 결제금액",
   "청구금액",
   "청구 금액",
+  "소계",
   "총합계",
   "금액합계",
   "합계",
@@ -162,7 +164,58 @@ const AMOUNT_NOISE = [
   "단가", "수량", "개수", "ea",
 ];
 
+// ── 금액 인식 정책 ────────────────────────────────────────────────────
+// 【인식 우선순위】
+//   1순위 — 합계 키워드 인접 금액 즉시 채택
+//           합계·합계금액·총결제금액·소계 등 핵심 키워드 필드(±2 이내) 금액 반환
+//           복수 매칭 시 가장 하단(최종 합계) 우선
+//   2순위 — 스코어링: 키워드·위치(하단 가중)·금액 크기 점수 합산 → 최고점 채택
+//   3순위 — 하단 40% 필드 중 최대 금액
+//   4순위 — 노이즈 제외 후 전체 필드 최대 금액
+// 【유효 금액 범위】 100원 이상 ~ 9,990,000원(999만원) 이하
+//   · 하한 100원: 오인식·단가 필터링
+//   · 상한 999만원: 가계부 용도 초과 금액 제외, 초과 후보는 다음 순위로 폴백
+// 【노이즈 제외 키워드】 부가세·VAT·할인·쿠폰·포인트·잔액·거스름돈 등
+const MAX_RECEIPT_AMOUNT = 9_990_000; // 999만원 — 가계부 금액 상한선
+
 function parseAmount(fields: PositionedField[]): number {
+  // ── 1순위: 합계 계열 키워드 인접 금액 즉시 채택 ──────────────────
+  // 합계·합계금액·소계 등 핵심 키워드 필드(±2 이내)에서 유효 금액 탐색.
+  // 복수 키워드 매칭 시 가장 하단(최종 합계) 우선.
+  const priorityMatches: Array<{ amount: number; yRatio: number }> = [];
+  for (let i = 0; i < fields.length; i++) {
+    const normalized = fields[i].text.toLowerCase().replace(/\s/g, "");
+    const isPriority = STRONG_AMOUNT_KEYWORDS.some(
+      (k) => normalized.includes(k.toLowerCase().replace(/\s/g, "")),
+    );
+    if (!isPriority) continue;
+
+    // 같은 필드에 숫자가 포함된 경우 (예: "합계금액 50,000원")
+    const selfAmount = toNumber(fields[i].text);
+    if (selfAmount >= 100 && selfAmount <= MAX_RECEIPT_AMOUNT) {
+      priorityMatches.push({ amount: selfAmount, yRatio: fields[i].yRatio });
+      continue;
+    }
+
+    // 인접 필드에서 유효 금액 탐색 (가까운 순: +1, -1, +2, -2)
+    for (const offset of [1, -1, 2, -2]) {
+      const j = i + offset;
+      if (j < 0 || j >= fields.length) continue;
+      const n = toNumber(fields[j].text);
+      if (n >= 100 && n <= MAX_RECEIPT_AMOUNT) {
+        priorityMatches.push({ amount: n, yRatio: fields[i].yRatio });
+        break;
+      }
+    }
+  }
+
+  if (priorityMatches.length > 0) {
+    // 복수 매칭 시 가장 하단(최종 합계) 선택
+    priorityMatches.sort((a, b) => b.yRatio - a.yRatio);
+    return priorityMatches[0].amount;
+  }
+
+  // ── 2순위: 스코어링 기반 선택 ────────────────────────────────────
   const texts = fields.map((f) => f.text);
   const candidates = fields
     .map((field, index) => ({
@@ -170,7 +223,12 @@ function parseAmount(fields: PositionedField[]): number {
       amount: toNumber(field.text),
       field,
     }))
-    .filter((candidate) => candidate.amount >= 100 && !Number.isNaN(candidate.amount));
+    .filter(
+      (candidate) =>
+        candidate.amount >= 100 &&
+        candidate.amount <= MAX_RECEIPT_AMOUNT &&
+        !Number.isNaN(candidate.amount),
+    );
 
   const strongestKeywordStrength = (text: string): number => {
     const lower = text.toLowerCase();
@@ -230,18 +288,18 @@ function parseAmount(fields: PositionedField[]): number {
     return scoredCandidates[0].amount;
   }
 
-  // 2차: 하단 40% 필드에서 가장 큰 숫자 (합계는 보통 영수증 하단)
+  // ── 3순위: 하단 40% 필드에서 가장 큰 금액 ───────────────────────
   const bottomFields = fields.filter((f) => f.yRatio >= 0.6);
   const bottomCandidates = bottomFields
     .map((f) => toNumber(f.text))
-    .filter((n) => n >= 100 && !isNaN(n));
+    .filter((n) => n >= 100 && n <= MAX_RECEIPT_AMOUNT && !isNaN(n));
   if (bottomCandidates.length) return Math.max(...bottomCandidates);
 
-  // 3차: 노이즈 필드 제외 후 전체에서 가장 큰 숫자
+  // ── 4순위: 노이즈 제외 후 전체 필드 최대 금액 ───────────────────
   const allCandidates = texts
     .filter((t) => !AMOUNT_NOISE.some((k) => t.toLowerCase().includes(k)))
     .map((t) => toNumber(t))
-    .filter((n) => n >= 100);
+    .filter((n) => n >= 100 && n <= MAX_RECEIPT_AMOUNT);
   return allCandidates.length ? Math.max(...allCandidates) : 0;
 }
 
