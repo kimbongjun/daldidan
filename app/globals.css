@@ -413,6 +413,21 @@ input[type="reset"]:not(:disabled):active,
   animation-delay: var(--widget-delay, 0ms);
 }
 
+/* ── Sortable widget drag handle ─────────────────────────────────────────── */
+[data-drag-handle] {
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+[data-widget-sortable]:hover [data-drag-handle] {
+  opacity: 1;
+}
+/* touch devices: always slightly visible for discoverability */
+@media (hover: none) {
+  [data-drag-handle] {
+    opacity: 0.55;
+  }
+}
+
 /* ── Mobile bottom-nav safe area padding ──────────────────────────────────── */
 @media (max-width: 639px) {
   .dashboard-wrap {

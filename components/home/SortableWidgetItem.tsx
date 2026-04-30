@@ -2,7 +2,7 @@
 
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical } from "lucide-react";
+import { GripHorizontal } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
 
 interface Props {
@@ -24,6 +24,7 @@ export function SortableWidgetItem({ id, children, containerStyle }: Props) {
   return (
     <div
       ref={setNodeRef}
+      data-widget-sortable
       style={{
         ...containerStyle,
         transform: CSS.Transform.toString(transform),
@@ -35,15 +36,17 @@ export function SortableWidgetItem({ id, children, containerStyle }: Props) {
       <button
         {...attributes}
         {...listeners}
+        data-drag-handle
         style={{
           position: "absolute",
-          top: 10,
-          right: 10,
+          top: 0,
+          left: "50%",
+          transform: "translate(-50%, -50%)",
           zIndex: 20,
           cursor: isDragging ? "grabbing" : "grab",
           color: "var(--text-muted)",
-          padding: "8px",
-          borderRadius: "6px",
+          padding: "4px 10px",
+          borderRadius: "999px",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -53,11 +56,12 @@ export function SortableWidgetItem({ id, children, containerStyle }: Props) {
           touchAction: "none",
           WebkitUserSelect: "none",
           userSelect: "none",
+          boxShadow: "0 2px 6px rgba(0,0,0,0.3)",
         }}
         title="드래그하여 위치 변경"
         aria-label="위젯 이동 핸들"
       >
-        <GripVertical size={14} />
+        <GripHorizontal size={12} />
       </button>
       {children}
     </div>
