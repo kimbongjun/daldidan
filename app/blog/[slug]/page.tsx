@@ -93,6 +93,7 @@ export default async function BlogDetailPage({ params }: { params: Promise<{ slu
             <section className="bento-card overflow-hidden">
               {/* 자동 생성 무료이미지: 본문에 없는 경우에만 상단 배치 */}
               {post.thumbnailUrl && !post.contentHtml.includes(post.thumbnailUrl) && (
+                // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={post.thumbnailUrl}
                   alt={post.title}

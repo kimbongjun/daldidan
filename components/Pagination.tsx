@@ -29,7 +29,7 @@ function buildPageList(current: number, total: number): (number | "el1" | "el2")
 function buildCompactPageList(current: number, total: number): (number | "el1" | "el2")[] {
   if (total <= 4) return Array.from({ length: total }, (_, i) => i + 1);
   let start = Math.max(1, current - 1);
-  let end = Math.min(total - 1, start + 2);
+  const end = Math.min(total - 1, start + 2);
   start = Math.max(1, end - 2);
   const pages: number[] = [];
   for (let i = start; i <= end; i++) pages.push(i);
