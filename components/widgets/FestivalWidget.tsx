@@ -96,10 +96,12 @@ export default function FestivalWidget() {
   }, [emblaApi, onSelect]);
 
   useEffect(() => {
-    fetch("/api/festival")
+    const controller = new AbortController();
+    fetch("/api/festival", { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(12_000)]) })
       .then((r) => r.json())
       .then((d: FestivalResponse) => setData(d))
       .catch(() => null);
+    return () => controller.abort();
   }, []);
 
   const { ongoingCount, upcomingCount, visible } = useMemo(() => {

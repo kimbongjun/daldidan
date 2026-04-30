@@ -927,6 +927,10 @@ export default function StockWidget() {
 
   // 2단계 fetch: Phase1 = 빠른 quotes, Phase2 = sparklines 포함 full
   const fetchStocks = useCallback(async (signal?: AbortSignal) => {
+    // 15초 타임아웃 + 외부 abort 신호 결합
+    const timeout = AbortSignal.timeout(15_000);
+    const effective = signal ? AbortSignal.any([signal, timeout]) : timeout;
+
     setLoadPhase("quotes");
     const baseParams = new URLSearchParams({
       items: watchlist.map(({ symbol, assetType }) => `${symbol}:${assetType}`).join(","),
@@ -935,13 +939,13 @@ export default function StockWidget() {
 
     // Phase 1: noSparkline — 시세만 빠르게
     try {
-      const res = await fetch(`/api/stocks?${baseParams}&noSparkline=true`, { cache: "no-store", signal });
+      const res = await fetch(`/api/stocks?${baseParams}&noSparkline=true`, { cache: "no-store", signal: effective });
       const d = await res.json() as StockOverviewResponse;
-      if (signal?.aborted) return;
+      if (effective.aborted) return;
       setData(d);
       setLoadPhase("charts");
     } catch (e: unknown) {
-      if (e instanceof DOMException && e.name === "AbortError") return;
+      if (e instanceof DOMException && (e.name === "AbortError" || e.name === "TimeoutError")) return;
       setData({
         status: "error",
         provider: "KRX Open API",
@@ -960,12 +964,14 @@ export default function StockWidget() {
 
     // Phase 2: sparklines 포함 full — Phase 1 실패해도 Phase 1 데이터 유지
     try {
-      const res = await fetch(`/api/stocks?${baseParams}`, { cache: "no-store", signal });
+      const timeout2 = AbortSignal.timeout(20_000);
+      const effective2 = signal ? AbortSignal.any([signal, timeout2]) : timeout2;
+      const res = await fetch(`/api/stocks?${baseParams}`, { cache: "no-store", signal: effective2 });
       const d = await res.json() as StockOverviewResponse;
-      if (!signal?.aborted) { setData(d); setLoadPhase("done"); }
+      if (!effective2.aborted) { setData(d); setLoadPhase("done"); }
     } catch (e: unknown) {
-      if (e instanceof DOMException && e.name === "AbortError") return;
-      if (!signal?.aborted) setLoadPhase("done");
+      if (e instanceof DOMException && (e.name === "AbortError" || e.name === "TimeoutError")) return;
+      if (!effective.aborted) setLoadPhase("done");
     }
   }, [watchlist]);
 
@@ -1019,6 +1025,7 @@ export default function StockWidget() {
       if (debounceRef.current) clearTimeout(debounceRef.current);
       if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
       if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
+      if (watchlistApiSaveRef.current) clearTimeout(watchlistApiSaveRef.current);
     };
   }, []);
 
@@ -1265,7 +1272,7 @@ export default function StockWidget() {
           detail="KRX_OPENAPI_KEY를 .env.local에 설정하면 한국거래소 실시간 데이터를 표시합니다."
         />
       ) : (
-        <AnimatePresence mode="wait">
+        <AnimatePresence>
           <motion.div
             key={activeTab}
             initial={{ opacity: 0, y: 6 }}

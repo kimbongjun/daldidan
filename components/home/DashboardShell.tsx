@@ -149,6 +149,23 @@ function BentoGrid({
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
   );
 
+  // 활성 레이아웃 감지 — null이면 아직 감지 전 (모든 레이아웃에 위젯 렌더)
+  const [activeLayout, setActiveLayout] = useState<"desktop" | "tablet" | "mobile" | null>(null);
+  useEffect(() => {
+    const detect = () => {
+      const w = window.innerWidth;
+      setActiveLayout(w >= 1100 ? "desktop" : w >= 640 ? "tablet" : "mobile");
+    };
+    detect();
+    window.addEventListener("resize", detect, { passive: true });
+    return () => window.removeEventListener("resize", detect);
+  }, []);
+
+  // 해당 레이아웃이 활성일 때만 위젯 콘텐츠 반환 — 비활성 레이아웃에서 중복 인스턴스 방지
+  function slotFor(layout: "desktop" | "tablet" | "mobile", node: React.ReactNode): React.ReactNode {
+    return activeLayout === null || activeLayout === layout ? node : null;
+  }
+
   useEffect(() => {
     void useLayoutStore.persist.rehydrate();
   }, []);
@@ -173,8 +190,8 @@ function BentoGrid({
   function getFullContent(id: FullWidgetId): React.ReactNode {
     switch (id) {
       case "stock":      return <ErrorBoundary><StockWidget /></ErrorBoundary>;
-      case "festival":   return <FestivalWidget />;
-      case "realestate": return <RealEstateWidget />;
+      case "festival":   return <ErrorBoundary><FestivalWidget /></ErrorBoundary>;
+      case "realestate": return <ErrorBoundary><RealEstateWidget /></ErrorBoundary>;
     }
   }
 
@@ -238,7 +255,7 @@ function BentoGrid({
                   style={{ "--widget-delay": `${index * 50}ms` } as CSSProperties}
                 >
                   <SortableWidgetItem id={id} containerStyle={MAIN_STYLES[id]}>
-                    {getMainContent(id)}
+                    {slotFor("desktop", getMainContent(id))}
                   </SortableWidgetItem>
                 </div>
               ))}
@@ -270,7 +287,7 @@ function BentoGrid({
                     style={{ "--widget-delay": `${(mainOrder.length + index) * 50}ms` } as CSSProperties}
                   >
                     <SortableWidgetItem id={id} containerStyle={FULL_STYLES[id]}>
-                      {getFullContent(id)}
+                      {slotFor("desktop", getFullContent(id))}
                     </SortableWidgetItem>
                   </div>
                 ))}
@@ -305,7 +322,7 @@ function BentoGrid({
                   style={{ "--widget-delay": `${index * 50}ms` } as CSSProperties}
                 >
                   <SortableWidgetItem id={id} containerStyle={MAIN_STYLES[id]}>
-                    {getMainContent(id)}
+                    {slotFor("tablet", getMainContent(id))}
                   </SortableWidgetItem>
                 </div>
               ))}
@@ -337,7 +354,7 @@ function BentoGrid({
                     style={{ "--widget-delay": `${(mainOrder.length + index) * 50}ms` } as CSSProperties}
                   >
                     <SortableWidgetItem id={id} containerStyle={FULL_STYLES[id]}>
-                      {getFullContent(id)}
+                      {slotFor("tablet", getFullContent(id))}
                     </SortableWidgetItem>
                   </div>
                 ))}
@@ -372,7 +389,7 @@ function BentoGrid({
                   style={{ "--widget-delay": `${index * 50}ms` } as CSSProperties}
                 >
                   <SortableWidgetItem id={id} containerStyle={MAIN_STYLES[id]}>
-                    {getMainContent(id)}
+                    {slotFor("mobile", getMainContent(id))}
                   </SortableWidgetItem>
                 </div>
               ))}
@@ -404,7 +421,7 @@ function BentoGrid({
                     style={{ "--widget-delay": `${(mainOrder.length + index) * 50}ms` } as CSSProperties}
                   >
                     <SortableWidgetItem id={id} containerStyle={FULL_STYLES[id]}>
-                      {getFullContent(id)}
+                      {slotFor("mobile", getFullContent(id))}
                     </SortableWidgetItem>
                   </div>
                 ))}
