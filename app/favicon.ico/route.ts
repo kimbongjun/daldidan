@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { readFile } from "fs/promises";
 import path from "path";
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -45,7 +46,7 @@ export async function GET() {
   }
 
   try {
-    const upstream = await fetch(faviconUrl, { next: { revalidate: 3600 } });
+    const upstream = await fetchWithTimeout(faviconUrl, { next: { revalidate: 3600 } }, 4000);
     if (!upstream.ok) return serveDefaultFavicon();
 
     const contentType = upstream.headers.get("content-type") ?? "image/png";

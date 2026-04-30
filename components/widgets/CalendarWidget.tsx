@@ -16,6 +16,7 @@ import {
   X,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { fetchWithTimeout, isAbortError } from "@/lib/fetch-with-timeout";
 import type { AuthUser as User } from "@supabase/supabase-js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -720,10 +721,10 @@ export default function CalendarWidget() {
     setLoading(true);
     setFetchError("");
     try {
-      const res = await fetch(`/api/calendar?year=${year}&month=${month}`, {
+      const res = await fetchWithTimeout(`/api/calendar?year=${year}&month=${month}`, {
         signal,
         cache: "no-store",
-      });
+      }, 7000);
       if (res.status === 401) {
         setEvents([]);
         return;
@@ -735,7 +736,7 @@ export default function CalendarWidget() {
       if (signal?.aborted) return;
       setEvents(Array.isArray(payload) ? payload : []);
     } catch (err) {
-      if (signal?.aborted) return;
+      if (signal?.aborted || isAbortError(err)) return;
       setFetchError(err instanceof Error ? err.message : "일정을 불러오지 못했습니다.");
     } finally {
       if (!signal?.aborted) setLoading(false);

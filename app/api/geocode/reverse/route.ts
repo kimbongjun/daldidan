@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 
 interface NaverReverseGeocodeResponse {
   results?: Array<{
@@ -45,13 +46,13 @@ export async function GET(request: NextRequest) {
       url.searchParams.set("orders", "legalcode,admcode");
       url.searchParams.set("output", "json");
 
-      const response = await fetch(url, {
+      const response = await fetchWithTimeout(url, {
         cache: "no-store",
         headers: {
           "X-NCP-APIGW-API-KEY-ID": naverClientId,
           "X-NCP-APIGW-API-KEY": naverClientSecret,
         },
-      });
+      }, 4000);
 
       if (response.ok) {
         const data = await response.json() as NaverReverseGeocodeResponse;
@@ -80,7 +81,7 @@ export async function GET(request: NextRequest) {
   if (apiKey) {
     try {
       const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${apiKey}&language=ko`;
-      const response = await fetch(url, { cache: "no-store" });
+      const response = await fetchWithTimeout(url, { cache: "no-store" }, 4000);
       const data = await response.json() as GeocodingResponse;
 
       if (data.status === "OK" && data.results.length) {
@@ -127,10 +128,10 @@ export async function GET(request: NextRequest) {
     }
 
     const nominatimUrl = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&accept-language=ko`;
-    const res = await fetch(nominatimUrl, {
+    const res = await fetchWithTimeout(nominatimUrl, {
       cache: "no-store",
       headers: { "User-Agent": "daldidan-app/1.0" },
-    });
+    }, 4000);
     const data = await res.json() as NominatimResponse;
 
     if (!data.address) return NextResponse.json({ location: null });

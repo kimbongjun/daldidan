@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 
 interface KakaoPlaceDocument {
   id: string;
@@ -33,12 +34,12 @@ export async function POST(request: NextRequest) {
     }
 
     const params = new URLSearchParams({ query, size: "5" });
-    const response = await fetch(`https://dapi.kakao.com/v2/local/search/keyword.json?${params}`, {
+    const response = await fetchWithTimeout(`https://dapi.kakao.com/v2/local/search/keyword.json?${params}`, {
       headers: {
         Authorization: `KakaoAK ${apiKey}`,
       },
       cache: "no-store",
-    });
+    }, 5000);
 
     if (!response.ok) {
       const message = await response.text();

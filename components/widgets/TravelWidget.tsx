@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { MapPin, Star, ExternalLink, LoaderCircle } from "lucide-react";
 import type { TravelActivity } from "@/app/api/travel/activities/route";
+import { fetchWithTimeout, isAbortError } from "@/lib/fetch-with-timeout";
 
 const KLOOK_COLOR = "#FF5722";
 const KKDAY_COLOR = "#00B6BD";
@@ -34,15 +35,15 @@ export default function TravelWidget() {
     let active = true;
     const controller = new AbortController();
 
-    fetch("/api/travel/activities", { signal: controller.signal })
+    fetchWithTimeout("/api/travel/activities", { signal: controller.signal }, 7000)
       .then((r) => r.json())
       .then((data: TravelActivity[]) => {
         if (!active) return;
         setActivities(Array.isArray(data) ? data : []);
         setLoading(false);
       })
-      .catch(() => {
-        if (!active) return;
+      .catch((error) => {
+        if (!active || isAbortError(error)) return;
         setError(true);
         setLoading(false);
       });

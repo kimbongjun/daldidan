@@ -5,6 +5,7 @@ import { Shuffle, RefreshCw, LoaderCircle, QrCode } from "lucide-react";
 import type { LottoLatestResponse } from "@/app/api/lotto/latest/route";
 import type { LottoGenerateResponse } from "@/app/api/lotto/generate/route";
 import dynamic from "next/dynamic";
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 const LottoQrScannerModal = dynamic(
   () => import("@/components/widgets/LottoQrScannerModal"),
   { ssr: false },
@@ -81,7 +82,7 @@ export default function LottoWidget() {
     setError(null);
 
     try {
-      const res = await fetch(`/api/lotto/latest?ts=${Date.now()}`, { cache: "no-store" });
+      const res = await fetchWithTimeout(`/api/lotto/latest?ts=${Date.now()}`, { cache: "no-store" }, 7000);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json() as LottoLatestResponse;
       setLatest(data);
@@ -100,7 +101,7 @@ export default function LottoWidget() {
     setGenLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/lotto/generate");
+      const res = await fetchWithTimeout("/api/lotto/generate", {}, 7000);
       if (!res.ok) throw new Error();
       const data = await res.json() as LottoGenerateResponse;
       setGenerated(data);

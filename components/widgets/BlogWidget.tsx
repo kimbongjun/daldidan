@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { ArrowRight, BookOpenText, Calendar, Lock, MessageCircle, PenLine, User } from "lucide-react";
 import type { BlogPostSummary } from "@/lib/blog-shared";
 import { formatBlogDateTime, getBlogActivityTimestamp } from "@/lib/blog-shared";
+import { fetchWithTimeout, isAbortError } from "@/lib/fetch-with-timeout";
 import { createClient } from "@/lib/supabase/client";
 import type { AuthUser } from "@supabase/supabase-js";
 
@@ -53,13 +54,16 @@ export default function BlogWidget({ initialPosts }: BlogWidgetProps) {
     let active = true;
     const controller = new AbortController();
 
-    fetch("/api/blog/posts?limit=3", { signal: controller.signal })
+    fetchWithTimeout("/api/blog/posts?limit=3", { signal: controller.signal }, 7000)
       .then((r) => r.json())
       .then((data) => {
         if (!active) return;
         setPosts(Array.isArray(data) ? data : []);
       })
-      .catch(() => { if (!active) return; setPosts([]); })
+      .catch((error) => {
+        if (!active || isAbortError(error)) return;
+        setPosts([]);
+      })
       .finally(() => { if (!active) return; setLoading(false); });
 
     return () => { active = false; controller.abort(); };

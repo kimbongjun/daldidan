@@ -7,6 +7,7 @@ import { ko } from "date-fns/locale";
 import { useThemeStore } from "@/store/useThemeStore";
 import { useNotificationStore } from "@/store/useNotificationStore";
 import { createClient } from "@/lib/supabase/client";
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 import { getFirebaseMessaging } from "@/lib/firebase-client";
 import { deleteToken, getToken, onMessage } from "firebase/messaging";
 import { signOut } from "@/lib/supabase/actions/auth";
@@ -125,7 +126,7 @@ export default function Header() {
 
   // 저장된 커스텀 인사말 + 로고 로드 (site_settings API)
   useEffect(() => {
-    fetch("/api/site-settings")
+    fetchWithTimeout("/api/site-settings", {}, 6000)
       .then((r) => r.json())
       .then((d: Record<string, string>) => {
         if (d.custom_greeting) setCustomGreeting(d.custom_greeting);
@@ -153,7 +154,7 @@ export default function Header() {
 
     let active = true;
 
-    fetch("/api/me", { cache: "no-store" })
+    fetchWithTimeout("/api/me", { cache: "no-store" }, 6000)
       .then(async (response) => {
         if (!response.ok) throw new Error("failed");
         return response.json() as Promise<UserProfile>;

@@ -5,6 +5,7 @@ import { ArrowRight, ArrowUp, ArrowDown, Minus, TrendingUp, Home, Wallet, Calend
 import type { SubscriptionItem } from "@/app/api/realestate/subscriptions/route";
 import type { PolicyRate } from "@/app/api/realestate/rates/route";
 import type { TransactionItem, MarketIndex } from "@/app/api/realestate/transactions/route";
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 
 const ACCENT = "#5CABF2";
 
@@ -76,7 +77,7 @@ function SubscriptionTab() {
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch("/api/realestate/subscriptions", { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(12_000)]) })
+    fetchWithTimeout("/api/realestate/subscriptions", { signal: controller.signal }, 12000)
       .then((r) => r.json() as Promise<{ subscriptions: (SubscriptionItem & { dday: number })[]; isMock?: boolean }>)
       .then((d) => { setItems(d.subscriptions); setIsMock(d.isMock ?? false); })
       .catch(() => null)
@@ -157,7 +158,7 @@ function TransactionTab() {
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch("/api/realestate/transactions", { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(12_000)]) })
+    fetchWithTimeout("/api/realestate/transactions", { signal: controller.signal }, 12000)
       .then((r) => r.json() as Promise<{ transactions: TransactionItem[]; marketIndex: MarketIndex[] }>)
       .then((d) => { setTransactions(d.transactions); setMarketIndex(d.marketIndex); })
       .catch(() => null)
@@ -229,7 +230,7 @@ function RateTab() {
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch("/api/realestate/rates", { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(12_000)]) })
+    fetchWithTimeout("/api/realestate/rates", { signal: controller.signal }, 12000)
       .then((r) => r.json() as Promise<{ rates: PolicyRate[] }>)
       .then((d) => setRates(d.rates))
       .catch(() => null)
