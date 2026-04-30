@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles, RotateCcw, LoaderCircle, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import type {
@@ -78,12 +77,7 @@ function CardFlipper({
   onReset: () => void;
 }) {
   return (
-    <motion.div
-      initial={{ rotateY: 90, opacity: 0 }}
-      animate={{ rotateY: 0, opacity: 1 }}
-      transition={{ type: "spring", stiffness: 180, damping: 18 }}
-      className="flex flex-col items-center gap-4"
-    >
+    <div className="fortune-card-flip flex flex-col items-center gap-4">
       <div
         className="w-full rounded-2xl flex flex-col items-center justify-center gap-4 py-8 px-5 relative overflow-hidden"
         style={{
@@ -103,21 +97,16 @@ function CardFlipper({
         />
 
         {/* 결과 이모지 */}
-        <motion.span
-          initial={{ scale: 0, rotate: -20 }}
-          animate={{ scale: 1, rotate: 0 }}
-          transition={{ type: "spring", stiffness: 300, damping: 15, delay: 0.15 }}
-          style={{ fontSize: "4rem", lineHeight: 1, display: "block", position: "relative", zIndex: 1 }}
+        <span
+          className="fortune-emoji-pop"
+          style={{ fontSize: "4rem", lineHeight: 1, position: "relative", zIndex: 1 }}
         >
           {card.result_emoji}
-        </motion.span>
+        </span>
 
         {/* 결과 텍스트 */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.25, duration: 0.3 }}
-          className="text-center relative z-10"
+        <div
+          className="fortune-text-fade text-center relative z-10"
         >
           <p
             className="text-lg font-bold mb-2 leading-snug"
@@ -132,7 +121,7 @@ function CardFlipper({
             <span>{card.emoji}</span>
             {card.category_label}
           </span>
-        </motion.div>
+        </div>
       </div>
       <button
         onClick={onReset}
@@ -141,7 +130,7 @@ function CardFlipper({
       >
         <RotateCcw size={12} /> 다시 뽑기
       </button>
-    </motion.div>
+    </div>
   );
 }
 
@@ -213,6 +202,37 @@ export default function FortuneWidget() {
 
   return (
     <div className="bento-card h-full flex flex-col p-5 gap-4">
+      <style>{`
+        @keyframes fortune-flip {
+          from { transform: rotateY(90deg); opacity: 0; }
+          to   { transform: rotateY(0deg); opacity: 1; }
+        }
+        @keyframes fortune-emoji-pop {
+          from { transform: scale(0) rotate(-20deg); }
+          to   { transform: scale(1) rotate(0deg); }
+        }
+        @keyframes fortune-text-fade {
+          from { opacity: 0; transform: translateY(10px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fortune-orb-swing {
+          0%,100% { transform: rotate(0deg); }
+          33%     { transform: rotate(10deg); }
+          66%     { transform: rotate(-10deg); }
+        }
+        @keyframes fortune-tab-in {
+          from { opacity: 0; transform: translateY(8px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        .fortune-card-flip { animation: fortune-flip 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+        .fortune-emoji-pop { animation: fortune-emoji-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) 0.15s both; display: block; }
+        .fortune-text-fade { animation: fortune-text-fade 0.3s ease 0.25s both; }
+        .fortune-orb-swing { animation: fortune-orb-swing 3s ease-in-out infinite; display: block; }
+        .fortune-tab-content { animation: fortune-tab-in 0.2s ease both; }
+        .fortune-card-btn { transition: transform 0.15s ease; }
+        .fortune-card-btn:hover { transform: scale(1.03); }
+        .fortune-card-btn:active { transform: scale(0.97); }
+      `}</style>
       {/* 헤더 */}
       <div className="flex items-center justify-between">
         <div>
@@ -246,16 +266,9 @@ export default function FortuneWidget() {
 
       {/* 콘텐츠 */}
       <div className="flex-1 overflow-auto scrollbar-hide">
-        <AnimatePresence mode="wait">
+        <div>
           {tab === "fortune" ? (
-            <motion.div
-              key="fortune"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2 }}
-              className="flex flex-col gap-4"
-            >
+            <div key="fortune" className="fortune-tab-content flex flex-col gap-4">
               {needsProfile ? (
                 <div
                   className="rounded-xl p-4 flex flex-col items-center gap-3 text-center"
@@ -287,13 +300,12 @@ export default function FortuneWidget() {
                   className="rounded-xl p-6 flex flex-col items-center gap-4"
                   style={{ background: `${ACCENT}10`, border: `1px dashed ${ACCENT}44` }}
                 >
-                  <motion.span
-                    animate={{ rotate: [0, 10, -10, 0] }}
-                    transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
-                    style={{ fontSize: "2.5rem", display: "block" }}
+                  <span
+                    className="fortune-orb-swing"
+                    style={{ fontSize: "2.5rem" }}
                   >
                     🔮
-                  </motion.span>
+                  </span>
                   <p className="text-sm text-center" style={{ color: "var(--text-muted)" }}>
                     오늘의 운세를 AI가 풀어드려요
                   </p>
@@ -320,16 +332,9 @@ export default function FortuneWidget() {
                   <RotateCcw size={11} /> 다시 보기
                 </button>
               )}
-            </motion.div>
+            </div>
           ) : (
-            <motion.div
-              key="card"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2 }}
-              className="flex flex-col gap-4"
-            >
+            <div key="card" className="fortune-tab-content flex flex-col gap-4">
               {/* 카테고리 선택 */}
               <div className="grid grid-cols-2 gap-2">
                 {CARD_CATEGORIES.map(({ id, label, emoji }) => (
@@ -374,30 +379,25 @@ export default function FortuneWidget() {
                   {error && (
                     <p className="text-xs text-center" style={{ color: "#F43F5E" }}>{error}</p>
                   )}
-                  <motion.div
-                    whileHover={{ scale: 1.03 }}
-                    whileTap={{ scale: 0.97 }}
+                  <button
+                    onClick={() => drawCard(selectedCategory)}
+                    disabled={flipping}
+                    className="fortune-card-btn flex items-center gap-2 px-6 py-3 rounded-2xl text-sm font-bold text-white disabled:opacity-50"
+                    style={{ background: `linear-gradient(135deg, ${ACCENT}, #6D28D9)` }}
                   >
-                    <button
-                      onClick={() => drawCard(selectedCategory)}
-                      disabled={flipping}
-                      className="flex items-center gap-2 px-6 py-3 rounded-2xl text-sm font-bold text-white disabled:opacity-50 transition-opacity"
-                      style={{ background: `linear-gradient(135deg, ${ACCENT}, #6D28D9)` }}
-                    >
-                      {flipping
-                        ? <><LoaderCircle size={14} className="animate-spin" /> 뽑는 중…</>
-                        : <>🃏 카드 뽑기</>
-                      }
-                    </button>
-                  </motion.div>
+                    {flipping
+                      ? <><LoaderCircle size={14} className="animate-spin" /> 뽑는 중…</>
+                      : <>🃏 카드 뽑기</>
+                    }
+                  </button>
                   <p className="text-xs" style={{ color: "var(--text-muted)" }}>
                     {CARD_CATEGORIES.find((c) => c.id === selectedCategory)?.label}를 랜덤으로 정해드려요
                   </p>
                 </div>
               )}
-            </motion.div>
+            </div>
           )}
-        </AnimatePresence>
+        </div>
       </div>
     </div>
   );

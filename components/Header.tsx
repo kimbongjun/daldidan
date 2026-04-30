@@ -1,7 +1,6 @@
 "use client";
 
 import { startTransition, useEffect, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
 import { Bell, BellOff, CalendarDays, Check, LoaderCircle, LogOut, Moon, Pencil, RefreshCw, Settings, Share, Sparkles, Sun, Trash2, User, UserCircle, X } from "lucide-react";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
@@ -453,6 +452,15 @@ export default function Header() {
 
   return (
     <header className="flex flex-col gap-3 py-6 px-1">
+      <style>{`
+        @keyframes header-dropdown-in {
+          from { opacity: 0; transform: translateY(-8px) scale(0.96); }
+          to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .header-dropdown-panel {
+          animation: header-dropdown-in 0.15s cubic-bezier(0.16, 1, 0.3, 1) both;
+        }
+      `}</style>
       <div className="flex items-center justify-between gap-4">
         {/* ── 로고 + 인사말 ── */}
         <div className="flex items-center gap-3 min-w-0">
@@ -633,13 +641,9 @@ export default function Header() {
               )}
             </button>
 
-            <AnimatePresence>
             {notificationMenuOpen && (
-              <motion.div
-                initial={{ opacity: 0, y: -8, scale: 0.96 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: -8, scale: 0.96 }}
-                transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
+              <div
+                className="header-dropdown-panel"
                 style={{
                   position: "absolute", top: "calc(100% + 0.5rem)", right: 0,
                   width: 260, background: "var(--bg-card)", border: "1px solid var(--border)",
@@ -802,9 +806,8 @@ export default function Header() {
                     )}
                   </div>
                 </div>
-              </motion.div>
+              </div>
             )}
-            </AnimatePresence>
           </div>
         )}
 
@@ -834,13 +837,9 @@ export default function Header() {
               )}
             </button>
 
-            <AnimatePresence>
             {dropdownOpen && (
-              <motion.div
-                initial={{ opacity: 0, y: -8, scale: 0.96 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: -8, scale: 0.96 }}
-                transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
+              <div
+                className="header-dropdown-panel"
                 style={{
                   position: "absolute", top: "calc(100% + 0.5rem)", right: 0,
                   minWidth: 200, background: "var(--bg-card)", border: "1px solid var(--border)",
@@ -888,9 +887,8 @@ export default function Header() {
                     로그아웃
                   </button>
                 </form>
-              </motion.div>
+              </div>
             )}
-            </AnimatePresence>
           </div>
         ) : (
           <Link

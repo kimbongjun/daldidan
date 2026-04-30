@@ -4,7 +4,11 @@ import { useState, useEffect } from "react";
 import { Shuffle, RefreshCw, LoaderCircle, QrCode } from "lucide-react";
 import type { LottoLatestResponse } from "@/app/api/lotto/latest/route";
 import type { LottoGenerateResponse } from "@/app/api/lotto/generate/route";
-import LottoQrScannerModal from "@/components/widgets/LottoQrScannerModal";
+import dynamic from "next/dynamic";
+const LottoQrScannerModal = dynamic(
+  () => import("@/components/widgets/LottoQrScannerModal"),
+  { ssr: false },
+);
 
 const ACCENT = "#F7C137";
 

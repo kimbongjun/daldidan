@@ -711,7 +711,7 @@ export default function CalendarWidget() {
     return () => subscription.unsubscribe();
   }, []);
 
-  const fetchEvents = useCallback(async (signal?: AbortSignal) => {
+  const fetchEvents = useCallback(async (year: number, month: number, signal?: AbortSignal) => {
     if (!user?.id) {
       setEvents([]);
       setFetchError("");
@@ -720,7 +720,7 @@ export default function CalendarWidget() {
     setLoading(true);
     setFetchError("");
     try {
-      const res = await fetch(`/api/calendar?year=${viewYear}&month=${viewMonth}`, {
+      const res = await fetch(`/api/calendar?year=${year}&month=${month}`, {
         signal,
         cache: "no-store",
       });
@@ -740,7 +740,7 @@ export default function CalendarWidget() {
     } finally {
       if (!signal?.aborted) setLoading(false);
     }
-  }, [user?.id, viewYear, viewMonth]);
+  }, [user?.id]);
 
   useEffect(() => {
     if (!user?.id) {
@@ -750,9 +750,9 @@ export default function CalendarWidget() {
       return;
     }
     const controller = new AbortController();
-    fetchEvents(controller.signal);
+    void fetchEvents(viewYear, viewMonth, controller.signal);
     return () => controller.abort();
-  }, [fetchEvents, user?.id]);
+  }, [fetchEvents, viewYear, viewMonth, user?.id]);
 
   // 날짜별 이벤트 맵
   const eventsByDate = useMemo(() => {
@@ -849,7 +849,7 @@ export default function CalendarWidget() {
           </div>
           <div className="flex items-center gap-1">
             <button
-              onClick={() => { void fetchEvents(); }}
+              onClick={() => { void fetchEvents(viewYear, viewMonth); }}
               disabled={loading}
               className="p-1.5 rounded-lg"
               style={{ color: "var(--text-muted)" }}
@@ -1056,7 +1056,7 @@ export default function CalendarWidget() {
         <EventFormModal
           defaultDate={formDate}
           onClose={() => setShowForm(false)}
-          onSaved={fetchEvents}
+          onSaved={() => void fetchEvents(viewYear, viewMonth)}
         />
       )}
       {detailDate && eventsByDate[detailDate] && (
@@ -1065,7 +1065,7 @@ export default function CalendarWidget() {
           date={detailDate}
           onClose={() => setDetailDate(null)}
           onError={setFetchError}
-          onDeleted={() => { fetchEvents(); setDetailDate(null); }}
+          onDeleted={() => { void fetchEvents(viewYear, viewMonth); setDetailDate(null); }}
           onEdit={(ev) => setEditingEvent(ev)}
         />
       )}
@@ -1073,7 +1073,7 @@ export default function CalendarWidget() {
         <EventEditModal
           event={editingEvent}
           onClose={() => setEditingEvent(null)}
-          onSaved={() => { fetchEvents(); setEditingEvent(null); }}
+          onSaved={() => { void fetchEvents(viewYear, viewMonth); setEditingEvent(null); }}
         />
       )}
     </>

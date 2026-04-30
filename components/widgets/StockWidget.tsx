@@ -36,7 +36,6 @@ import {
   WalletCards,
   X,
 } from "lucide-react";
-import { AnimatePresence, motion } from "framer-motion";
 import {
   getCoreRowModel,
   getSortedRowModel,
@@ -1210,6 +1209,13 @@ export default function StockWidget() {
 
   return (
     <div className="bento-card flex flex-col p-5 gap-3">
+      <style>{`
+        @keyframes stock-tab-in {
+          from { opacity: 0; transform: translateY(6px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        .stock-tab-content { animation: stock-tab-in 0.15s ease both; }
+      `}</style>
       {/* 헤더 */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
@@ -1274,15 +1280,8 @@ export default function StockWidget() {
           detail="KRX_OPENAPI_KEY를 .env.local에 설정하면 한국거래소 실시간 데이터를 표시합니다."
         />
       ) : (
-        <AnimatePresence>
-          <motion.div
-            key={activeTab}
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
-            transition={{ duration: 0.15, ease: "easeOut" }}
-            className="flex flex-col gap-3"
-          >
+        <>
+          <div key={activeTab} className="stock-tab-content flex flex-col gap-3">
 
           {/* ── 관심 탭 ── */}
           {activeTab === "watch" && (
@@ -1559,8 +1558,8 @@ export default function StockWidget() {
             </div>
           )}
 
-          </motion.div>
-        </AnimatePresence>
+          </div>
+        </>
       )}
       {selectedQuote && <QuoteDetailModal quote={selectedQuote} onClose={() => setSelectedQuote(null)} />}
     </div>
