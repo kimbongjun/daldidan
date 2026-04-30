@@ -186,8 +186,8 @@ function SkeletonRows({ count = 3 }: { count?: number }) {
       {Array.from({ length: count }).map((_, i) => (
         <div
           key={i}
-          className="h-[62px] rounded-xl animate-pulse"
-          style={{ background: "rgba(255,255,255,0.05)", border: "1px solid var(--border)" }}
+          className="h-[62px] rounded-xl skeleton-shimmer"
+          style={{ border: "1px solid var(--border)" }}
         />
       ))}
     </div>

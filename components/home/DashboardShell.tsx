@@ -25,6 +25,7 @@ import FortuneWidget from "@/components/widgets/FortuneWidget";
 import LottoWidget from "@/components/widgets/LottoWidget";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { SortableWidgetItem } from "@/components/home/SortableWidgetItem";
+import BottomNav from "@/components/BottomNav";
 import type { BlogPostSummary } from "@/lib/blog-shared";
 import type { MainWidgetId, FullWidgetId } from "@/store/useLayoutStore";
 import { useLayoutStore } from "@/store/useLayoutStore";
@@ -96,6 +97,7 @@ export default function DashboardShell({ initialBlogPosts }: DashboardShellProps
       }}
     >
       <div
+        className="dashboard-wrap"
         style={{
           maxWidth: 1400,
           margin: "0 auto",
@@ -122,6 +124,7 @@ export default function DashboardShell({ initialBlogPosts }: DashboardShellProps
             </ErrorBoundary>
           }
         />
+        <BottomNav />
         <Footer />
       </div>
     </div>
@@ -226,11 +229,18 @@ function BentoGrid({
           onDragEnd={handleMainDragEnd}
         >
           <SortableContext items={mainOrder} strategy={rectSortingStrategy}>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: "1rem" }}>
-              {mainOrder.map((id) => (
-                <SortableWidgetItem key={id} id={id} containerStyle={MAIN_STYLES[id]}>
-                  {getMainContent(id)}
-                </SortableWidgetItem>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: "1.25rem" }}>
+              {mainOrder.map((id, index) => (
+                <div
+                  key={id}
+                  data-widget-id={id}
+                  className="widget-enter"
+                  style={{ "--widget-delay": `${index * 50}ms` } as CSSProperties}
+                >
+                  <SortableWidgetItem id={id} containerStyle={MAIN_STYLES[id]}>
+                    {getMainContent(id)}
+                  </SortableWidgetItem>
+                </div>
               ))}
             </div>
           </SortableContext>
@@ -243,7 +253,7 @@ function BentoGrid({
           </DragOverlay>
         </DndContext>
 
-        <div style={{ marginTop: "1rem" }}>
+        <div style={{ marginTop: "1.25rem" }}>
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
@@ -251,11 +261,18 @@ function BentoGrid({
             onDragEnd={handleFullDragEnd}
           >
             <SortableContext items={fullOrder} strategy={rectSortingStrategy}>
-              <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-                {fullOrder.map((id) => (
-                  <SortableWidgetItem key={id} id={id} containerStyle={FULL_STYLES[id]}>
-                    {getFullContent(id)}
-                  </SortableWidgetItem>
+              <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+                {fullOrder.map((id, index) => (
+                  <div
+                    key={id}
+                    data-widget-id={id}
+                    className="widget-enter"
+                    style={{ "--widget-delay": `${(mainOrder.length + index) * 50}ms` } as CSSProperties}
+                  >
+                    <SortableWidgetItem id={id} containerStyle={FULL_STYLES[id]}>
+                      {getFullContent(id)}
+                    </SortableWidgetItem>
+                  </div>
                 ))}
               </div>
             </SortableContext>
@@ -279,11 +296,18 @@ function BentoGrid({
           onDragEnd={handleMainDragEnd}
         >
           <SortableContext items={mainOrder} strategy={rectSortingStrategy}>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0,1fr))", gap: "1rem" }}>
-              {mainOrder.map((id) => (
-                <SortableWidgetItem key={`tablet-${id}`} id={id} containerStyle={MAIN_STYLES[id]}>
-                  {getMainContent(id)}
-                </SortableWidgetItem>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0,1fr))", gap: "1.25rem" }}>
+              {mainOrder.map((id, index) => (
+                <div
+                  key={`tablet-${id}`}
+                  data-widget-id={id}
+                  className="widget-enter"
+                  style={{ "--widget-delay": `${index * 50}ms` } as CSSProperties}
+                >
+                  <SortableWidgetItem id={id} containerStyle={MAIN_STYLES[id]}>
+                    {getMainContent(id)}
+                  </SortableWidgetItem>
+                </div>
               ))}
             </div>
           </SortableContext>
@@ -296,7 +320,7 @@ function BentoGrid({
           </DragOverlay>
         </DndContext>
 
-        <div style={{ marginTop: "1rem" }}>
+        <div style={{ marginTop: "1.25rem" }}>
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
@@ -304,11 +328,18 @@ function BentoGrid({
             onDragEnd={handleFullDragEnd}
           >
             <SortableContext items={fullOrder} strategy={rectSortingStrategy}>
-              <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-                {fullOrder.map((id) => (
-                  <SortableWidgetItem key={`tablet-full-${id}`} id={id} containerStyle={FULL_STYLES[id]}>
-                    {getFullContent(id)}
-                  </SortableWidgetItem>
+              <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+                {fullOrder.map((id, index) => (
+                  <div
+                    key={`tablet-full-${id}`}
+                    data-widget-id={id}
+                    className="widget-enter"
+                    style={{ "--widget-delay": `${(mainOrder.length + index) * 50}ms` } as CSSProperties}
+                  >
+                    <SortableWidgetItem id={id} containerStyle={FULL_STYLES[id]}>
+                      {getFullContent(id)}
+                    </SortableWidgetItem>
+                  </div>
                 ))}
               </div>
             </SortableContext>
@@ -332,11 +363,18 @@ function BentoGrid({
           onDragEnd={handleMainDragEnd}
         >
           <SortableContext items={mainOrder} strategy={rectSortingStrategy}>
-            <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-              {mainOrder.map((id) => (
-                <SortableWidgetItem key={`mobile-${id}`} id={id} containerStyle={MAIN_STYLES[id]}>
-                  {getMainContent(id)}
-                </SortableWidgetItem>
+            <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+              {mainOrder.map((id, index) => (
+                <div
+                  key={`mobile-${id}`}
+                  data-widget-id={id}
+                  className="widget-enter"
+                  style={{ "--widget-delay": `${index * 50}ms` } as CSSProperties}
+                >
+                  <SortableWidgetItem id={id} containerStyle={MAIN_STYLES[id]}>
+                    {getMainContent(id)}
+                  </SortableWidgetItem>
+                </div>
               ))}
             </div>
           </SortableContext>
@@ -349,7 +387,7 @@ function BentoGrid({
           </DragOverlay>
         </DndContext>
 
-        <div style={{ marginTop: "1rem" }}>
+        <div style={{ marginTop: "1.25rem" }}>
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
@@ -357,11 +395,18 @@ function BentoGrid({
             onDragEnd={handleFullDragEnd}
           >
             <SortableContext items={fullOrder} strategy={rectSortingStrategy}>
-              <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-                {fullOrder.map((id) => (
-                  <SortableWidgetItem key={`mobile-full-${id}`} id={id} containerStyle={FULL_STYLES[id]}>
-                    {getFullContent(id)}
-                  </SortableWidgetItem>
+              <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+                {fullOrder.map((id, index) => (
+                  <div
+                    key={`mobile-full-${id}`}
+                    data-widget-id={id}
+                    className="widget-enter"
+                    style={{ "--widget-delay": `${(mainOrder.length + index) * 50}ms` } as CSSProperties}
+                  >
+                    <SortableWidgetItem id={id} containerStyle={FULL_STYLES[id]}>
+                      {getFullContent(id)}
+                    </SortableWidgetItem>
+                  </div>
                 ))}
               </div>
             </SortableContext>
