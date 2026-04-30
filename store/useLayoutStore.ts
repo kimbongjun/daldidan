@@ -14,8 +14,8 @@ interface LayoutState {
 export const useLayoutStore = create<LayoutState>()(
   persist(
     (set) => ({
-      mainOrder: ["blog", "budget", "calendar", "fortune", "lotto"],
-      fullOrder: ["stock", "festival", "realestate"],
+      mainOrder: ["fortune", "lotto", "blog", "budget", "calendar"],
+      fullOrder: ["stock", "realestate", "festival"],
       setMainOrder: (mainOrder) => set({ mainOrder }),
       setFullOrder: (fullOrder) => set({ fullOrder }),
     }),

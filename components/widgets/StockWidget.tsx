@@ -21,6 +21,7 @@ import {
   Bell,
   ChevronLeft,
   ChevronRight,
+  ChevronsUpDown,
   GripVertical,
   LineChart,
   Loader2,
@@ -35,6 +36,14 @@ import {
   WalletCards,
   X,
 } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  getCoreRowModel,
+  getSortedRowModel,
+  useReactTable,
+  type ColumnDef,
+  type SortingState,
+} from "@tanstack/react-table";
 import Sparkline from "@/components/Sparkline";
 import {
   STOCK_RANKING_KINDS,
@@ -348,7 +357,7 @@ function QuoteRow({
           </p>
         )}
         {range.high > range.low && (
-          <div className="mt-1.5 grid grid-cols-[34px_minmax(0,1fr)_34px] items-center gap-1.5">
+          <div className="hidden sm:grid mt-1.5 grid-cols-[34px_minmax(0,1fr)_34px] items-center gap-1.5">
             <span className="text-[9px] tabular-nums" style={{ color: "var(--text-muted)" }}>{formatPrice(range.low)}</span>
             <div className="h-1.5 overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,0.08)" }}>
               <div className="h-full rounded-full" style={{ width: `${range.pct}%`, background: color }} />
@@ -1004,6 +1013,15 @@ export default function StockWidget() {
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, []);
 
+  // 타이머 ref cleanup — 언마운트 시 pending timer 제거
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+      if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
+    };
+  }, []);
+
   // 검색 (300ms 디바운스)
   const handleInputChange = useCallback((value: string) => {
     setInput(value);
@@ -1136,9 +1154,27 @@ export default function StockWidget() {
     return next;
   }, [quotes, watchSort]);
 
+  // TanStack Table — 랭킹 클라이언트 정렬
+  const [rankSorting, setRankSorting] = useState<SortingState>([]);
+  const rankColumns = useMemo<ColumnDef<StockRankingItem>[]>(() => [
+    { accessorKey: "name",       header: "종목명" },
+    { accessorKey: "price",      header: "현재가" },
+    { accessorKey: "changePct",  header: "등락률" },
+    { accessorKey: "scoreValue", header: "지표값" },
+  ], []);
+  const rankTable = useReactTable({
+    data: currentRankings,
+    columns: rankColumns,
+    state: { sorting: rankSorting },
+    onSortingChange: setRankSorting,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+  });
+  const sortedRankings = rankTable.getRowModel().rows.map((r) => r.original);
+
   // 페이지 슬라이스
   const pagedQuotes = sortedQuotes.slice(watchPage * PAGE_SIZE, (watchPage + 1) * PAGE_SIZE);
-  const pagedRankings = currentRankings.slice(rankPage * PAGE_SIZE, (rankPage + 1) * PAGE_SIZE);
+  const pagedRankings = sortedRankings.slice(rankPage * PAGE_SIZE, (rankPage + 1) * PAGE_SIZE);
   const pagedIpos = ipos.slice(ipoPage * PAGE_SIZE, (ipoPage + 1) * PAGE_SIZE);
 
   const handleWatchDragEnd = useCallback(({ active, over }: DragEndEvent) => {
@@ -1229,7 +1265,15 @@ export default function StockWidget() {
           detail="KRX_OPENAPI_KEY를 .env.local에 설정하면 한국거래소 실시간 데이터를 표시합니다."
         />
       ) : (
-        <div className="flex flex-col gap-3">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.15, ease: "easeOut" }}
+            className="flex flex-col gap-3"
+          >
 
           {/* ── 관심 탭 ── */}
           {activeTab === "watch" && (
@@ -1403,7 +1447,7 @@ export default function StockWidget() {
                     <button
                       key={kind}
                       type="button"
-                      onClick={() => { setActiveRank(kind); setRankPage(0); }}
+                      onClick={() => { setActiveRank(kind); setRankPage(0); setRankSorting([]); }}
                       className="tag shrink-0 gap-1"
                       style={{ background: active ? ACCENT : `${ACCENT}15`, color: active ? "#fff" : "var(--text-muted)" }}
                     >
@@ -1423,12 +1467,41 @@ export default function StockWidget() {
                 <EmptyState title="랭킹 데이터가 없습니다" detail="KRX API 권한 및 호출 제한 상태를 확인하세요." />
               ) : (
                 <>
+                  {/* 2차 정렬 버튼 (TanStack Table) */}
+                  <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide">
+                    {rankTable.getAllColumns().filter((c) => c.id !== "name").map((column) => {
+                      const sorted = column.getIsSorted();
+                      const SortIcon = sorted === "asc" ? ArrowUp : sorted === "desc" ? ArrowDown : ChevronsUpDown;
+                      return (
+                        <button
+                          key={column.id}
+                          type="button"
+                          onClick={column.getToggleSortingHandler()}
+                          className="tag shrink-0 gap-1 transition-all"
+                          style={{ background: sorted ? `${ACCENT}25` : `${ACCENT}10`, color: sorted ? ACCENT : "var(--text-muted)" }}
+                        >
+                          {column.columnDef.header as string}
+                          <SortIcon size={9} />
+                        </button>
+                      );
+                    })}
+                    {rankSorting.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setRankSorting([])}
+                        className="tag shrink-0"
+                        style={{ background: "rgba(255,255,255,0.06)", color: "var(--text-muted)" }}
+                      >
+                        초기화
+                      </button>
+                    )}
+                  </div>
                   <div className="flex flex-col gap-2">
                     {pagedRankings.map((item) => (
                       <RankingRow key={`${activeRank}-${item.symbol}-${item.rank}`} item={item} />
                     ))}
                   </div>
-                  <Pagination page={rankPage} total={currentRankings.length} onChange={setRankPage} />
+                  <Pagination page={rankPage} total={sortedRankings.length} onChange={setRankPage} />
                 </>
               )}
             </div>
@@ -1477,7 +1550,8 @@ export default function StockWidget() {
             </div>
           )}
 
-        </div>
+          </motion.div>
+        </AnimatePresence>
       )}
       {selectedQuote && <QuoteDetailModal quote={selectedQuote} onClose={() => setSelectedQuote(null)} />}
     </div>

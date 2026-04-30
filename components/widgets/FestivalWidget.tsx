@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, Calendar, MapPin } from "lucide-react";
+import { ArrowLeft, ArrowRight, Calendar, MapPin } from "lucide-react";
+import useEmblaCarousel from "embla-carousel-react";
 import { FestivalItem, FestivalResponse, FestivalStatus, REGION_GROUPS } from "@/lib/data/festival";
 
 const ACCENT = "#10B981";
@@ -69,6 +70,30 @@ function SkeletonCard() {
 export default function FestivalWidget() {
   const [data, setData] = useState<FestivalResponse | null>(null);
   const [regionFilter, setRegionFilter] = useState<string>("전체");
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [canScrollPrev, setCanScrollPrev] = useState(false);
+  const [canScrollNext, setCanScrollNext] = useState(false);
+
+  const [emblaRef, emblaApi] = useEmblaCarousel({
+    align: "start",
+    dragFree: true,
+    containScroll: "trimSnaps",
+  });
+
+  const onSelect = useCallback(() => {
+    if (!emblaApi) return;
+    setSelectedIndex(emblaApi.selectedScrollSnap());
+    setCanScrollPrev(emblaApi.canScrollPrev());
+    setCanScrollNext(emblaApi.canScrollNext());
+  }, [emblaApi]);
+
+  useEffect(() => {
+    if (!emblaApi) return;
+    onSelect();
+    emblaApi.on("select", onSelect);
+    emblaApi.on("reInit", onSelect);
+    return () => { emblaApi.off("select", onSelect); emblaApi.off("reInit", onSelect); };
+  }, [emblaApi, onSelect]);
 
   useEffect(() => {
     fetch("/api/festival")
@@ -103,7 +128,6 @@ export default function FestivalWidget() {
           <h2 className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>
             국내 행사·축제
           </h2>
-          {/* 실데이터 여부 + 진행중/예정 카운트 */}
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
             {data ? (
               <>
@@ -132,13 +156,34 @@ export default function FestivalWidget() {
             )}
           </div>
         </div>
-        <Link
-          href="/festival"
-          className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg shrink-0 transition-opacity hover:opacity-70"
-          style={{ background: "#10B98122", color: ACCENT }}
-        >
-          전체보기 <ArrowRight size={11} />
-        </Link>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {/* 이전/다음 화살표 */}
+          <button
+            onClick={() => emblaApi?.scrollPrev()}
+            disabled={!canScrollPrev}
+            aria-label="이전 행사"
+            className="flex h-7 w-7 items-center justify-center rounded-lg transition-opacity disabled:opacity-25"
+            style={{ background: "#10B98120", color: ACCENT }}
+          >
+            <ArrowLeft size={13} />
+          </button>
+          <button
+            onClick={() => emblaApi?.scrollNext()}
+            disabled={!canScrollNext}
+            aria-label="다음 행사"
+            className="flex h-7 w-7 items-center justify-center rounded-lg transition-opacity disabled:opacity-25"
+            style={{ background: "#10B98120", color: ACCENT }}
+          >
+            <ArrowRight size={13} />
+          </button>
+          <Link
+            href="/festival"
+            className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg transition-opacity hover:opacity-70"
+            style={{ background: "#10B98122", color: ACCENT }}
+          >
+            전체보기 <ArrowRight size={11} />
+          </Link>
+        </div>
       </div>
 
       {/* 지역 필터 */}
@@ -148,7 +193,8 @@ export default function FestivalWidget() {
           return (
             <button
               key={g.label}
-              onClick={() => setRegionFilter(g.label)}
+              onClick={() => { setRegionFilter(g.label); emblaApi?.scrollTo(0); }}
+              aria-label={`${g.label} 지역 필터`}
               className="tag shrink-0 transition-all"
               style={
                 active
@@ -162,23 +208,43 @@ export default function FestivalWidget() {
         })}
       </div>
 
-      {/* 카드 목록 — 가로 스크롤 */}
-      <div className="flex gap-3 overflow-x-auto scrollbar-hide flex-1 pb-0.5">
-        {!data ? (
-          // 스켈레톤
-          <>
-            <SkeletonCard />
-            <SkeletonCard />
-            <SkeletonCard />
-          </>
-        ) : visible.length === 0 ? (
-          <div className="flex-1 flex items-center justify-center">
-            <p className="text-sm" style={{ color: "var(--text-muted)" }}>해당 지역 행사가 없습니다.</p>
-          </div>
-        ) : (
-          visible.map((item) => <FestivalCard key={item.id} item={item} />)
-        )}
+      {/* 카드 목록 — Embla Carousel */}
+      <div className="overflow-hidden flex-1" ref={emblaRef}>
+        <div className="flex gap-3 h-full pb-0.5">
+          {!data ? (
+            <>
+              <SkeletonCard />
+              <SkeletonCard />
+              <SkeletonCard />
+            </>
+          ) : visible.length === 0 ? (
+            <div className="flex-1 flex items-center justify-center">
+              <p className="text-sm" style={{ color: "var(--text-muted)" }}>해당 지역 행사가 없습니다.</p>
+            </div>
+          ) : (
+            visible.map((item) => <FestivalCard key={item.id} item={item} />)
+          )}
+        </div>
       </div>
+
+      {/* 도트 인디케이터 */}
+      {visible.length > 1 && (
+        <div className="flex items-center justify-center gap-1 shrink-0">
+          {visible.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => emblaApi?.scrollTo(i)}
+              aria-label={`${i + 1}번째 행사로 이동`}
+              className="rounded-full transition-all"
+              style={{
+                width: i === selectedIndex ? 14 : 6,
+                height: 6,
+                background: i === selectedIndex ? ACCENT : `${ACCENT}44`,
+              }}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
