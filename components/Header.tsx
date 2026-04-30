@@ -403,11 +403,11 @@ export default function Header() {
   };
 
   const handleOpenNotificationMenu = () => {
-    setNotificationMenuOpen((prev) => {
-      const next = !prev;
-      if (next) markAllInboxRead();
-      return next;
-    });
+    const next = !notificationMenuOpen;
+    setNotificationMenuOpen(next);
+    if (next) {
+      markAllInboxRead();
+    }
   };
 
   const handleNotificationClick = (id: string, url: string) => {
