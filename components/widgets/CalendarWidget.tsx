@@ -58,7 +58,7 @@ type NewEvent = {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const EVENT_TYPE_META: Record<EventType, { label: string; color: string; bg: string }> = {
-  schedule:    { label: "일정",   color: "#0EA5E9", bg: "rgba(14,165,233,0.15)" },
+  schedule:    { label: "일정",   color: "#5CABF2", bg: "rgba(92,171,242,0.15)" },
   anniversary: { label: "기념일", color: "#F43F5E", bg: "rgba(244,63,94,0.15)" },
 };
 
@@ -257,7 +257,7 @@ function EventFormFields({
             type="checkbox"
             checked={form.is_recurring}
             onChange={(e) => set("is_recurring", e.target.checked)}
-            className="w-4 h-4 accent-[#0EA5E9]"
+            className="w-4 h-4 accent-[#5CABF2]"
           />
           <span className="text-sm flex items-center gap-1" style={{ color: "var(--text-primary)" }}>
             <Repeat size={13} /> 반복 일정
@@ -361,7 +361,7 @@ function EventEditModal({
       >
         <div className="flex items-center justify-between p-5 pb-0">
           <div className="flex items-center gap-2">
-            <Pencil size={18} style={{ color: "#0EA5E9" }} />
+            <Pencil size={18} style={{ color: "#5CABF2" }} />
             <span className="font-semibold" style={{ color: "var(--text-primary)" }}>일정 편집</span>
           </div>
           <button onClick={onClose} aria-label="닫기" className="p-1 rounded-lg" style={{ color: "var(--text-muted)" }}>
@@ -376,7 +376,7 @@ function EventEditModal({
             type="submit"
             disabled={saving}
             className="w-full py-2.5 rounded-xl text-sm font-semibold transition-opacity"
-            style={{ background: "#0EA5E9", color: "#fff", opacity: saving ? 0.6 : 1 }}
+            style={{ background: "#5CABF2", color: "#fff", opacity: saving ? 0.6 : 1 }}
           >
             {saving ? "저장 중…" : "변경 사항 저장"}
           </button>
@@ -456,7 +456,7 @@ function EventFormModal({
         {/* Header */}
         <div className="flex items-center justify-between p-5 pb-0">
           <div className="flex items-center gap-2">
-            <CalendarDays size={18} style={{ color: "#0EA5E9" }} />
+            <CalendarDays size={18} style={{ color: "#5CABF2" }} />
             <span className="font-semibold" style={{ color: "var(--text-primary)" }}>일정 추가</span>
           </div>
           <button onClick={onClose} aria-label="닫기" className="p-1 rounded-lg" style={{ color: "var(--text-muted)" }}>
@@ -505,7 +505,7 @@ function EventFormModal({
             type="submit"
             disabled={saving}
             className="w-full py-2.5 rounded-xl text-sm font-semibold transition-opacity"
-            style={{ background: "#0EA5E9", color: "#fff", opacity: saving ? 0.6 : 1 }}
+            style={{ background: "#5CABF2", color: "#fff", opacity: saving ? 0.6 : 1 }}
           >
             {saving ? "저장 중…" : "일정 저장"}
           </button>
@@ -662,7 +662,7 @@ function EventDetailModal({
                         <button
                           onClick={() => { onEdit(ev); onClose(); }}
                           className="p-1.5 rounded-lg"
-                          style={{ color: "#0EA5E9", background: "rgba(14,165,233,0.1)" }}
+                          style={{ color: "#5CABF2", background: "rgba(92,171,242,0.1)" }}
                           aria-label="일정 편집"
                         >
                           <Pencil size={14} />
@@ -805,21 +805,21 @@ export default function CalendarWidget() {
   // ─── 로딩 상태 ───────────────────────────────────────────────────────
   if (user === undefined) {
     return (
-      <div className="bento-card gradient-sky h-full flex items-center justify-center">
-        <div style={{ width: 28, height: 28, borderRadius: "50%", border: "3px solid #0EA5E9", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }} />
+      <div className="bento-card h-full flex items-center justify-center">
+        <div style={{ width: 28, height: 28, borderRadius: "50%", border: "3px solid #5CABF2", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }} />
       </div>
     );
   }
 
   if (!user) {
     return (
-      <div className="bento-card gradient-sky h-full flex flex-col items-center justify-center gap-3 p-6">
-        <CalendarDays size={36} style={{ color: "#0EA5E9" }} />
+      <div className="bento-card h-full flex flex-col items-center justify-center gap-3 p-6">
+        <CalendarDays size={36} style={{ color: "#5CABF2" }} />
         <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>로그인하면 일정을 공유할 수 있어요</p>
         <a
           href="/login"
           className="px-4 py-2 rounded-xl text-sm font-semibold"
-          style={{ background: "#0EA5E9", color: "#fff" }}
+          style={{ background: "#5CABF2", color: "#fff" }}
         >
           로그인
         </a>
@@ -832,17 +832,17 @@ export default function CalendarWidget() {
 
   return (
     <>
-      <div className="bento-card gradient-sky h-full flex flex-col p-5 gap-4">
+      <div className="bento-card h-full flex flex-col p-5 gap-4">
         {/* Header */}
         <div className="flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2">
-            <CalendarDays size={16} style={{ color: "#0EA5E9" }} />
-            <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#0EA5E9" }}>
+            <CalendarDays size={16} style={{ color: "#5CABF2" }} />
+            <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#5CABF2" }}>
               캘린더
             </span>
             <span
               className="tag text-xs"
-              style={{ background: "rgba(14,165,233,0.15)", color: "#0EA5E9" }}
+              style={{ background: "rgba(92,171,242,0.15)", color: "#5CABF2" }}
             >
               {events.length}개
             </span>
@@ -860,7 +860,7 @@ export default function CalendarWidget() {
             <button
               onClick={() => { setFormDate(today); setShowForm(true); }}
               className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium"
-              style={{ background: "rgba(14,165,233,0.15)", color: "#0EA5E9" }}
+              style={{ background: "rgba(92,171,242,0.15)", color: "#5CABF2" }}
             >
               <Plus size={13} /> 추가
             </button>
@@ -895,7 +895,7 @@ export default function CalendarWidget() {
             <div
               key={label}
               className="text-center text-xs pb-1 font-medium"
-              style={{ color: i === 0 ? "#F43F5E" : i === 6 ? "#0EA5E9" : "var(--text-muted)" }}
+              style={{ color: i === 0 ? "#F43F5E" : i === 6 ? "#5CABF2" : "var(--text-muted)" }}
             >
               {label}
             </div>
@@ -924,7 +924,7 @@ export default function CalendarWidget() {
                 onClick={() => handleDayClick(dateStr)}
                 className="flex flex-col items-center gap-0.5 py-1 rounded-lg transition-opacity"
                 style={{
-                  background: isToday ? "rgba(14,165,233,0.2)" : "transparent",
+                  background: isToday ? "rgba(92,171,242,0.2)" : "transparent",
                   opacity: isPast ? 0.5 : 1,
                   minHeight: 44,
                 }}
@@ -933,11 +933,11 @@ export default function CalendarWidget() {
                   className="text-xs leading-none"
                   style={{
                     color: isToday
-                      ? "#0EA5E9"
+                      ? "#5CABF2"
                       : isSun
                       ? "#F43F5E"
                       : isSat
-                      ? "#0EA5E9"
+                      ? "#5CABF2"
                       : "var(--text-primary)",
                     fontWeight: isToday ? 700 : 400,
                   }}

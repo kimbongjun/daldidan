@@ -64,7 +64,7 @@ import {
   formatTradingValue,
 } from "@/lib/stocks/utils";
 
-const ACCENT = "#F43F5E";
+const ACCENT = "#F05C6E";
 const DOWN = "#10B981";
 const STORAGE_KEY = "daldidan-stock-watchlist";
 const PORTFOLIO_STORAGE_KEY = "daldidan-stock-portfolio";
@@ -1200,7 +1200,7 @@ export default function StockWidget() {
   }, []);
 
   return (
-    <div className="bento-card gradient-rose flex flex-col p-5 gap-3">
+    <div className="bento-card flex flex-col p-5 gap-3">
       {/* 헤더 */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">

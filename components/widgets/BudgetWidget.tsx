@@ -74,29 +74,29 @@ export default function BudgetWidget() {
 
   if (user === undefined) {
     return (
-      <div className="bento-card gradient-indigo h-full flex flex-col p-5 items-center justify-center gap-2">
-        <div style={{ width: 28, height: 28, borderRadius: "50%", border: "3px solid #6366F1", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }} />
+      <div className="bento-card h-full flex flex-col p-5 items-center justify-center gap-2">
+        <div style={{ width: 28, height: 28, borderRadius: "50%", border: "3px solid #3DD9C0", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }} />
       </div>
     );
   }
 
   if (!user) {
     return (
-      <div className="bento-card gradient-indigo h-full flex flex-col p-5 gap-4">
+      <div className="bento-card h-full flex flex-col p-5 gap-4">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "#6366F1" }}>가계부</p>
+          <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "#3DD9C0" }}>가계부</p>
           <h2 className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>분석 요약</h2>
         </div>
         <div className="flex-1 flex flex-col items-center justify-center gap-3">
-          <div style={{ width: 48, height: 48, borderRadius: "0.875rem", background: "rgba(99,102,241,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <Wallet size={22} style={{ color: "#6366F1" }} />
+          <div style={{ width: 48, height: 48, borderRadius: "0.875rem", background: "rgba(61,217,192,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Wallet size={22} style={{ color: "#3DD9C0" }} />
           </div>
           <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>로그인 후 이용 가능합니다</p>
           <p className="text-xs text-center" style={{ color: "var(--text-muted)" }}>로그인하면 공유 가계부를<br />함께 기록하고 분석할 수 있어요.</p>
           <Link
             href="/login"
             className="flex items-center gap-1.5 text-xs font-semibold px-4 py-2 rounded-lg transition-opacity hover:opacity-70"
-            style={{ background: "#6366F1", color: "#fff" }}
+            style={{ background: "#3DD9C0", color: "#fff" }}
           >
             <LogIn size={12} />로그인하기
           </Link>
@@ -106,16 +106,16 @@ export default function BudgetWidget() {
   }
 
   return (
-    <div className="bento-card gradient-indigo h-full flex flex-col p-5 gap-4">
+    <div className="bento-card h-full flex flex-col p-5 gap-4">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "#6366F1" }}>가계부</p>
+          <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "#3DD9C0" }}>가계부</p>
           <h2 className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>분석 요약</h2>
         </div>
         <Link
           href="/budget"
           className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg transition-opacity hover:opacity-70"
-          style={{ background: "#6366F122", color: "#6366F1" }}
+          style={{ background: "#3DD9C022", color: "#3DD9C0" }}
         >
           상세보기 <ArrowRight size={11} />
         </Link>
@@ -193,14 +193,14 @@ export default function BudgetWidget() {
       {!loading && transactions.length === 0 && (
         <div className="flex-1 flex flex-col items-center justify-center gap-2">
           <p className="text-sm" style={{ color: "var(--text-muted)" }}>아직 거래 내역이 없습니다.</p>
-          <Link href="/budget" className="text-xs font-semibold" style={{ color: "#6366F1" }}>
+          <Link href="/budget" className="text-xs font-semibold" style={{ color: "#3DD9C0" }}>
             + 첫 거래 추가하기
           </Link>
         </div>
       )}
       {loading && (
         <div className="flex-1 flex items-center justify-center">
-          <div style={{ width: 20, height: 20, borderRadius: "50%", border: "2px solid #6366F1", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }} />
+          <div style={{ width: 20, height: 20, borderRadius: "50%", border: "2px solid #3DD9C0", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }} />
         </div>
       )}
     </div>

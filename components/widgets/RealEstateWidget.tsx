@@ -6,7 +6,7 @@ import type { SubscriptionItem } from "@/app/api/realestate/subscriptions/route"
 import type { PolicyRate } from "@/app/api/realestate/rates/route";
 import type { TransactionItem, MarketIndex } from "@/app/api/realestate/transactions/route";
 
-const ACCENT = "#0EA5E9";
+const ACCENT = "#5CABF2";
 
 type Tab = "청약" | "시세" | "금리";
 
@@ -284,7 +284,7 @@ export default function RealEstateWidget() {
   ];
 
   return (
-    <div className="bento-card gradient-sky h-full flex flex-col p-5 gap-3">
+    <div className="bento-card h-full flex flex-col p-5 gap-3">
       {/* 헤더 */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">

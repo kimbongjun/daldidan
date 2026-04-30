@@ -118,7 +118,7 @@ export default function FestivalWidget() {
   }, [data, regionFilter]);
 
   return (
-    <div className="bento-card gradient-emerald h-full flex flex-col p-5 gap-3">
+    <div className="bento-card h-full flex flex-col p-5 gap-3">
       {/* 헤더 */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">

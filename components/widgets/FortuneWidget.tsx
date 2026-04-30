@@ -11,7 +11,7 @@ import type {
   CardCategory,
 } from "@/app/api/fortune/reading/route";
 
-const ACCENT = "#8B5CF6";
+const ACCENT = "#7C6AF7";
 
 const CARD_CATEGORIES: { id: CardCategory; label: string; emoji: string }[] = [
   { id: "meal",   label: "오늘의 식사",  emoji: "🍽️" },
@@ -212,7 +212,7 @@ export default function FortuneWidget() {
   };
 
   return (
-    <div className="bento-card gradient-violet h-full flex flex-col p-5 gap-4">
+    <div className="bento-card h-full flex flex-col p-5 gap-4">
       {/* 헤더 */}
       <div className="flex items-center justify-between">
         <div>

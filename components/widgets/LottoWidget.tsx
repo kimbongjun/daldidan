@@ -6,7 +6,7 @@ import type { LottoLatestResponse } from "@/app/api/lotto/latest/route";
 import type { LottoGenerateResponse } from "@/app/api/lotto/generate/route";
 import LottoQrScannerModal from "@/components/widgets/LottoQrScannerModal";
 
-const ACCENT = "#F59E0B";
+const ACCENT = "#F7C137";
 
 function calcNetPrize(amnt: number | null): number | null {
   if (!amnt) return null;
@@ -112,7 +112,7 @@ export default function LottoWidget() {
     : [];
 
   return (
-    <div className="bento-card gradient-amber h-full flex flex-col p-5 gap-4">
+    <div className="bento-card h-full flex flex-col p-5 gap-4">
       {/* 헤더 */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">

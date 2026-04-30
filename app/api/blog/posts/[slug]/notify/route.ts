@@ -1,6 +1,7 @@
 import { after, NextRequest, NextResponse } from "next/server";
 import { canEditBlogPost, getBlogPostBySlug } from "@/lib/blog";
 import { sendPushToAllSubscribers } from "@/lib/push-notification";
+import { createAdminClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
@@ -36,6 +37,27 @@ export async function POST(
       ok: true,
       queued: false,
       message: "이미 이 글의 알림 발송이 진행 중입니다.",
+    }, { status: 202 });
+  }
+
+  // DB 기반 중복 차단: 최근 23시간 내 동일 URL로 발송된 기록이 있으면 차단
+  const targetUrl = `/blog/${encodeURIComponent(slug)}`;
+  const cutoff = new Date(now - 23 * 60 * 60 * 1000).toISOString();
+  const adminDb = createAdminClient();
+  const { data: recentLog } = await adminDb
+    .from("push_logs")
+    .select("id")
+    .eq("notification_type", "new_post")
+    .eq("target_url", targetUrl)
+    .gte("created_at", cutoff)
+    .limit(1)
+    .maybeSingle();
+
+  if (recentLog) {
+    return NextResponse.json({
+      ok: true,
+      queued: false,
+      message: "이미 발송된 알림입니다. (23시간 내 중복 차단)",
     }, { status: 202 });
   }
 

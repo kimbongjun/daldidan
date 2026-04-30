@@ -9,7 +9,7 @@ import { formatBlogDateTime, getBlogActivityTimestamp } from "@/lib/blog-shared"
 import { createClient } from "@/lib/supabase/client";
 import type { AuthUser } from "@supabase/supabase-js";
 
-const ACCENT = "#EA580C";
+const ACCENT = "#F7A35C";
 const NEW_COMMENT_THRESHOLD_DAYS = 7;
 
 function isNewComment(latestCommentAt: string | null): boolean {
@@ -68,7 +68,7 @@ export default function BlogWidget({ initialPosts }: BlogWidgetProps) {
   // ── 비로그인 상태 ──────────────────────────────────
   if (user === null) {
     return (
-      <div className="bento-card gradient-orange h-full flex flex-col p-5 gap-4">
+      <div className="bento-card h-full flex flex-col p-5 gap-4">
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: ACCENT }}>블로그</p>
@@ -78,7 +78,7 @@ export default function BlogWidget({ initialPosts }: BlogWidgetProps) {
         <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center">
           <div
             className="w-14 h-14 rounded-2xl flex items-center justify-center"
-            style={{ background: "rgba(234,88,12,0.12)", color: ACCENT }}
+            style={{ background: "rgba(247,163,92,0.12)", color: ACCENT }}
           >
             <Lock size={24} />
           </div>
@@ -100,7 +100,7 @@ export default function BlogWidget({ initialPosts }: BlogWidgetProps) {
 
   // ── 로그인 상태 ──────────────────────────────────
   return (
-    <div className="bento-card gradient-orange h-full flex flex-col p-5 gap-4">
+    <div className="bento-card h-full flex flex-col p-5 gap-4">
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: ACCENT }}>블로그</p>
@@ -117,7 +117,7 @@ export default function BlogWidget({ initialPosts }: BlogWidgetProps) {
           <Link
             href="/blog"
             className="pressable flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg transition-opacity hover:opacity-70"
-            style={{ background: "#EA580C22", color: ACCENT }}
+            style={{ background: "#F7A35C22", color: ACCENT }}
           >
             상세보기 <ArrowRight size={11} />
           </Link>
@@ -133,7 +133,7 @@ export default function BlogWidget({ initialPosts }: BlogWidgetProps) {
           <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center">
             <div
               className="w-12 h-12 rounded-2xl flex items-center justify-center"
-              style={{ background: "rgba(234,88,12,0.14)", color: ACCENT }}
+              style={{ background: "rgba(247,163,92,0.14)", color: ACCENT }}
             >
               <BookOpenText size={22} />
             </div>
@@ -157,7 +157,7 @@ export default function BlogWidget({ initialPosts }: BlogWidgetProps) {
                 {post.thumbnailUrl ? (
                   <Image src={post.thumbnailUrl} alt={post.title} fill sizes="96px" className="object-cover" unoptimized />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center" style={{ color: ACCENT, background: "rgba(234,88,12,0.12)" }}>
+                  <div className="w-full h-full flex items-center justify-center" style={{ color: ACCENT, background: "rgba(247,163,92,0.12)" }}>
                     <BookOpenText size={18} />
                   </div>
                 )}
@@ -178,14 +178,14 @@ export default function BlogWidget({ initialPosts }: BlogWidgetProps) {
                       <MessageCircle size={11} />
                       {isNewComment(post.latestCommentAt) && (
                         <>
-                          <span className="absolute -top-1 -right-1 w-1.5 h-1.5 rounded-full" style={{ background: ACCENT, boxShadow: "0 0 5px rgba(234,88,12,0.9)" }} />
+                          <span className="absolute -top-1 -right-1 w-1.5 h-1.5 rounded-full" style={{ background: ACCENT, boxShadow: "0 0 5px rgba(247,163,92,0.9)" }} />
                           <span className="absolute -top-1 -right-1 w-1.5 h-1.5 rounded-full animate-ping" style={{ background: ACCENT, opacity: 0.6 }} />
                         </>
                       )}
                     </span>
                     {post.commentCount.toLocaleString()}
                     {isNewComment(post.latestCommentAt) && (
-                      <span className="px-1 py-px rounded text-xs font-bold" style={{ background: "rgba(234,88,12,0.18)", color: ACCENT, fontSize: "0.6rem" }}>NEW</span>
+                      <span className="px-1 py-px rounded text-xs font-bold" style={{ background: "rgba(247,163,92,0.18)", color: ACCENT, fontSize: "0.6rem" }}>NEW</span>
                     )}
                   </span>
                 </div>

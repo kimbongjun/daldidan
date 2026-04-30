@@ -54,7 +54,7 @@ export default function TravelWidget() {
   }, []);
 
   return (
-    <div className="bento-card gradient-emerald h-full flex flex-col p-5 gap-4">
+    <div className="bento-card h-full flex flex-col p-5 gap-4">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: EMERALD }}>여행</p>
