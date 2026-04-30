@@ -1,7 +1,8 @@
 "use client";
 
 import { startTransition, useEffect, useRef, useState } from "react";
-import { Bell, BellOff, CalendarDays, Check, Cloud, CloudFog, CloudLightning, CloudRain, LoaderCircle, LogOut, MapPin, Pencil, RefreshCw, Settings, Share, Snowflake, Sparkles, Sun, Thermometer, Trash2, User, UserCircle, Wind, X } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import { Bell, BellOff, CalendarDays, Check, Cloud, CloudFog, CloudLightning, CloudRain, LoaderCircle, LogOut, MapPin, Moon, Pencil, RefreshCw, Settings, Share, Snowflake, Sparkles, Sun, Thermometer, Trash2, User, UserCircle, Wind, X } from "lucide-react";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 import { useThemeStore } from "@/store/useThemeStore";
@@ -124,7 +125,7 @@ export default function Header({
   const notificationRef = useRef<HTMLDivElement>(null);
   const greetingInputRef = useRef<HTMLInputElement>(null);
 
-  const { theme } = useThemeStore();
+  const { theme, toggle: toggleTheme } = useThemeStore();
   const { condition: weatherCondition, temp: weatherTemp, fetchWeather, isLoading: weatherLoading } = useWeatherStore();
   const inbox = useNotificationStore((state) => state.inbox);
   const notifyNewPost = useNotificationStore((state) => state.notifyNewPost);
@@ -633,6 +634,19 @@ export default function Header({
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
+        {/* 테마 토글 */}
+        <button
+          onClick={toggleTheme}
+          aria-label={isLight ? "다크 모드로 전환" : "라이트 모드로 전환"}
+          className="w-9 h-9 rounded-xl flex items-center justify-center transition-all hover:opacity-80"
+          style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+        >
+          {isLight
+            ? <Moon size={15} style={{ color: "var(--text-muted)" }} />
+            : <Sun size={15} style={{ color: "var(--text-muted)" }} />
+          }
+        </button>
+
         {/* 새로고침 */}
         <button
           onClick={handleRefresh}
@@ -707,8 +721,13 @@ export default function Header({
               )}
             </button>
 
+            <AnimatePresence>
             {notificationMenuOpen && (
-              <div
+              <motion.div
+                initial={{ opacity: 0, y: -8, scale: 0.96 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -8, scale: 0.96 }}
+                transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
                 style={{
                   position: "absolute", top: "calc(100% + 0.5rem)", right: 0,
                   width: 260, background: "var(--bg-card)", border: "1px solid var(--border)",
@@ -871,8 +890,9 @@ export default function Header({
                     )}
                   </div>
                 </div>
-              </div>
+              </motion.div>
             )}
+            </AnimatePresence>
           </div>
         )}
 
@@ -902,8 +922,13 @@ export default function Header({
               )}
             </button>
 
+            <AnimatePresence>
             {dropdownOpen && (
-              <div
+              <motion.div
+                initial={{ opacity: 0, y: -8, scale: 0.96 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -8, scale: 0.96 }}
+                transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
                 style={{
                   position: "absolute", top: "calc(100% + 0.5rem)", right: 0,
                   minWidth: 200, background: "var(--bg-card)", border: "1px solid var(--border)",
@@ -951,8 +976,9 @@ export default function Header({
                     로그아웃
                   </button>
                 </form>
-              </div>
+              </motion.div>
             )}
+            </AnimatePresence>
           </div>
         ) : (
           <Link
