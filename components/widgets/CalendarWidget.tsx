@@ -364,7 +364,7 @@ function EventEditModal({
             <Pencil size={18} style={{ color: "#0EA5E9" }} />
             <span className="font-semibold" style={{ color: "var(--text-primary)" }}>일정 편집</span>
           </div>
-          <button onClick={onClose} className="p-1 rounded-lg" style={{ color: "var(--text-muted)" }}>
+          <button onClick={onClose} aria-label="닫기" className="p-1 rounded-lg" style={{ color: "var(--text-muted)" }}>
             <X size={18} />
           </button>
         </div>
@@ -459,7 +459,7 @@ function EventFormModal({
             <CalendarDays size={18} style={{ color: "#0EA5E9" }} />
             <span className="font-semibold" style={{ color: "var(--text-primary)" }}>일정 추가</span>
           </div>
-          <button onClick={onClose} className="p-1 rounded-lg" style={{ color: "var(--text-muted)" }}>
+          <button onClick={onClose} aria-label="닫기" className="p-1 rounded-lg" style={{ color: "var(--text-muted)" }}>
             <X size={18} />
           </button>
         </div>
@@ -565,7 +565,7 @@ function EventDetailModal({
       >
         <div className="flex items-center justify-between p-5 pb-3">
           <span className="font-semibold text-sm" style={{ color: "var(--text-primary)" }}>{dateLabel}</span>
-          <button onClick={onClose} className="p-1" style={{ color: "var(--text-muted)" }}>
+          <button onClick={onClose} aria-label="닫기" className="p-1" style={{ color: "var(--text-muted)" }}>
             <X size={18} />
           </button>
         </div>
@@ -663,7 +663,7 @@ function EventDetailModal({
                           onClick={() => { onEdit(ev); onClose(); }}
                           className="p-1.5 rounded-lg"
                           style={{ color: "#0EA5E9", background: "rgba(14,165,233,0.1)" }}
-                          title="편집"
+                          aria-label="일정 편집"
                         >
                           <Pencil size={14} />
                         </button>
@@ -672,7 +672,7 @@ function EventDetailModal({
                           disabled={deleting === ev.id}
                           className="p-1.5 rounded-lg"
                           style={{ color: "#F43F5E", background: "rgba(244,63,94,0.1)" }}
-                          title="삭제"
+                          aria-label="일정 삭제"
                         >
                           <Trash2 size={14} />
                         </button>
@@ -853,7 +853,7 @@ export default function CalendarWidget() {
               disabled={loading}
               className="p-1.5 rounded-lg"
               style={{ color: "var(--text-muted)" }}
-              title="새로고침"
+              aria-label="일정 새로고침"
             >
               <RefreshCw size={13} style={{ animation: loading ? "spin 0.8s linear infinite" : "none" }} />
             </button>
@@ -878,13 +878,13 @@ export default function CalendarWidget() {
 
         {/* Month navigator */}
         <div className="flex items-center justify-between shrink-0">
-          <button onClick={prevMonth} className="p-1 rounded-lg" style={{ color: "var(--text-muted)" }}>
+          <button onClick={prevMonth} aria-label="이전 달" className="p-1 rounded-lg" style={{ color: "var(--text-muted)" }}>
             <ChevronLeft size={16} />
           </button>
           <span className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
             {viewYear}년 {viewMonth}월
           </span>
-          <button onClick={nextMonth} className="p-1 rounded-lg" style={{ color: "var(--text-muted)" }}>
+          <button onClick={nextMonth} aria-label="다음 달" className="p-1 rounded-lg" style={{ color: "var(--text-muted)" }}>
             <ChevronRight size={16} />
           </button>
         </div>

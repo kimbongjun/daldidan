@@ -55,14 +55,14 @@ function PriceDiff({ prev, curr }: { prev: number | null; curr: number }) {
 
 function SkeletonRow() {
   return (
-    <div className="flex items-center gap-3 rounded-xl px-3 py-2.5 animate-pulse"
+    <div className="flex items-center gap-3 rounded-xl px-3 py-2.5"
       style={{ background: "rgba(255,255,255,0.04)" }}>
-      <div className="w-8 h-8 rounded-lg shrink-0" style={{ background: "rgba(255,255,255,0.08)" }} />
+      <div className="w-8 h-8 rounded-lg shrink-0 skeleton-shimmer" />
       <div className="flex-1 min-w-0 flex flex-col gap-1.5">
-        <div className="h-3 w-3/4 rounded" style={{ background: "rgba(255,255,255,0.08)" }} />
-        <div className="h-2 w-1/2 rounded" style={{ background: "rgba(255,255,255,0.06)" }} />
+        <div className="h-3 w-3/4 rounded skeleton-shimmer" />
+        <div className="h-2 w-1/2 rounded skeleton-shimmer" />
       </div>
-      <div className="h-4 w-16 rounded shrink-0" style={{ background: "rgba(255,255,255,0.08)" }} />
+      <div className="h-4 w-16 rounded shrink-0 skeleton-shimmer" />
     </div>
   );
 }

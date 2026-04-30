@@ -500,8 +500,7 @@ export default function Header({
         {/* 로고: 설정 로드 전 skeleton */}
         {!settingsLoaded ? (
           <div
-            className="w-10 h-10 rounded-xl shrink-0 animate-pulse"
-            style={{ background: "var(--border)" }}
+            className="w-10 h-10 rounded-xl shrink-0 skeleton-shimmer"
           />
         ) : logoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -524,8 +523,7 @@ export default function Header({
           {/* 인사말: 설정 로드 전 skeleton */}
           {!settingsLoaded ? (
             <div
-              className="h-3 w-28 rounded animate-pulse mt-1"
-              style={{ background: "var(--border)" }}
+              className="h-3 w-28 rounded skeleton-shimmer mt-1"
             />
           ) : editingGreeting ? (
             <div className="flex items-center gap-1 mt-0.5">
@@ -978,12 +976,10 @@ export default function Header({
           {locationLoading ? (
             <div className="flex items-center gap-1.5">
               <div
-                className="w-3 h-3 rounded-full animate-pulse shrink-0"
-                style={{ background: "var(--border)" }}
+                className="w-3 h-3 rounded-full skeleton-shimmer shrink-0"
               />
               <div
-                className="h-3 w-32 rounded animate-pulse"
-                style={{ background: "var(--border)" }}
+                className="h-3 w-32 rounded skeleton-shimmer"
               />
             </div>
           ) : currentLocation ? (

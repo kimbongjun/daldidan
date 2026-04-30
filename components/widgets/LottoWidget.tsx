@@ -56,8 +56,8 @@ function SkeletonRow() {
       {Array.from({ length: 6 }).map((_, i) => (
         <div
           key={i}
-          className="rounded-full animate-pulse shrink-0"
-          style={{ width: 36, height: 36, background: "rgba(255,255,255,0.08)" }}
+          className="rounded-full skeleton-shimmer shrink-0"
+          style={{ width: 36, height: 36 }}
         />
       ))}
     </div>

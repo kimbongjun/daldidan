@@ -60,11 +60,9 @@ function StatusBadge({ status, startDate }: { status: FestivalStatus; startDate:
 function SkeletonCard() {
   return (
     <div
-      className="shrink-0 rounded-xl overflow-hidden animate-pulse"
-      style={{ width: 168, height: 224, background: "rgba(255,255,255,0.06)" }}
-    >
-      <div className="w-full h-full" />
-    </div>
+      className="shrink-0 rounded-xl overflow-hidden skeleton-shimmer"
+      style={{ width: 168, height: 224 }}
+    />
   );
 }
 
