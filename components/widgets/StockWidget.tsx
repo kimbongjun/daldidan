@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   DndContext,
   PointerSensor,
@@ -641,7 +642,7 @@ function QuoteDetailModal({ quote, onClose }: { quote: StockQuote; onClose: () =
     ...(quote.dividendYield ? [{ label: "배당", value: quote.dividendYield }] : []),
   ];
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/55 px-4 py-6" onMouseDown={onClose}>
       <div
         className="w-full max-w-lg rounded-2xl p-4 shadow-2xl"
@@ -702,7 +703,8 @@ function QuoteDetailModal({ quote, onClose }: { quote: StockQuote; onClose: () =
           ))}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
