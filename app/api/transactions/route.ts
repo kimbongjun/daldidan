@@ -27,6 +27,7 @@ async function buildNicknameMap(userIds: string[]): Promise<Record<string, strin
 
 // GET /api/transactions?month=YYYY-MM&limit=N — 전체 거래 목록 (공유 가계부)
 export async function GET(request: NextRequest) {
+  // 인증 확인은 anon 클라이언트로, 데이터 조회는 admin 클라이언트로 (RLS 우회 — 공유 가계부)
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -35,7 +36,8 @@ export async function GET(request: NextRequest) {
   const month = searchParams.get("month"); // "YYYY-MM"
   const limitParam = searchParams.get("limit");
 
-  let query = supabase
+  const admin = createAdminClient();
+  let query = admin
     .from("transactions")
     .select("id, user_id, type, category, buyer, merchant_name, location, receipt_image_url, amount, note, date")
     .order("date", { ascending: false })

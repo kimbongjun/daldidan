@@ -151,7 +151,11 @@ export default function BudgetPage() {
       if (res.ok) {
         const data = await res.json() as TransactionApiResponse[];
         setTransactions(Array.isArray(data) ? data.map(normalizeTransaction) : []);
+      } else {
+        setTransactions([]);
       }
+    } catch {
+      setTransactions([]);
     } finally {
       setLoading(false);
     }
