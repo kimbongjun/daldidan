@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowRight, LogIn, TrendingDown, TrendingUp, Wallet } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { fetchWithTimeout, isAbortError } from "@/lib/fetch-with-timeout";
 import type { AuthUser as User } from "@supabase/supabase-js";
 
 interface Transaction {
@@ -98,14 +97,17 @@ export default function BudgetWidget() {
 
     const now = new Date();
     const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-    fetchWithTimeout(`/api/transactions?month=${month}`, { signal: controller.signal }, 15000)
-      .then((r) => r.json())
+    fetch(`/api/transactions?month=${month}`, { signal: controller.signal })
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
       .then((data) => {
         if (!active) return;
         setTransactions(Array.isArray(data) ? data : []);
       })
-      .catch((error) => {
-        if (!active || isAbortError(error)) return;
+      .catch((error: unknown) => {
+        if (!active || (error instanceof Error && error.name === "AbortError")) return;
         setTransactions([]);
       })
       .finally(() => {
