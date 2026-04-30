@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&units=metric&appid=${apiKey}&lang=ko`;
-    const res = await fetch(url, { cache: "no-store" });
+    const res = await fetch(url, { next: { revalidate: 300 }, signal: AbortSignal.timeout(8_000) });
     if (!res.ok) {
       return NextResponse.json({ error: "날씨 데이터를 가져오지 못했습니다." }, { status: 502 });
     }

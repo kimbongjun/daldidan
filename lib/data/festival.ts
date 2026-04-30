@@ -296,7 +296,7 @@ export async function getFestivalItems(): Promise<FestivalResponse> {
       url.searchParams.set("eventStartDate", startYmd);
       url.searchParams.set("arrange", "A");
 
-      const res = await fetch(url.toString(), { next: { revalidate: 3600 } });
+      const res = await fetch(url.toString(), { next: { revalidate: 3600 }, signal: AbortSignal.timeout(10_000) });
       if (res.ok) {
         const data = (await res.json()) as TourResponse;
         const raw = data.response?.body?.items?.item;
@@ -345,7 +345,7 @@ export async function getFestivalItems(): Promise<FestivalResponse> {
     try {
       const res = await fetch(
         `http://openapi.seoul.go.kr:8088/${seoulKey}/json/culturalEventInfo/1/15/축제`,
-        { next: { revalidate: 3600 } },
+        { next: { revalidate: 3600 }, signal: AbortSignal.timeout(10_000) },
       );
       if (res.ok) {
         const data = (await res.json()) as SeoulFestivalResponse;

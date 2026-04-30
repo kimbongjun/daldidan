@@ -927,25 +927,25 @@ export default function StockWidget() {
 
   // 2단계 fetch: Phase1 = 빠른 quotes, Phase2 = sparklines 포함 full
   const fetchStocks = useCallback(async (signal?: AbortSignal) => {
-    // 15초 타임아웃 + 외부 abort 신호 결합
-    const timeout = AbortSignal.timeout(15_000);
-    const effective = signal ? AbortSignal.any([signal, timeout]) : timeout;
-
     setLoadPhase("quotes");
     const baseParams = new URLSearchParams({
       items: watchlist.map(({ symbol, assetType }) => `${symbol}:${assetType}`).join(","),
       rankings: STOCK_RANKING_KINDS.join(","),
     });
 
-    // Phase 1: noSparkline — 시세만 빠르게
+    // Phase 1: noSparkline — 시세만 빠르게 (25s 타임아웃)
     try {
-      const res = await fetch(`/api/stocks?${baseParams}&noSparkline=true`, { cache: "no-store", signal: effective });
+      const p1Signal = signal
+        ? AbortSignal.any([signal, AbortSignal.timeout(25_000)])
+        : AbortSignal.timeout(25_000);
+      const res = await fetch(`/api/stocks?${baseParams}&noSparkline=true`, { cache: "no-store", signal: p1Signal });
       const d = await res.json() as StockOverviewResponse;
-      if (effective.aborted) return;
+      if (signal?.aborted) return;
       setData(d);
       setLoadPhase("charts");
     } catch (e: unknown) {
-      if (e instanceof DOMException && (e.name === "AbortError" || e.name === "TimeoutError")) return;
+      if (signal?.aborted) return; // 컴포넌트 언마운트 — 조용히 종료
+      // 타임아웃 또는 네트워크 오류 → 에러 상태 표시 (무한 로딩 방지)
       setData({
         status: "error",
         provider: "KRX Open API",
@@ -956,22 +956,24 @@ export default function StockWidget() {
         rankings: { amount: [], volume: [], rise: [], fall: [], popular: [] },
         themes: [],
         ipos: [],
-        message: "데이터를 불러오지 못했습니다.",
+        message: e instanceof DOMException && e.name === "TimeoutError"
+          ? "데이터 로딩 시간이 초과되었습니다."
+          : "데이터를 불러오지 못했습니다.",
       });
       setLoadPhase("error");
       return;
     }
 
-    // Phase 2: sparklines 포함 full — Phase 1 실패해도 Phase 1 데이터 유지
+    // Phase 2: sparklines 포함 full (30s 타임아웃) — 실패해도 Phase 1 데이터 유지
     try {
-      const timeout2 = AbortSignal.timeout(20_000);
-      const effective2 = signal ? AbortSignal.any([signal, timeout2]) : timeout2;
-      const res = await fetch(`/api/stocks?${baseParams}`, { cache: "no-store", signal: effective2 });
+      const p2Signal = signal
+        ? AbortSignal.any([signal, AbortSignal.timeout(30_000)])
+        : AbortSignal.timeout(30_000);
+      const res = await fetch(`/api/stocks?${baseParams}`, { cache: "no-store", signal: p2Signal });
       const d = await res.json() as StockOverviewResponse;
-      if (!effective2.aborted) { setData(d); setLoadPhase("done"); }
-    } catch (e: unknown) {
-      if (e instanceof DOMException && (e.name === "AbortError" || e.name === "TimeoutError")) return;
-      if (!effective.aborted) setLoadPhase("done");
+      if (!signal?.aborted) { setData(d); setLoadPhase("done"); }
+    } catch {
+      if (!signal?.aborted) setLoadPhase("done"); // Phase 1 데이터로 표시
     }
   }, [watchlist]);
 

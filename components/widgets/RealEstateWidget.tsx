@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowRight, ArrowUp, ArrowDown, Minus, TrendingUp, Home, Wallet, CalendarCheck } from "lucide-react";
 import type { SubscriptionItem } from "@/app/api/realestate/subscriptions/route";
 import type { PolicyRate } from "@/app/api/realestate/rates/route";
@@ -75,11 +75,13 @@ function SubscriptionTab() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/realestate/subscriptions")
+    const controller = new AbortController();
+    fetch("/api/realestate/subscriptions", { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(12_000)]) })
       .then((r) => r.json() as Promise<{ subscriptions: (SubscriptionItem & { dday: number })[]; isMock?: boolean }>)
       .then((d) => { setItems(d.subscriptions); setIsMock(d.isMock ?? false); })
       .catch(() => null)
       .finally(() => setLoading(false));
+    return () => controller.abort();
   }, []);
 
   if (loading) return <div className="flex flex-col gap-2">{[1, 2, 3].map((i) => <SkeletonRow key={i} />)}</div>;
@@ -154,11 +156,13 @@ function TransactionTab() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/realestate/transactions")
+    const controller = new AbortController();
+    fetch("/api/realestate/transactions", { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(12_000)]) })
       .then((r) => r.json() as Promise<{ transactions: TransactionItem[]; marketIndex: MarketIndex[] }>)
       .then((d) => { setTransactions(d.transactions); setMarketIndex(d.marketIndex); })
       .catch(() => null)
       .finally(() => setLoading(false));
+    return () => controller.abort();
   }, []);
 
   if (loading) return <div className="flex flex-col gap-2">{[1, 2, 3].map((i) => <SkeletonRow key={i} />)}</div>;
@@ -223,15 +227,15 @@ function RateTab() {
   const [rates, setRates] = useState<PolicyRate[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const load = useCallback(() => {
-    fetch("/api/realestate/rates")
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch("/api/realestate/rates", { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(12_000)]) })
       .then((r) => r.json() as Promise<{ rates: PolicyRate[] }>)
       .then((d) => setRates(d.rates))
       .catch(() => null)
       .finally(() => setLoading(false));
+    return () => controller.abort();
   }, []);
-
-  useEffect(() => { load(); }, [load]);
 
   if (loading) return <div className="flex flex-col gap-2">{[1, 2, 3].map((i) => <SkeletonRow key={i} />)}</div>;
 
