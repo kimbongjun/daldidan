@@ -413,7 +413,7 @@ input[type="reset"]:not(:disabled):active,
   animation-delay: var(--widget-delay, 0ms);
 }
 
-/* ── Sortable widget drag handle ─────────────────────────────────────────── */
+/* ── Sortable widget drag handle (desktop only) ───────────────────────────── */
 [data-drag-handle] {
   opacity: 0;
   transition: opacity 0.15s ease;
@@ -421,10 +421,9 @@ input[type="reset"]:not(:disabled):active,
 [data-widget-sortable]:hover [data-drag-handle] {
   opacity: 1;
 }
-/* touch devices: always slightly visible for discoverability */
 @media (hover: none) {
   [data-drag-handle] {
-    opacity: 0.55;
+    display: none;
   }
 }
 

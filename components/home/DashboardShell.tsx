@@ -5,7 +5,6 @@ import {
   DndContext,
   DragOverlay,
   MouseSensor,
-  TouchSensor,
   closestCenter,
   useSensor,
   useSensors,
@@ -26,7 +25,7 @@ import ErrorBoundary from "@/components/ErrorBoundary";
 import BottomNav from "@/components/BottomNav";
 import { SortableWidgetItem } from "@/components/home/SortableWidgetItem";
 import type { BlogPostSummary } from "@/lib/blog-shared";
-import { useLayoutStore, type WidgetId } from "@/store/useLayoutStore";
+import { useLayoutStore, MOBILE_WIDGET_ORDER, type WidgetId } from "@/store/useLayoutStore";
 
 type DashboardShellProps = {
   initialBlogPosts: BlogPostSummary[];
@@ -86,10 +85,10 @@ function BentoGrid({ initialBlogPosts }: { initialBlogPosts: BlogPostSummary[] }
   const { widgetOrder, setWidgetOrder } = useLayoutStore();
   const [activeWidgetId, setActiveWidgetId] = useState<WidgetId | null>(null);
   const [hydrated, setHydrated] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(false);
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 8 } }),
   );
 
   useEffect(() => {
@@ -102,7 +101,14 @@ function BentoGrid({ initialBlogPosts }: { initialBlogPosts: BlogPostSummary[] }
     };
   }, []);
 
-  const orderedWidgets = hydrated ? widgetOrder : DEFAULT_WIDGET_ORDER;
+  useEffect(() => {
+    const check = () => setIsDesktop(window.innerWidth >= 1100);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
+  const desktopWidgets = hydrated ? widgetOrder : DEFAULT_WIDGET_ORDER;
 
   function getWidgetContent(id: WidgetId): React.ReactNode {
     switch (id) {
@@ -140,10 +146,10 @@ function BentoGrid({ initialBlogPosts }: { initialBlogPosts: BlogPostSummary[] }
 
   function handleDragEnd({ active, over }: DragEndEvent) {
     if (over && active.id !== over.id) {
-      const from = orderedWidgets.indexOf(active.id as WidgetId);
-      const to = orderedWidgets.indexOf(over.id as WidgetId);
+      const from = desktopWidgets.indexOf(active.id as WidgetId);
+      const to = desktopWidgets.indexOf(over.id as WidgetId);
       if (from >= 0 && to >= 0) {
-        setWidgetOrder(arrayMove(orderedWidgets, from, to));
+        setWidgetOrder(arrayMove(desktopWidgets, from, to));
       }
     }
     setActiveWidgetId(null);
@@ -188,38 +194,46 @@ function BentoGrid({ initialBlogPosts }: { initialBlogPosts: BlogPostSummary[] }
         }
       `}</style>
 
-      <ErrorBoundary fallback={<StaticWidgetGrid orderedWidgets={orderedWidgets} getWidgetContent={getWidgetContent} getWidgetStyle={getWidgetStyle} />}>
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-          onDragCancel={handleDragCancel}
-        >
-          <SortableContext items={orderedWidgets} strategy={rectSortingStrategy}>
-            <div className="bento-grid">
-              {orderedWidgets.map((id, index) => (
-                <SortableWidgetItem
-                  key={id}
-                  id={id}
-                  widgetId={id}
-                  className="bento-item"
-                  containerStyle={getWidgetStyle(id, index)}
-                >
-                  <div className="widget-enter">
-                    {getWidgetContent(id)}
-                  </div>
-                </SortableWidgetItem>
-              ))}
-            </div>
-          </SortableContext>
-          <DragOverlay dropAnimation={{ duration: 180, easing: "ease" }}>
-            {activeWidgetId ? (
-              <WidgetDragPreview id={activeWidgetId} />
-            ) : null}
-          </DragOverlay>
-        </DndContext>
-      </ErrorBoundary>
+      {isDesktop ? (
+        <ErrorBoundary fallback={<StaticWidgetGrid orderedWidgets={desktopWidgets} getWidgetContent={getWidgetContent} getWidgetStyle={getWidgetStyle} />}>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+            onDragCancel={handleDragCancel}
+          >
+            <SortableContext items={desktopWidgets} strategy={rectSortingStrategy}>
+              <div className="bento-grid">
+                {desktopWidgets.map((id, index) => (
+                  <SortableWidgetItem
+                    key={id}
+                    id={id}
+                    widgetId={id}
+                    className="bento-item"
+                    containerStyle={getWidgetStyle(id, index)}
+                  >
+                    <div className="widget-enter">
+                      {getWidgetContent(id)}
+                    </div>
+                  </SortableWidgetItem>
+                ))}
+              </div>
+            </SortableContext>
+            <DragOverlay dropAnimation={{ duration: 180, easing: "ease" }}>
+              {activeWidgetId ? (
+                <WidgetDragPreview id={activeWidgetId} />
+              ) : null}
+            </DragOverlay>
+          </DndContext>
+        </ErrorBoundary>
+      ) : (
+        <StaticWidgetGrid
+          orderedWidgets={MOBILE_WIDGET_ORDER}
+          getWidgetContent={getWidgetContent}
+          getWidgetStyle={getWidgetStyle}
+        />
+      )}
     </div>
   );
 }

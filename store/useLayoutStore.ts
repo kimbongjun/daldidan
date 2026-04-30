@@ -20,6 +20,15 @@ const DEFAULT_WIDGET_ORDER: WidgetId[] = [
   "realestate",
 ];
 
+export const MOBILE_WIDGET_ORDER: WidgetId[] = [
+  "blog",
+  "calendar",
+  "budget",
+  "stock",
+  "fortune",
+  "realestate",
+];
+
 const WIDGET_IDS = new Set<WidgetId>(DEFAULT_WIDGET_ORDER);
 
 interface LayoutState {
