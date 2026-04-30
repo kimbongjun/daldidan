@@ -4,7 +4,8 @@ import { useEffect, useState, type CSSProperties } from "react";
 import {
   DndContext,
   DragOverlay,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   closestCenter,
   useSensor,
   useSensors,
@@ -34,19 +35,20 @@ type DashboardShellProps = {
 const WIDGET_META: Record<
   WidgetId,
   {
+    label: string;
     minHeight: number;
     mobileCols: 1;
     tabletCols: 1 | 2;
     desktopCols: 1 | 2 | 3;
   }
 > = {
-  fortune: { minHeight: 420, mobileCols: 1, tabletCols: 1, desktopCols: 1 },
-  lotto: { minHeight: 380, mobileCols: 1, tabletCols: 1, desktopCols: 1 },
-  blog: { minHeight: 480, mobileCols: 1, tabletCols: 2, desktopCols: 2 },
-  budget: { minHeight: 460, mobileCols: 1, tabletCols: 1, desktopCols: 1 },
-  calendar: { minHeight: 520, mobileCols: 1, tabletCols: 1, desktopCols: 1 },
-  stock: { minHeight: 520, mobileCols: 1, tabletCols: 2, desktopCols: 2 },
-  realestate: { minHeight: 340, mobileCols: 1, tabletCols: 2, desktopCols: 1 },
+  fortune: { label: "운세", minHeight: 0, mobileCols: 1, tabletCols: 1, desktopCols: 1 },
+  lotto: { label: "로또", minHeight: 0, mobileCols: 1, tabletCols: 1, desktopCols: 1 },
+  blog: { label: "블로그", minHeight: 0, mobileCols: 1, tabletCols: 1, desktopCols: 2 },
+  budget: { label: "가계부", minHeight: 0, mobileCols: 1, tabletCols: 1, desktopCols: 1 },
+  calendar: { label: "캘린더", minHeight: 0, mobileCols: 1, tabletCols: 1, desktopCols: 1 },
+  stock: { label: "증시", minHeight: 0, mobileCols: 1, tabletCols: 2, desktopCols: 2 },
+  realestate: { label: "부동산", minHeight: 0, mobileCols: 1, tabletCols: 1, desktopCols: 1 },
 };
 
 const DEFAULT_WIDGET_ORDER = useLayoutStore.getState().widgetOrder;
@@ -86,13 +88,18 @@ function BentoGrid({ initialBlogPosts }: { initialBlogPosts: BlogPostSummary[] }
   const [hydrated, setHydrated] = useState(false);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 8 } }),
   );
 
   useEffect(() => {
+    let active = true;
     void Promise.resolve(useLayoutStore.persist.rehydrate()).finally(() => {
-      setHydrated(true);
+      if (active) setHydrated(true);
     });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const orderedWidgets = hydrated ? widgetOrder : DEFAULT_WIDGET_ORDER;
@@ -135,8 +142,14 @@ function BentoGrid({ initialBlogPosts }: { initialBlogPosts: BlogPostSummary[] }
     if (over && active.id !== over.id) {
       const from = orderedWidgets.indexOf(active.id as WidgetId);
       const to = orderedWidgets.indexOf(over.id as WidgetId);
-      setWidgetOrder(arrayMove(orderedWidgets, from, to));
+      if (from >= 0 && to >= 0) {
+        setWidgetOrder(arrayMove(orderedWidgets, from, to));
+      }
     }
+    setActiveWidgetId(null);
+  }
+
+  function handleDragCancel() {
     setActiveWidgetId(null);
   }
 
@@ -175,37 +188,87 @@ function BentoGrid({ initialBlogPosts }: { initialBlogPosts: BlogPostSummary[] }
         }
       `}</style>
 
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-      >
-        <SortableContext items={orderedWidgets} strategy={rectSortingStrategy}>
-          <div className="bento-grid">
-            {orderedWidgets.map((id, index) => (
-              <SortableWidgetItem
-                key={id}
-                id={id}
-                widgetId={id}
-                className="bento-item"
-                containerStyle={getWidgetStyle(id, index)}
-              >
-                <div className="widget-enter">
-                  {getWidgetContent(id)}
-                </div>
-              </SortableWidgetItem>
-            ))}
-          </div>
-        </SortableContext>
-        <DragOverlay dropAnimation={{ duration: 180, easing: "ease" }}>
-          {activeWidgetId ? (
-            <div className="bento-item" style={{ ...getWidgetStyle(activeWidgetId, 0), opacity: 0.88 }}>
-              {getWidgetContent(activeWidgetId)}
+      <ErrorBoundary fallback={<StaticWidgetGrid orderedWidgets={orderedWidgets} getWidgetContent={getWidgetContent} getWidgetStyle={getWidgetStyle} />}>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+          onDragCancel={handleDragCancel}
+        >
+          <SortableContext items={orderedWidgets} strategy={rectSortingStrategy}>
+            <div className="bento-grid">
+              {orderedWidgets.map((id, index) => (
+                <SortableWidgetItem
+                  key={id}
+                  id={id}
+                  widgetId={id}
+                  className="bento-item"
+                  containerStyle={getWidgetStyle(id, index)}
+                >
+                  <div className="widget-enter">
+                    {getWidgetContent(id)}
+                  </div>
+                </SortableWidgetItem>
+              ))}
             </div>
-          ) : null}
-        </DragOverlay>
-      </DndContext>
+          </SortableContext>
+          <DragOverlay dropAnimation={{ duration: 180, easing: "ease" }}>
+            {activeWidgetId ? (
+              <WidgetDragPreview id={activeWidgetId} />
+            ) : null}
+          </DragOverlay>
+        </DndContext>
+      </ErrorBoundary>
+    </div>
+  );
+}
+
+function StaticWidgetGrid({
+  orderedWidgets,
+  getWidgetContent,
+  getWidgetStyle,
+}: {
+  orderedWidgets: WidgetId[];
+  getWidgetContent: (id: WidgetId) => React.ReactNode;
+  getWidgetStyle: (id: WidgetId, index: number) => CSSProperties;
+}) {
+  return (
+    <div className="bento-grid">
+      {orderedWidgets.map((id, index) => (
+        <div
+          key={id}
+          data-widget-id={id}
+          className="bento-item widget-enter"
+          style={getWidgetStyle(id, index)}
+        >
+          {getWidgetContent(id)}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function WidgetDragPreview({ id }: { id: WidgetId }) {
+  return (
+    <div
+      style={{
+        width: 220,
+        minHeight: 76,
+        borderRadius: 16,
+        background: "var(--bg-card)",
+        border: "1px solid var(--border)",
+        boxShadow: "var(--shadow-card)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        color: "var(--text-primary)",
+        fontSize: "0.85rem",
+        fontWeight: 800,
+        pointerEvents: "none",
+      }}
+    >
+      {WIDGET_META[id].label}
     </div>
   );
 }
