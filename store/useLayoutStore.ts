@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 export type MainWidgetId = "blog" | "budget" | "calendar" | "fortune" | "lotto";
-export type FullWidgetId = "stock" | "festival" | "realestate";
+export type FullWidgetId = "stock" | "realestate";
 
 interface LayoutState {
   mainOrder: MainWidgetId[];
@@ -15,7 +15,7 @@ export const useLayoutStore = create<LayoutState>()(
   persist(
     (set) => ({
       mainOrder: ["fortune", "lotto", "blog", "budget", "calendar"],
-      fullOrder: ["stock", "realestate", "festival"],
+      fullOrder: ["stock", "realestate"],
       setMainOrder: (mainOrder) => set({ mainOrder }),
       setFullOrder: (fullOrder) => set({ fullOrder }),
     }),

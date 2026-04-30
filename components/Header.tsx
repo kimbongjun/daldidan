@@ -2,11 +2,10 @@
 
 import { startTransition, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Bell, BellOff, CalendarDays, Check, Cloud, CloudFog, CloudLightning, CloudRain, LoaderCircle, LogOut, MapPin, Moon, Pencil, RefreshCw, Settings, Share, Snowflake, Sparkles, Sun, Thermometer, Trash2, User, UserCircle, Wind, X } from "lucide-react";
+import { Bell, BellOff, CalendarDays, Check, LoaderCircle, LogOut, Moon, Pencil, RefreshCw, Settings, Share, Sparkles, Sun, Trash2, User, UserCircle, X } from "lucide-react";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 import { useThemeStore } from "@/store/useThemeStore";
-import { useWeatherStore, type WeatherCondition } from "@/store/useWeatherStore";
 import { useNotificationStore } from "@/store/useNotificationStore";
 import { createClient } from "@/lib/supabase/client";
 import { getFirebaseMessaging } from "@/lib/firebase-client";
@@ -33,18 +32,6 @@ function detectDevice(): "ios" | "android" | "web" {
   if (typeof navigator !== "undefined" && /Android/.test(navigator.userAgent)) return "android";
   return "web";
 }
-
-const WEATHER_ICONS: Record<WeatherCondition, React.ReactNode> = {
-  clear: <Sun size={14} />,
-  cloudy: <Cloud size={14} />,
-  rain: <CloudRain size={14} />,
-  snow: <Snowflake size={14} />,
-  hot: <Thermometer size={14} />,
-  cold: <Thermometer size={14} />,
-  windy: <Wind size={14} />,
-  storm: <CloudLightning size={14} />,
-  foggy: <CloudFog size={14} />,
-};
 
 const PUSH_STORAGE_KEY = "daldidan-push";
 const PUSH_INSTALLATION_KEY = "daldidan-push-installation-id";
@@ -86,13 +73,7 @@ function getDefaultGreeting(hour: number): string {
   return "좋은 저녁이에요";
 }
 
-export default function Header({
-  currentLocation,
-  locationLoading = false,
-}: {
-  currentLocation?: string | null;
-  locationLoading?: boolean;
-}) {
+export default function Header() {
   const router = useRouter();
   type UserProfile = {
     avatarUrl: string | null;
@@ -126,7 +107,6 @@ export default function Header({
   const greetingInputRef = useRef<HTMLInputElement>(null);
 
   const { theme, toggle: toggleTheme } = useThemeStore();
-  const { condition: weatherCondition, temp: weatherTemp, fetchWeather, isLoading: weatherLoading } = useWeatherStore();
   const inbox = useNotificationStore((state) => state.inbox);
   const notifyNewPost = useNotificationStore((state) => state.notifyNewPost);
   const notifyComment = useNotificationStore((state) => state.notifyComment);
@@ -142,22 +122,6 @@ export default function Header({
     setNow(new Date());
     const id = setInterval(() => setNow(new Date()), 60000);
     return () => clearInterval(id);
-  }, []);
-
-  // 날씨 초기 로드
-  useEffect(() => {
-    fetchWeather();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // 1시간 단위 자동 갱신
-  useEffect(() => {
-    const id = setInterval(() => {
-      fetchWeather();
-      startTransition(() => { router.refresh(); });
-    }, 3600000);
-    return () => clearInterval(id);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // 저장된 커스텀 인사말 + 로고 로드 (site_settings API)
@@ -327,11 +291,6 @@ export default function Header({
   const greeting = customGreeting || (now ? getDefaultGreeting(now.getHours()) : "");
   const isLight = theme === "light";
 
-  const WEATHER_ICON_MAP = WEATHER_ICONS;
-  const weatherDisplay = weatherCondition ? WEATHER_ICON_MAP[weatherCondition] : null;
-  const weatherBadgeStyle = isLight
-    ? { color: "#334155", bg: "var(--bg-card)" }
-    : { color: "#E2E8F0", bg: "var(--bg-card)" };
   const avatarLetter = userProfile?.displayName?.[0]?.toUpperCase() ?? user?.email?.[0]?.toUpperCase() ?? "U";
   const userAvatarUrl = userProfile?.avatarUrl ?? null;
   const firebaseConfigured = Boolean(process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID);
@@ -644,31 +603,6 @@ export default function Header({
           />
         </button>
 
-        {/* 날씨 아이콘 + 온도 버튼 */}
-        <button
-          onClick={() => fetchWeather(true)}
-          aria-label="날씨 새로고침"
-          title={weatherCondition ? `${weatherCondition} · 클릭해서 즉시 새로고침` : "위치 기반 날씨 불러오는 중"}
-          className="h-9 px-2.5 rounded-xl flex items-center gap-1.5 transition-all hover:opacity-80"
-          style={{
-            background: weatherBadgeStyle.bg,
-            border: "1px solid var(--border)",
-            minWidth: 36,
-          }}
-        >
-          {weatherLoading
-            ? <LoaderCircle size={14} style={{ color: "var(--text-muted)", animation: "spin 0.8s linear infinite" }} />
-            : weatherDisplay
-              ? <span style={{ color: weatherBadgeStyle.color, display: "flex", alignItems: "center" }}>{weatherDisplay}</span>
-              : <MapPin size={14} style={{ color: "var(--text-muted)" }} />
-          }
-          {weatherTemp !== null && (
-            <span className="text-xs font-bold" style={{ color: weatherBadgeStyle.color }}>
-              {weatherTemp}°
-            </span>
-          )}
-        </button>
-
         {firebaseConfigured && (
           <div ref={notificationRef} style={{ position: "relative" }}>
             <button
@@ -971,26 +905,6 @@ export default function Header({
       </div>
       </div>
       </div>
-      {/* 위치 정보 — 유틸리티 navigation 하단 */}
-        <div className="min-h-[1rem] flex justify-end">
-          {locationLoading ? (
-            <div className="flex items-center gap-1.5">
-              <div
-                className="w-3 h-3 rounded-full skeleton-shimmer shrink-0"
-              />
-              <div
-                className="h-3 w-32 rounded skeleton-shimmer"
-              />
-            </div>
-          ) : currentLocation ? (
-            <div className="flex items-center gap-1.5 min-w-0">
-              <MapPin size={12} style={{ color: "var(--text-muted)" }} />
-              <p className="text-xs truncate" style={{ color: "var(--text-muted)" }}>
-                {currentLocation}
-              </p>
-            </div>
-          ) : null}
-        </div>
     </header>
     
   );

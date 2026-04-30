@@ -17,7 +17,6 @@ import Footer from "@/components/Footer";
 import Header from "@/components/Header";
 import BudgetWidget from "@/components/widgets/BudgetWidget";
 import BlogWidget from "@/components/widgets/BlogWidget";
-import FestivalWidget from "@/components/widgets/FestivalWidget";
 import RealEstateWidget from "@/components/widgets/RealEstateWidget";
 import StockWidget from "@/components/widgets/StockWidget";
 import CalendarWidget from "@/components/widgets/CalendarWidget";
@@ -45,11 +44,10 @@ const MAIN_STYLES: Record<MainWidgetId, CSSProperties> = {
 
 const FULL_STYLES: Record<FullWidgetId, CSSProperties> = {
   stock:      {},
-  festival:   { height: 300 },
   realestate: { height: 340 },
 };
 
-const ALL_FULL_WIDGETS: FullWidgetId[] = ["stock", "festival", "realestate"];
+const ALL_FULL_WIDGETS: FullWidgetId[] = ["stock", "realestate"];
 
 function normalizeFullOrder(order: FullWidgetId[]): FullWidgetId[] {
   const known = order.filter((id): id is FullWidgetId => ALL_FULL_WIDGETS.includes(id));
@@ -58,35 +56,6 @@ function normalizeFullOrder(order: FullWidgetId[]): FullWidgetId[] {
 }
 
 export default function DashboardShell({ initialBlogPosts }: DashboardShellProps) {
-  const [currentLocation, setCurrentLocation] = useState<string | null>(null);
-  const [locationLoading, setLocationLoading] = useState(true);
-
-  useEffect(() => {
-    if (!navigator.geolocation) {
-      setLocationLoading(false);
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      async ({ coords }) => {
-        try {
-          const res = await fetch(
-            `/api/geocode/reverse?lat=${coords.latitude}&lng=${coords.longitude}`,
-          );
-          const data = (await res.json()) as { location?: string };
-          if (data.location) setCurrentLocation(data.location);
-        } catch {
-          // 위치 표시 생략
-        } finally {
-          setLocationLoading(false);
-        }
-      },
-      () => {
-        setLocationLoading(false);
-      },
-      { timeout: 8000 },
-    );
-  }, []);
-
   return (
     <div
       style={{
@@ -106,7 +75,7 @@ export default function DashboardShell({ initialBlogPosts }: DashboardShellProps
           boxSizing: "border-box",
         }}
       >
-        <Header currentLocation={currentLocation} locationLoading={locationLoading} />
+        <Header />
         <BentoGrid
           blog={
             <ErrorBoundary>
@@ -190,7 +159,6 @@ function BentoGrid({
   function getFullContent(id: FullWidgetId): React.ReactNode {
     switch (id) {
       case "stock":      return <ErrorBoundary><StockWidget /></ErrorBoundary>;
-      case "festival":   return <ErrorBoundary><FestivalWidget /></ErrorBoundary>;
       case "realestate": return <ErrorBoundary><RealEstateWidget /></ErrorBoundary>;
     }
   }
