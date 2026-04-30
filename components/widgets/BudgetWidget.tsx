@@ -18,11 +18,63 @@ interface Transaction {
   buyer?: string;
 }
 
+const ACCENT = "#3DD9C0";
+
+function BudgetSkeleton() {
+  return (
+    <div className="bento-card h-full flex flex-col p-5 gap-4">
+      {/* 헤더 */}
+      <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-1.5">
+          <div className="h-3 w-12 rounded skeleton-shimmer" />
+          <div className="h-5 w-24 rounded skeleton-shimmer" />
+        </div>
+        <div className="h-7 w-20 rounded-lg skeleton-shimmer" />
+      </div>
+
+      {/* 잔액/수입/지출 3셀 */}
+      <div className="grid grid-cols-3 gap-2">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="rounded-xl p-2.5" style={{ background: "rgba(255,255,255,0.04)" }}>
+            <div className="h-3 w-10 rounded skeleton-shimmer mb-2" />
+            <div className="h-5 w-8 rounded skeleton-shimmer" />
+          </div>
+        ))}
+      </div>
+
+      {/* 저축률 */}
+      <div className="rounded-xl p-3" style={{ background: "rgba(255,255,255,0.04)" }}>
+        <div className="flex items-center justify-between mb-2">
+          <div className="h-3 w-14 rounded skeleton-shimmer" />
+          <div className="h-4 w-10 rounded skeleton-shimmer" />
+        </div>
+        <div className="h-1.5 w-full rounded-full skeleton-shimmer" />
+      </div>
+
+      {/* 최근 거래 3줄 */}
+      <div className="flex flex-col gap-1.5">
+        <div className="h-3 w-16 rounded skeleton-shimmer" />
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="flex items-center justify-between gap-2 rounded-lg px-2.5 py-2" style={{ background: "rgba(255,255,255,0.04)" }}>
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <div className="h-4 w-10 rounded-full skeleton-shimmer shrink-0" />
+              <div className="flex flex-col gap-1 flex-1 min-w-0">
+                <div className="h-3 w-3/4 rounded skeleton-shimmer" />
+                <div className="h-2.5 w-1/2 rounded skeleton-shimmer" />
+              </div>
+            </div>
+            <div className="h-4 w-12 rounded skeleton-shimmer shrink-0" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function BudgetWidget() {
   const [user, setUser] = useState<User | null | undefined>(undefined);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const supabase = createClient();
@@ -34,14 +86,19 @@ export default function BudgetWidget() {
   }, []);
 
   useEffect(() => {
-    if (!user) return;
+    if (user === undefined) return;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
     let active = true;
     setLoading(true);
     const controller = new AbortController();
 
     const now = new Date();
     const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-    fetchWithTimeout(`/api/transactions?month=${month}`, { signal: controller.signal }, 7000)
+    fetchWithTimeout(`/api/transactions?month=${month}`, { signal: controller.signal }, 15000)
       .then((r) => r.json())
       .then((data) => {
         if (!active) return;
@@ -73,31 +130,28 @@ export default function BudgetWidget() {
     };
   }, [transactions]);
 
-  if (user === undefined) {
-    return (
-      <div className="bento-card h-full flex flex-col p-5 items-center justify-center gap-2">
-        <div style={{ width: 28, height: 28, borderRadius: "50%", border: "3px solid #3DD9C0", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }} />
-      </div>
-    );
+  // 인증 확인 중 또는 데이터 로딩 중
+  if (user === undefined || (user !== null && loading)) {
+    return <BudgetSkeleton />;
   }
 
   if (!user) {
     return (
       <div className="bento-card h-full flex flex-col p-5 gap-4">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "#3DD9C0" }}>가계부</p>
+          <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: ACCENT }}>가계부</p>
           <h2 className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>분석 요약</h2>
         </div>
         <div className="flex-1 flex flex-col items-center justify-center gap-3">
           <div style={{ width: 48, height: 48, borderRadius: "0.875rem", background: "rgba(61,217,192,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <Wallet size={22} style={{ color: "#3DD9C0" }} />
+            <Wallet size={22} style={{ color: ACCENT }} />
           </div>
           <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>로그인 후 이용 가능합니다</p>
           <p className="text-xs text-center" style={{ color: "var(--text-muted)" }}>로그인하면 공유 가계부를<br />함께 기록하고 분석할 수 있어요.</p>
           <Link
             href="/login"
             className="flex items-center gap-1.5 text-xs font-semibold px-4 py-2 rounded-lg transition-opacity hover:opacity-70"
-            style={{ background: "#3DD9C0", color: "#fff" }}
+            style={{ background: ACCENT, color: "#fff" }}
           >
             <LogIn size={12} />로그인하기
           </Link>
@@ -110,13 +164,13 @@ export default function BudgetWidget() {
     <div className="bento-card h-full flex flex-col p-5 gap-4">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "#3DD9C0" }}>가계부</p>
+          <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: ACCENT }}>가계부</p>
           <h2 className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>분석 요약</h2>
         </div>
         <Link
           href="/budget"
           className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg transition-opacity hover:opacity-70"
-          style={{ background: "#3DD9C022", color: "#3DD9C0" }}
+          style={{ background: "#3DD9C022", color: ACCENT }}
         >
           상세보기 <ArrowRight size={11} />
         </Link>
@@ -156,13 +210,12 @@ export default function BudgetWidget() {
       </div>
 
       {/* 최근 거래 3건 */}
-      {!loading && transactions.length > 0 && (
+      {transactions.length > 0 && (
         <div className="flex flex-col gap-1.5">
           <p className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>최근 거래</p>
           {transactions.slice(0, 3).map((tx) => (
             <div key={tx.id} className="flex items-center justify-between gap-2 rounded-lg px-2.5 py-2" style={{ background: "rgba(255,255,255,0.04)" }}>
               <div className="flex items-center gap-2 min-w-0 flex-1">
-                {/* 카테고리 뱃지 */}
                 <span
                   className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full font-semibold"
                   style={{
@@ -172,7 +225,6 @@ export default function BudgetWidget() {
                 >
                   {tx.category}
                 </span>
-                {/* 매장명 + 구매자 */}
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-semibold truncate" style={{ color: "var(--text-primary)" }}>
                     {tx.merchant_name || tx.note || tx.category}
@@ -191,17 +243,12 @@ export default function BudgetWidget() {
       )}
 
       {/* 거래 없을 때 안내 */}
-      {!loading && transactions.length === 0 && (
+      {transactions.length === 0 && (
         <div className="flex-1 flex flex-col items-center justify-center gap-2">
           <p className="text-sm" style={{ color: "var(--text-muted)" }}>아직 거래 내역이 없습니다.</p>
-          <Link href="/budget" className="text-xs font-semibold" style={{ color: "#3DD9C0" }}>
+          <Link href="/budget" className="text-xs font-semibold" style={{ color: ACCENT }}>
             + 첫 거래 추가하기
           </Link>
-        </div>
-      )}
-      {loading && (
-        <div className="flex-1 flex items-center justify-center">
-          <div style={{ width: 20, height: 20, borderRadius: "50%", border: "2px solid #3DD9C0", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }} />
         </div>
       )}
     </div>

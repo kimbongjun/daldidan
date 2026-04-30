@@ -130,8 +130,17 @@ export default function BlogWidget({ initialPosts }: BlogWidgetProps) {
 
       <div className="flex flex-col gap-3 flex-1 overflow-auto scrollbar-hide">
         {loading || user === undefined ? (
-          <div className="flex-1 flex items-center justify-center">
-            <div style={{ width: 20, height: 20, borderRadius: "50%", border: `2px solid ${ACCENT}`, borderTopColor: "transparent" }} className="animate-spin" />
+          <div className="flex flex-col gap-3">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="rounded-2xl p-2 flex gap-3" style={{ background: "rgba(255,255,255,0.04)" }}>
+                <div className="w-16 h-16 rounded-xl skeleton-shimmer shrink-0" />
+                <div className="flex flex-col gap-1.5 flex-1 min-w-0 pt-0.5">
+                  <div className="h-3.5 w-3/4 rounded skeleton-shimmer" />
+                  <div className="h-3 w-1/2 rounded skeleton-shimmer" />
+                  <div className="h-2.5 w-2/5 rounded skeleton-shimmer mt-1" />
+                </div>
+              </div>
+            ))}
           </div>
         ) : posts.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center">

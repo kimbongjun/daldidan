@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { MapPin, Star, ExternalLink, LoaderCircle } from "lucide-react";
+import { MapPin, Star, ExternalLink } from "lucide-react";
 import type { TravelActivity } from "@/app/api/travel/activities/route";
 import { fetchWithTimeout, isAbortError } from "@/lib/fetch-with-timeout";
 
@@ -66,8 +66,18 @@ export default function TravelWidget() {
 
       <div className="flex flex-col gap-3 flex-1 overflow-auto scrollbar-hide">
         {loading ? (
-          <div className="flex items-center justify-center flex-1">
-            <LoaderCircle size={18} className="animate-spin" style={{ color: EMERALD }} />
+          <div className="flex flex-col gap-3">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="rounded-xl p-3 flex items-center gap-3" style={{ background: "rgba(255,255,255,0.04)" }}>
+                <div className="w-10 h-10 rounded-lg skeleton-shimmer shrink-0" />
+                <div className="flex flex-col gap-1.5 flex-1 min-w-0">
+                  <div className="h-3.5 w-3/4 rounded skeleton-shimmer" />
+                  <div className="h-3 w-1/2 rounded skeleton-shimmer" />
+                  <div className="h-2.5 w-2/5 rounded skeleton-shimmer" />
+                </div>
+                <div className="h-4 w-14 rounded skeleton-shimmer shrink-0" />
+              </div>
+            ))}
           </div>
         ) : error ? (
           <div className="flex-1 flex items-center justify-center">

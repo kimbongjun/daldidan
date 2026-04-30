@@ -4,29 +4,23 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 // profiles 테이블에서 user_id 목록의 닉네임을 한 번에 조회
 async function buildNicknameMap(userIds: string[]): Promise<Record<string, string>> {
   if (userIds.length === 0) return {};
-  const admin = createAdminClient();
 
-  // profiles 테이블 배치 조회 (display_name)
-  const { data: profileRows } = await admin
-    .from("profiles")
-    .select("id, display_name")
-    .in("id", userIds);
+  // 기본값: 모든 uid를 "사용자"로 초기화
+  const map: Record<string, string> = Object.fromEntries(userIds.map((id) => [id, "사용자"]));
 
-  const map: Record<string, string> = {};
-  for (const row of profileRows ?? []) {
-    if (row.display_name) {
-      map[row.id] = row.display_name;
+  try {
+    const admin = createAdminClient();
+    const { data: profileRows } = await admin
+      .from("profiles")
+      .select("id, display_name")
+      .in("id", userIds);
+
+    for (const row of profileRows ?? []) {
+      if (row.display_name) map[row.id] = row.display_name;
     }
+  } catch {
+    // profiles 조회 실패 시 기본값("사용자") 유지
   }
-
-  // display_name 없는 유저는 이메일 앞부분으로 폴백
-  const missing = userIds.filter((id) => !map[id]);
-  await Promise.all(
-    missing.map(async (uid) => {
-      const { data } = await admin.auth.admin.getUserById(uid);
-      if (data?.user?.email) map[uid] = data.user.email.split("@")[0];
-    }),
-  );
 
   return map;
 }
