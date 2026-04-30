@@ -10,6 +10,7 @@ interface SortableWidgetItemProps {
   widgetId?: string;
   children: ReactNode;
   containerStyle?: CSSProperties;
+  className?: string;
 }
 
 export function SortableWidgetItem({
@@ -17,6 +18,7 @@ export function SortableWidgetItem({
   widgetId,
   children,
   containerStyle,
+  className,
 }: SortableWidgetItemProps) {
   const {
     attributes,
@@ -32,6 +34,7 @@ export function SortableWidgetItem({
       ref={setNodeRef}
       data-widget-sortable
       data-widget-id={widgetId}
+      className={className}
       style={{
         ...containerStyle,
         transform: CSS.Transform.toString(transform),

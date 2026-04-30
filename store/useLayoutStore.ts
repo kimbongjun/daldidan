@@ -1,24 +1,74 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-export type MainWidgetId = "blog" | "budget" | "calendar" | "fortune" | "lotto";
-export type FullWidgetId = "stock" | "realestate";
+export type WidgetId =
+  | "fortune"
+  | "lotto"
+  | "blog"
+  | "budget"
+  | "calendar"
+  | "stock"
+  | "realestate";
+
+const DEFAULT_WIDGET_ORDER: WidgetId[] = [
+  "fortune",
+  "lotto",
+  "blog",
+  "budget",
+  "calendar",
+  "stock",
+  "realestate",
+];
 
 interface LayoutState {
-  mainOrder: MainWidgetId[];
-  fullOrder: FullWidgetId[];
-  setMainOrder: (ids: MainWidgetId[]) => void;
-  setFullOrder: (ids: FullWidgetId[]) => void;
+  widgetOrder: WidgetId[];
+  setWidgetOrder: (ids: WidgetId[]) => void;
+}
+
+type LegacyLayoutState = {
+  mainOrder?: WidgetId[];
+  fullOrder?: WidgetId[];
+};
+
+function normalizeWidgetOrder(widgetOrder?: WidgetId[]): WidgetId[] {
+  const source = widgetOrder ?? [];
+  const deduped = source.filter((id, index) => source.indexOf(id) === index);
+  const missing = DEFAULT_WIDGET_ORDER.filter((id) => !deduped.includes(id));
+  return [...deduped, ...missing];
+}
+
+function migrateLayoutState(persisted: unknown): LayoutState {
+  const state = (persisted ?? {}) as Partial<LayoutState> & LegacyLayoutState;
+
+  if (Array.isArray(state.widgetOrder)) {
+    return {
+      widgetOrder: normalizeWidgetOrder(state.widgetOrder),
+      setWidgetOrder: () => undefined,
+    };
+  }
+
+  const combined = [
+    ...(Array.isArray(state.mainOrder) ? state.mainOrder : []),
+    ...(Array.isArray(state.fullOrder) ? state.fullOrder : []),
+  ];
+
+  return {
+    widgetOrder: normalizeWidgetOrder(combined),
+    setWidgetOrder: () => undefined,
+  };
 }
 
 export const useLayoutStore = create<LayoutState>()(
   persist(
     (set) => ({
-      mainOrder: ["fortune", "lotto", "blog", "budget", "calendar"],
-      fullOrder: ["stock", "realestate"],
-      setMainOrder: (mainOrder) => set({ mainOrder }),
-      setFullOrder: (fullOrder) => set({ fullOrder }),
+      widgetOrder: DEFAULT_WIDGET_ORDER,
+      setWidgetOrder: (widgetOrder) => set({ widgetOrder: normalizeWidgetOrder(widgetOrder) }),
     }),
-    { name: "daldidan-layout", skipHydration: true },
+    {
+      name: "daldidan-layout",
+      skipHydration: true,
+      version: 2,
+      migrate: async (persisted) => migrateLayoutState(persisted),
+    },
   ),
 );

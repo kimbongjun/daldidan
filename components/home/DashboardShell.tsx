@@ -11,7 +11,7 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { SortableContext, arrayMove, rectSortingStrategy, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { SortableContext, arrayMove, rectSortingStrategy } from "@dnd-kit/sortable";
 import Footer from "@/components/Footer";
 import Header from "@/components/Header";
 import BudgetWidget from "@/components/widgets/BudgetWidget";
@@ -25,24 +25,31 @@ import ErrorBoundary from "@/components/ErrorBoundary";
 import BottomNav from "@/components/BottomNav";
 import { SortableWidgetItem } from "@/components/home/SortableWidgetItem";
 import type { BlogPostSummary } from "@/lib/blog-shared";
-import { useLayoutStore, type FullWidgetId, type MainWidgetId } from "@/store/useLayoutStore";
+import { useLayoutStore, type WidgetId } from "@/store/useLayoutStore";
 
 type DashboardShellProps = {
   initialBlogPosts: BlogPostSummary[];
 };
 
-const MAIN_STYLES: Record<MainWidgetId, CSSProperties> = {
-  blog: { minHeight: 480, gridColumn: "span 2" },
-  budget: { minHeight: 460 },
-  calendar: { minHeight: 520 },
-  fortune: { minHeight: 420 },
-  lotto: { minHeight: 380 },
+const WIDGET_META: Record<
+  WidgetId,
+  {
+    minHeight: number;
+    mobileCols: 1;
+    tabletCols: 1 | 2;
+    desktopCols: 1 | 2 | 3;
+  }
+> = {
+  fortune: { minHeight: 420, mobileCols: 1, tabletCols: 1, desktopCols: 1 },
+  lotto: { minHeight: 380, mobileCols: 1, tabletCols: 1, desktopCols: 1 },
+  blog: { minHeight: 480, mobileCols: 1, tabletCols: 2, desktopCols: 2 },
+  budget: { minHeight: 460, mobileCols: 1, tabletCols: 1, desktopCols: 1 },
+  calendar: { minHeight: 520, mobileCols: 1, tabletCols: 1, desktopCols: 1 },
+  stock: { minHeight: 520, mobileCols: 1, tabletCols: 2, desktopCols: 2 },
+  realestate: { minHeight: 340, mobileCols: 1, tabletCols: 2, desktopCols: 1 },
 };
 
-const FULL_STYLES: Record<FullWidgetId, CSSProperties> = {
-  stock: { minHeight: 520 },
-  realestate: { minHeight: 340 },
-};
+const DEFAULT_WIDGET_ORDER = useLayoutStore.getState().widgetOrder;
 
 export default function DashboardShell({ initialBlogPosts }: DashboardShellProps) {
   return (
@@ -74,9 +81,8 @@ export default function DashboardShell({ initialBlogPosts }: DashboardShellProps
 }
 
 function BentoGrid({ initialBlogPosts }: { initialBlogPosts: BlogPostSummary[] }) {
-  const { mainOrder, fullOrder, setMainOrder, setFullOrder } = useLayoutStore();
-  const [activeMainId, setActiveMainId] = useState<MainWidgetId | null>(null);
-  const [activeFullId, setActiveFullId] = useState<FullWidgetId | null>(null);
+  const { widgetOrder, setWidgetOrder } = useLayoutStore();
+  const [activeWidgetId, setActiveWidgetId] = useState<WidgetId | null>(null);
   const [hydrated, setHydrated] = useState(false);
 
   const sensors = useSensors(
@@ -89,7 +95,9 @@ function BentoGrid({ initialBlogPosts }: { initialBlogPosts: BlogPostSummary[] }
     });
   }, []);
 
-  function getMainContent(id: MainWidgetId): React.ReactNode {
+  const orderedWidgets = hydrated ? widgetOrder : DEFAULT_WIDGET_ORDER;
+
+  function getWidgetContent(id: WidgetId): React.ReactNode {
     switch (id) {
       case "blog":
         return <ErrorBoundary><BlogWidget initialPosts={initialBlogPosts} /></ErrorBoundary>;
@@ -101,11 +109,6 @@ function BentoGrid({ initialBlogPosts }: { initialBlogPosts: BlogPostSummary[] }
         return <ErrorBoundary><FortuneWidget /></ErrorBoundary>;
       case "lotto":
         return <ErrorBoundary><LottoWidget /></ErrorBoundary>;
-    }
-  }
-
-  function getFullContent(id: FullWidgetId): React.ReactNode {
-    switch (id) {
       case "stock":
         return <ErrorBoundary><StockWidget /></ErrorBoundary>;
       case "realestate":
@@ -113,151 +116,96 @@ function BentoGrid({ initialBlogPosts }: { initialBlogPosts: BlogPostSummary[] }
     }
   }
 
-  function handleMainDragStart({ active }: DragStartEvent) {
-    setActiveMainId(active.id as MainWidgetId);
+  function getWidgetStyle(id: WidgetId, index: number): CSSProperties {
+    const meta = WIDGET_META[id];
+    return {
+      minHeight: meta.minHeight,
+      ["--widget-delay" as string]: `${index * 45}ms`,
+      ["--widget-span-mobile" as string]: String(meta.mobileCols),
+      ["--widget-span-tablet" as string]: String(meta.tabletCols),
+      ["--widget-span-desktop" as string]: String(meta.desktopCols),
+    };
   }
 
-  function handleMainDragEnd({ active, over }: DragEndEvent) {
+  function handleDragStart({ active }: DragStartEvent) {
+    setActiveWidgetId(active.id as WidgetId);
+  }
+
+  function handleDragEnd({ active, over }: DragEndEvent) {
     if (over && active.id !== over.id) {
-      const from = mainOrder.indexOf(active.id as MainWidgetId);
-      const to = mainOrder.indexOf(over.id as MainWidgetId);
-      setMainOrder(arrayMove(mainOrder, from, to));
+      const from = orderedWidgets.indexOf(active.id as WidgetId);
+      const to = orderedWidgets.indexOf(over.id as WidgetId);
+      setWidgetOrder(arrayMove(orderedWidgets, from, to));
     }
-    setActiveMainId(null);
-  }
-
-  function handleFullDragStart({ active }: DragStartEvent) {
-    setActiveFullId(active.id as FullWidgetId);
-  }
-
-  function handleFullDragEnd({ active, over }: DragEndEvent) {
-    if (over && active.id !== over.id) {
-      const from = fullOrder.indexOf(active.id as FullWidgetId);
-      const to = fullOrder.indexOf(over.id as FullWidgetId);
-      setFullOrder(arrayMove(fullOrder, from, to));
-    }
-    setActiveFullId(null);
+    setActiveWidgetId(null);
   }
 
   return (
     <div style={{ width: "100%", marginTop: "1rem" }}>
       <style>{`
-        .bento-responsive { display: none; }
-        .bento-mobile { display: flex; flex-direction: column; gap: 1.25rem; }
-        @media (min-width: 640px) {
-          .bento-responsive { display: flex; flex-direction: column; gap: 1.25rem; }
-          .bento-mobile { display: none; }
-        }
-        .bento-grid-main {
+        .bento-grid {
           display: grid;
           gap: 1.25rem;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
+          grid-template-columns: minmax(0, 1fr);
+          grid-auto-flow: dense;
+          align-items: stretch;
+        }
+        @media (min-width: 640px) {
+          .bento-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
         }
         @media (min-width: 1100px) {
-          .bento-grid-main { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+          .bento-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+          }
+        }
+        .bento-item {
+          grid-column: span var(--widget-span-mobile, 1);
+        }
+        @media (min-width: 640px) {
+          .bento-item {
+            grid-column: span var(--widget-span-tablet, 1);
+          }
+        }
+        @media (min-width: 1100px) {
+          .bento-item {
+            grid-column: span var(--widget-span-desktop, 1);
+          }
         }
       `}</style>
 
-      <div className="bento-responsive">
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragStart={handleMainDragStart}
-          onDragEnd={handleMainDragEnd}
-        >
-          <SortableContext items={hydrated ? mainOrder : useLayoutStore.getState().mainOrder} strategy={rectSortingStrategy}>
-            <div className="bento-grid-main">
-              {(hydrated ? mainOrder : useLayoutStore.getState().mainOrder).map((id, index) => (
-                <SortableWidgetItem
-                  key={id}
-                  id={id}
-                  widgetId={id}
-                  containerStyle={{
-                    ...MAIN_STYLES[id],
-                    ["--widget-delay" as string]: `${index * 50}ms`,
-                  }}
-                >
-                  <div className="widget-enter">
-                    {getMainContent(id)}
-                  </div>
-                </SortableWidgetItem>
-              ))}
-            </div>
-          </SortableContext>
-          <DragOverlay dropAnimation={{ duration: 180, easing: "ease" }}>
-            {activeMainId ? (
-              <div style={{ ...MAIN_STYLES[activeMainId], opacity: 0.88 }}>
-                {getMainContent(activeMainId)}
-              </div>
-            ) : null}
-          </DragOverlay>
-        </DndContext>
-
-        <div style={{ marginTop: "1.25rem" }}>
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragStart={handleFullDragStart}
-            onDragEnd={handleFullDragEnd}
-          >
-            <SortableContext items={hydrated ? fullOrder : useLayoutStore.getState().fullOrder} strategy={verticalListSortingStrategy}>
-              <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-                {(hydrated ? fullOrder : useLayoutStore.getState().fullOrder).map((id, index) => (
-                  <SortableWidgetItem
-                    key={id}
-                    id={id}
-                    widgetId={id}
-                    containerStyle={{
-                      ...FULL_STYLES[id],
-                      ["--widget-delay" as string]: `${(mainOrder.length + index) * 50}ms`,
-                    }}
-                  >
-                    <div className="widget-enter">
-                      {getFullContent(id)}
-                    </div>
-                  </SortableWidgetItem>
-                ))}
-              </div>
-            </SortableContext>
-            <DragOverlay dropAnimation={{ duration: 180, easing: "ease" }}>
-              {activeFullId ? (
-                <div style={{ ...FULL_STYLES[activeFullId], opacity: 0.88 }}>
-                  {getFullContent(activeFullId)}
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+      >
+        <SortableContext items={orderedWidgets} strategy={rectSortingStrategy}>
+          <div className="bento-grid">
+            {orderedWidgets.map((id, index) => (
+              <SortableWidgetItem
+                key={id}
+                id={id}
+                widgetId={id}
+                className="bento-item"
+                containerStyle={getWidgetStyle(id, index)}
+              >
+                <div className="widget-enter">
+                  {getWidgetContent(id)}
                 </div>
-              ) : null}
-            </DragOverlay>
-          </DndContext>
-        </div>
-      </div>
-
-      <div className="bento-mobile">
-        {mainOrder.map((id, index) => (
-          <div
-            key={`mobile-${id}`}
-            data-widget-id={id}
-            className="widget-enter"
-            style={{
-              ...MAIN_STYLES[id],
-              ["--widget-delay" as string]: `${index * 50}ms`,
-            }}
-          >
-            {getMainContent(id)}
+              </SortableWidgetItem>
+            ))}
           </div>
-        ))}
-        {fullOrder.map((id, index) => (
-          <div
-            key={`mobile-${id}`}
-            data-widget-id={id}
-            className="widget-enter"
-            style={{
-              ...FULL_STYLES[id],
-              ["--widget-delay" as string]: `${(mainOrder.length + index) * 50}ms`,
-            }}
-          >
-            {getFullContent(id)}
-          </div>
-        ))}
-      </div>
+        </SortableContext>
+        <DragOverlay dropAnimation={{ duration: 180, easing: "ease" }}>
+          {activeWidgetId ? (
+            <div className="bento-item" style={{ ...getWidgetStyle(activeWidgetId, 0), opacity: 0.88 }}>
+              {getWidgetContent(activeWidgetId)}
+            </div>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
     </div>
   );
 }
