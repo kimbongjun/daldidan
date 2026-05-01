@@ -108,3 +108,45 @@ export async function getCloudflareStreamVideoDetails(uid: string): Promise<Clou
 
   return payload.result;
 }
+
+export type CloudflareStreamListItem = {
+  uid: string;
+  thumbnail: string;
+  meta: { name?: string };
+  status: {
+    state: CloudflareStreamStatus;
+    pctComplete?: string;
+    errorReasonCode?: string;
+    errorReasonText?: string;
+  };
+  duration?: number;
+  created?: string;
+  readyToStream: boolean;
+};
+
+export async function listCloudflareStreamVideos(options: {
+  limit?: number;
+  search?: string;
+} = {}): Promise<CloudflareStreamListItem[]> {
+  const { accountId, apiToken } = getCloudflareStreamConfig();
+  const url = new URL(`${CLOUDFLARE_API_BASE}/accounts/${accountId}/stream`);
+  url.searchParams.set("per_page", String(options.limit ?? 50));
+  if (options.search?.trim()) url.searchParams.set("search", options.search.trim());
+
+  const res = await fetch(url.toString(), {
+    headers: {
+      Authorization: `Bearer ${apiToken}`,
+      accept: "application/json",
+    },
+    cache: "no-store",
+  });
+
+  const payload = await res.json().catch(() => ({})) as CloudflareEnvelope<CloudflareStreamListItem[]>;
+
+  if (!res.ok || !payload.success) {
+    const message = payload.errors?.[0]?.message ?? "비디오 목록을 조회하지 못했습니다.";
+    throw new Error(message);
+  }
+
+  return payload.result ?? [];
+}
