@@ -3,11 +3,74 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/server";
 import { extractDescriptionFromHtml } from "@/lib/blog-shared";
 
-function buildPollinationsPrompt(title: string, snippet: string): string {
+type ThumbnailCategoryProfile = {
+  koreanLabel: string;
+  visualFocus: string;
+  promptStyle: string;
+  englishKeywords: string[];
+  avoidKeywords?: string[];
+};
+
+const CATEGORY_THUMBNAIL_PROFILES: Record<string, ThumbnailCategoryProfile> = {
+  "여행": {
+    koreanLabel: "여행",
+    visualFocus: "destination-focused travel scene, local atmosphere, landscape or city exploration",
+    promptStyle: "editorial travel photography, authentic place-based storytelling, natural light",
+    englishKeywords: ["travel", "destination", "landscape", "city", "journey", "local culture"],
+    avoidKeywords: ["studio", "product", "abstract"],
+  },
+  "스윙": {
+    koreanLabel: "스윙",
+    visualFocus: "swing dance social, jazz-era mood, partner movement, dance floor energy",
+    promptStyle: "lively dance photography, rhythmic motion, warm stage lighting, candid social atmosphere",
+    englishKeywords: ["swing dance", "jazz dance", "lindy hop", "social dance", "ballroom", "live music"],
+    avoidKeywords: ["golf swing", "baseball", "fitness gym"],
+  },
+  "일상": {
+    koreanLabel: "일상",
+    visualFocus: "everyday life moment, cozy routine, home or neighborhood scene",
+    promptStyle: "lifestyle editorial photography, candid slice-of-life composition, warm and relatable mood",
+    englishKeywords: ["lifestyle", "daily life", "home", "routine", "cafe", "neighborhood"],
+    avoidKeywords: ["corporate", "luxury showroom", "product mockup"],
+  },
+  "육아": {
+    koreanLabel: "육아",
+    visualFocus: "family life, parenting moment, child-friendly environment, warm connection",
+    promptStyle: "family lifestyle photography, gentle natural light, tender candid interaction",
+    englishKeywords: ["parenting", "family", "kids", "childcare", "home life", "playtime"],
+    avoidKeywords: ["hospital", "medical", "classroom lecture"],
+  },
+  "재테크": {
+    koreanLabel: "재테크",
+    visualFocus: "personal finance planning, budgeting desk, investing habit, money management scene",
+    promptStyle: "clean editorial finance photography, modern workspace, practical and trustworthy tone",
+    englishKeywords: ["personal finance", "budgeting", "investing", "money management", "financial planning", "workspace"],
+    avoidKeywords: ["casino", "luxury car", "gold bars"],
+  },
+  "기타": {
+    koreanLabel: "기타",
+    visualFocus: "blog editorial visual aligned with the article topic",
+    promptStyle: "editorial photography, contextual subject matter, clean and attractive composition",
+    englishKeywords: ["editorial", "feature story", "magazine photography"],
+    avoidKeywords: ["random unrelated object"],
+  },
+};
+
+function getCategoryProfile(category?: string | null): ThumbnailCategoryProfile {
+  if (!category) return CATEGORY_THUMBNAIL_PROFILES["기타"];
+  return CATEGORY_THUMBNAIL_PROFILES[category] ?? CATEGORY_THUMBNAIL_PROFILES["기타"];
+}
+
+function buildPollinationsPrompt(title: string, snippet: string, category?: string | null): string {
+  const profile = getCategoryProfile(category);
   const parts = [
     `professional blog thumbnail: "${title}"`,
+    `article category: ${profile.koreanLabel}`,
+    `visual focus: ${profile.visualFocus}`,
     snippet ? snippet.slice(0, 80) : "",
-    "beautiful editorial photography, cinematic composition, vibrant colors, high quality, 16:9",
+    profile.promptStyle,
+    profile.avoidKeywords?.length ? `avoid: ${profile.avoidKeywords.join(", ")}` : "",
+    "beautiful editorial photography, cinematic composition, relevant subject matter, high quality, 16:9",
   ].filter(Boolean).join(". ");
   return encodeURIComponent(parts);
 }
@@ -108,16 +171,22 @@ export async function generateAutoThumbnail(
   title: string,
   contentHtml: string,
   slug: string,
+  category?: string | null,
 ): Promise<string> {
   const snippet = extractDescriptionFromHtml(contentHtml, 200);
-  const prompt = buildPollinationsPrompt(title, snippet);
+  const prompt = buildPollinationsPrompt(title, snippet, category);
+  const profile = getCategoryProfile(category);
 
   // 1. Pollinations AI
   const pollinationsUrl = await tryPollinationsAI(prompt);
   if (pollinationsUrl) return pollinationsUrl;
 
-  // 2. Unsplash Source (영어 키워드 추출)
-  const keywords = title.replace(/[ㄱ-ㅎㅏ-ㅣ가-힣]+/g, "").trim() || title;
+  // 2. Unsplash Source (카테고리 중심 영어 키워드 우선)
+  const normalizedTitle = title.replace(/[ㄱ-ㅎㅏ-ㅣ가-힣]+/g, " ").replace(/\s+/g, " ").trim();
+  const keywords = [
+    ...profile.englishKeywords,
+    normalizedTitle,
+  ].filter(Boolean).join(" ");
   const unsplashUrl = await tryUnsplashSource(keywords);
   if (unsplashUrl) return unsplashUrl;
 

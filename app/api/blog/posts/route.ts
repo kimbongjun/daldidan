@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
     // 썸네일 없으면 자동 생성 후 DB 업데이트
     let finalThumbnail = resolvedThumbnail;
     if (!resolvedThumbnail) {
-      const autoThumb = await generateAutoThumbnail(title, contentHtml, slug);
+      const autoThumb = await generateAutoThumbnail(title, contentHtml, slug, category);
       if (autoThumb) {
         const adminClient = createAdminClient();
         await adminClient
@@ -186,7 +186,7 @@ export async function PATCH(request: NextRequest) {
     const capturedId = id;
     const capturedSlug = slug;
     after(async () => {
-      const autoThumb = await generateAutoThumbnail(title, contentHtml, capturedSlug);
+      const autoThumb = await generateAutoThumbnail(title, contentHtml, capturedSlug, category);
       if (!autoThumb) return;
       const adminClient = createAdminClient();
       await adminClient
