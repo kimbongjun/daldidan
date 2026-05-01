@@ -24,6 +24,12 @@
     "@tiptap/extension-placeholder": "^3.22.3",
     "@tiptap/react": "^3.22.3",
     "@tiptap/starter-kit": "^3.22.3",
+    "@uppy/core": "^5.2.0",
+    "@uppy/dashboard": "^5.1.1",
+    "@uppy/react": "^5.2.0",
+    "@uppy/status-bar": "^5.1.0",
+    "@uppy/tus": "^5.1.1",
+    "@vidstack/react": "^0.6.15",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "embla-carousel-react": "^8.6.0",
@@ -37,6 +43,7 @@
     "react-dom": "^19.0.0",
     "resend": "^6.11.0",
     "sharp": "^0.34.5",
+    "vidstack": "^0.6.15",
     "zustand": "^5.0.3"
   },
   "devDependencies": {

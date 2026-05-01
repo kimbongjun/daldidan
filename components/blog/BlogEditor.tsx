@@ -24,7 +24,9 @@ import {
   Video,
 } from "lucide-react";
 import { EmbedBlock, parseYouTubeEmbedUrl } from "@/lib/blog-embeds";
+import { StreamVideoBlock } from "@/lib/blog-stream-video";
 import { MapInputBlock } from "@/components/blog/MapInputBlock";
+import CloudflareVideoUploader from "@/components/blog/CloudflareVideoUploader";
 import { uploadImagesToStorage } from "@/lib/image-upload";
 
 export const DEFAULT_EDITOR_HTML = "";
@@ -45,6 +47,7 @@ export default function BlogEditor({
   const [isDragging, setIsDragging] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null);
   const [uploadError, setUploadError] = useState("");
+  const [videoUploaderOpen, setVideoUploaderOpen] = useState(false);
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -61,6 +64,7 @@ export default function BlogEditor({
         defaultProtocol: "https",
       }),
       EmbedBlock,
+      StreamVideoBlock,
       MapInputBlock,
       Image.configure({
         inline: false,
@@ -170,6 +174,17 @@ export default function BlogEditor({
     }).run();
   };
 
+  const insertCloudflareVideo = (video: { uid: string; title: string; posterTime: string }) => {
+    editor.chain().focus().insertContent({
+      type: "streamVideoBlock",
+      attrs: {
+        uid: video.uid,
+        title: video.title,
+        posterTime: video.posterTime,
+      },
+    }).createParagraphNear().run();
+  };
+
   return (
     <div className="flex flex-col gap-3">
       {uploadError && (
@@ -228,6 +243,18 @@ export default function BlogEditor({
         <ToolbarButton label="유튜브" onClick={insertYouTube} active={false}>
           <Video size={15} />
         </ToolbarButton>
+        <button
+          type="button"
+          onClick={() => setVideoUploaderOpen(true)}
+          className="pressable px-3 h-9 rounded-xl text-xs font-semibold transition-colors"
+          style={{
+            background: "rgba(234,88,12,0.12)",
+            color: "#EA580C",
+            border: "1px solid rgba(234,88,12,0.22)",
+          }}
+        >
+          동영상 업로드
+        </button>
         <ToolbarButton label="네이버 지도" onClick={insertMap} active={false}>
           <MapPin size={15} />
         </ToolbarButton>
@@ -283,7 +310,7 @@ export default function BlogEditor({
           className="px-5 py-4 text-xs font-semibold"
           style={{ color: "var(--text-muted)", borderBottom: "1px solid var(--border)", background: "rgba(234,88,12,0.08)" }}
         >
-          이미지는 드래그/업로드, 유튜브·네이버 지도는 툴바 버튼으로 삽입하세요
+          이미지는 드래그/업로드, 동영상은 Cloudflare Stream, 유튜브·네이버 지도는 툴바 버튼으로 삽입하세요
         </div>
 
         {uploadProgress ? (
@@ -333,6 +360,13 @@ export default function BlogEditor({
           </button>
           <button
             type="button"
+            onClick={() => setVideoUploaderOpen(true)}
+            className="pressable blog-editor-dock-button"
+          >
+            동영상
+          </button>
+          <button
+            type="button"
             onClick={insertYouTube}
             className="pressable blog-editor-dock-button"
           >
@@ -347,6 +381,11 @@ export default function BlogEditor({
           </button>
         </div>
       </div>
+      <CloudflareVideoUploader
+        open={videoUploaderOpen}
+        onClose={() => setVideoUploaderOpen(false)}
+        onUploaded={insertCloudflareVideo}
+      />
     </div>
   );
 }

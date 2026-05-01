@@ -1,4 +1,9 @@
 @import "tailwindcss";
+@import "@uppy/core/css/style.min.css";
+@import "@uppy/dashboard/css/style.min.css";
+@import "vidstack/styles/base.css";
+@import "vidstack/styles/defaults.css";
+@import "vidstack/styles/community-skin/video.css";
 
 /* ── Dark theme (default) ─────────────────────────────────────────────────── */
 :root,
@@ -573,6 +578,163 @@ input[type="reset"]:not(:disabled):active,
 .blog-embed-map {
   aspect-ratio: 16 / 9;
   width: 100%;
+}
+
+.blog-stream-video {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1rem;
+  margin: 1rem 0;
+  background: linear-gradient(140deg, rgba(234,88,12,0.16), rgba(15,15,20,0.95));
+  border: 1px solid rgba(234,88,12,0.18);
+}
+
+.blog-stream-video-react,
+.blog-stream-video-player-wrap,
+.blog-stream-video-player,
+.blog-stream-video-pending,
+.blog-stream-video-shell {
+  width: 100%;
+}
+
+.blog-stream-video-shell,
+.blog-stream-video-pending {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-start;
+  overflow: hidden;
+}
+
+.blog-stream-video-pending-poster {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.38;
+}
+
+.blog-stream-video-shell::before,
+.blog-stream-video-pending-overlay {
+  position: absolute;
+  inset: 0;
+}
+
+.blog-stream-video-shell::before {
+  content: "";
+  background:
+    radial-gradient(circle at top left, rgba(255,255,255,0.14), transparent 34%),
+    linear-gradient(180deg, rgba(15,15,20,0.16), rgba(15,15,20,0.82));
+}
+
+.blog-stream-video-shell,
+.blog-stream-video-pending-overlay {
+  padding: 1.25rem;
+}
+
+.blog-stream-video-badge {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 999px;
+  background: rgba(15,15,20,0.7);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: #F8FAFC;
+  padding: 0.45rem 0.7rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.blog-stream-video-copy {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: auto;
+  color: #F8FAFC;
+}
+
+.blog-stream-video-copy strong {
+  font-size: 1rem;
+  line-height: 1.35;
+}
+
+.blog-stream-video-copy span {
+  color: rgba(248,250,252,0.82);
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+
+.blog-stream-video-pending-overlay {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  background: linear-gradient(180deg, rgba(15,15,20,0.1), rgba(15,15,20,0.84));
+}
+
+.blog-stream-video-pending-meta {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 0.9rem;
+  color: rgba(248,250,252,0.86);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.blog-stream-video-player-wrap {
+  background: #000;
+}
+
+.blog-stream-video-player {
+  aspect-ratio: 16 / 9;
+  display: block;
+  width: 100%;
+  --media-brand: #EA580C;
+  --media-focus: rgba(234,88,12,0.45);
+  --media-tooltip-bg-color: rgba(15,15,20,0.92);
+  --media-menu-bg: rgba(15,15,20,0.95);
+}
+
+.blog-stream-video-caption {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  padding: 0.85rem 1rem 1rem;
+  color: rgba(248,250,252,0.8);
+  font-size: 0.8rem;
+  background: linear-gradient(180deg, rgba(15,15,20,0.12), rgba(15,15,20,0.9));
+}
+
+.uppy-Dashboard-inner {
+  border: 0 !important;
+  background: var(--bg-card) !important;
+}
+
+.uppy-Dashboard-AddFiles {
+  border: 1px dashed rgba(234,88,12,0.28) !important;
+  background: linear-gradient(180deg, rgba(234,88,12,0.08), rgba(255,255,255,0.02)) !important;
+}
+
+.uppy-Dashboard-browse,
+.uppy-c-btn-primary {
+  background: #EA580C !important;
+}
+
+.uppy-StatusBar {
+  border-top-color: var(--border) !important;
 }
 
 .blog-editor-dock {
