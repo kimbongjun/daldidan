@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useState, useDeferredValue, Suspense, lazy, type CSSProperties } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -18,7 +18,6 @@ import BudgetWidget from "@/components/widgets/BudgetWidget";
 import BlogWidget from "@/components/widgets/BlogWidget";
 import RealEstateWidget from "@/components/widgets/RealEstateWidget";
 import StockWidget from "@/components/widgets/StockWidget";
-import CalendarWidget from "@/components/widgets/CalendarWidget";
 import FortuneWidget from "@/components/widgets/FortuneWidget";
 import LottoWidget from "@/components/widgets/LottoWidget";
 import ErrorBoundary from "@/components/ErrorBoundary";
@@ -26,6 +25,8 @@ import BottomNav from "@/components/BottomNav";
 import { SortableWidgetItem } from "@/components/home/SortableWidgetItem";
 import type { BlogPostSummary } from "@/lib/blog-shared";
 import { useLayoutStore, MOBILE_WIDGET_ORDER, type WidgetId } from "@/store/useLayoutStore";
+
+const CalendarWidget = lazy(() => import("@/components/widgets/CalendarWidget"));
 
 type DashboardShellProps = {
   initialBlogPosts: BlogPostSummary[];
@@ -49,6 +50,21 @@ const WIDGET_META: Record<
   stock: { label: "증시", minHeight: 0, mobileCols: 1, tabletCols: 2, desktopCols: 2 },
   realestate: { label: "부동산", minHeight: 0, mobileCols: 1, tabletCols: 1, desktopCols: 1 },
 };
+
+function CalendarWidgetSkeleton() {
+  return (
+    <div
+      style={{
+        background: "var(--bg-card)",
+        border: "1px solid var(--border)",
+        borderRadius: 12,
+        minHeight: 320,
+        width: "100%",
+      }}
+      className="skeleton-shimmer"
+    />
+  );
+}
 
 const DEFAULT_WIDGET_ORDER = useLayoutStore.getState().widgetOrder;
 
@@ -86,6 +102,10 @@ function BentoGrid({ initialBlogPosts }: { initialBlogPosts: BlogPostSummary[] }
   const [activeWidgetId, setActiveWidgetId] = useState<WidgetId | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
+  // CalendarWidget 지연 렌더링 제어
+  const [calendarReady, setCalendarReady] = useState(false);
+  // useDeferredValue로 Fiber가 낮은 우선순위로 처리하게 함
+  const deferredCalendarReady = useDeferredValue(calendarReady);
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
@@ -108,6 +128,11 @@ function BentoGrid({ initialBlogPosts }: { initialBlogPosts: BlogPostSummary[] }
     return () => window.removeEventListener("resize", check);
   }, []);
 
+  useEffect(() => {
+    // 초기 렌더 완료 후 낮은 우선순위로 CalendarWidget 마운트 예약
+    setCalendarReady(true);
+  }, []);
+
   const desktopWidgets = hydrated ? widgetOrder : DEFAULT_WIDGET_ORDER;
 
   function getWidgetContent(id: WidgetId): React.ReactNode {
@@ -117,7 +142,13 @@ function BentoGrid({ initialBlogPosts }: { initialBlogPosts: BlogPostSummary[] }
       case "budget":
         return <ErrorBoundary><BudgetWidget /></ErrorBoundary>;
       case "calendar":
-        return <ErrorBoundary><CalendarWidget /></ErrorBoundary>;
+        return (
+          <ErrorBoundary>
+            <Suspense fallback={<CalendarWidgetSkeleton />}>
+              {deferredCalendarReady ? <CalendarWidget /> : <CalendarWidgetSkeleton />}
+            </Suspense>
+          </ErrorBoundary>
+        );
       case "fortune":
         return <ErrorBoundary><FortuneWidget /></ErrorBoundary>;
       case "lotto":
