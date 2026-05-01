@@ -605,15 +605,9 @@ input[type="reset"]:not(:disabled):active,
   align-items: flex-end;
   justify-content: flex-start;
   overflow: hidden;
-}
-
-.blog-stream-video-pending-poster {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  opacity: 0.38;
+  background:
+    radial-gradient(circle at top left, rgba(255,255,255,0.14), transparent 34%),
+    linear-gradient(180deg, rgba(15,15,20,0.16), rgba(15,15,20,0.9));
 }
 
 .blog-stream-video-shell::before,
@@ -705,17 +699,6 @@ input[type="reset"]:not(:disabled):active,
   --media-focus: rgba(234,88,12,0.45);
   --media-tooltip-bg-color: rgba(15,15,20,0.92);
   --media-menu-bg: rgba(15,15,20,0.95);
-}
-
-.blog-stream-video-caption {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  width: 100%;
-  padding: 0.85rem 1rem 1rem;
-  color: rgba(248,250,252,0.8);
-  font-size: 0.8rem;
-  background: linear-gradient(180deg, rgba(15,15,20,0.12), rgba(15,15,20,0.9));
 }
 
 .uppy-Dashboard-inner {

@@ -1,11 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { LoaderCircle, PlayCircle, RefreshCw } from "lucide-react";
-import { MediaCommunitySkin, MediaOutlet, MediaPlayer, MediaPoster } from "@vidstack/react";
+import { LoaderCircle, RefreshCw } from "lucide-react";
+import { MediaCommunitySkin, MediaOutlet, MediaPlayer } from "@vidstack/react";
 import {
   buildCloudflareStreamHlsUrl,
-  buildCloudflareStreamThumbnailUrl,
   getCloudflareStreamPublicConfig,
 } from "@/lib/cloudflare-stream-public";
 
@@ -27,19 +26,12 @@ type VideoStatusPayload = {
 export default function CloudflareStreamPlayer({
   uid,
   title,
-  posterTime = "1s",
 }: {
   uid: string;
   title?: string;
   posterTime?: string;
 }) {
-  const { customerCode, defaultPosterTime } = getCloudflareStreamPublicConfig();
-  const fallbackPosterTime = posterTime || defaultPosterTime;
-
-  const fallbackThumbnail = useMemo(() => {
-    if (!customerCode) return null;
-    return buildCloudflareStreamThumbnailUrl(customerCode, uid, { time: fallbackPosterTime, height: 720 });
-  }, [customerCode, fallbackPosterTime, uid]);
+  const { customerCode } = getCloudflareStreamPublicConfig();
 
   const fallbackHls = useMemo(() => {
     if (!customerCode) return null;
@@ -108,16 +100,11 @@ export default function CloudflareStreamPlayer({
     );
   }
 
-  const posterUrl = payload?.thumbnail || fallbackThumbnail;
   const hlsUrl = payload?.playback.hls || fallbackHls;
 
   if (!payload?.readyToStream || !hlsUrl) {
     return (
       <div className="blog-stream-video-pending">
-        {posterUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={posterUrl} alt={title || "동영상 썸네일"} className="blog-stream-video-pending-poster" />
-        ) : null}
         <div className="blog-stream-video-pending-overlay">
           <div className="blog-stream-video-badge">Cloudflare Stream</div>
           <div className="blog-stream-video-copy">
@@ -142,19 +129,13 @@ export default function CloudflareStreamPlayer({
       <MediaPlayer
         title={title || "Cloudflare Stream video"}
         src={hlsUrl}
-        poster={posterUrl ?? undefined}
         crossorigin=""
         playsinline
         className="blog-stream-video-player"
       >
         <MediaOutlet />
-        <MediaPoster alt={title || "Cloudflare Stream poster"} />
         <MediaCommunitySkin />
       </MediaPlayer>
-      <div className="blog-stream-video-caption">
-        <PlayCircle size={14} />
-        Adaptive HLS streaming via Cloudflare Stream + Vidstack
-      </div>
     </div>
   );
 }

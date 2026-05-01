@@ -42,32 +42,12 @@ export function SkeletonBentoGrid() {
       style={{
         maxWidth: 1400,
         margin: "0 auto",
-        padding: "0 1rem 3rem",
+        padding: "1rem 1rem 3rem",
         width: "100%",
         boxSizing: "border-box",
       }}
     >
-      {/* Header skeleton — logo + greeting + clock 영역 */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "1.25rem 0",
-          marginBottom: "0.25rem",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-          <SkeletonBlock width={40} height={40} radius={10} />
-          <div>
-            <SkeletonBlock width={100} height={14} radius={6} />
-            <SkeletonBlock width={170} height={20} radius={6} style={{ marginTop: 6 }} />
-          </div>
-        </div>
-        <SkeletonBlock width={72} height={36} radius={8} />
-      </div>
-
-      {/* Bento grid — 실제 useLayoutStore widgetOrder와 동일한 1→2→3컬럼 span */}
+      {/* Main content only — avoid loading placeholders for surrounding chrome */}
       <style>{`
         .sk-bento-grid {
           display: grid;

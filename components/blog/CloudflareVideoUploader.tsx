@@ -7,7 +7,7 @@ import Tus, { type TusBody } from "@uppy/tus";
 import Dashboard from "@uppy/react/dashboard";
 import { useUppyState } from "@uppy/react";
 import type { UppyFile } from "@uppy/core";
-import { LoaderCircle, RefreshCw, Search, X } from "lucide-react";
+import { Film, LoaderCircle, RefreshCw, Search, X } from "lucide-react";
 
 const POSTER_TIME = process.env.NEXT_PUBLIC_CLOUDFLARE_STREAM_POSTER_TIME?.trim() || "1s";
 const TUS_CHUNK_SIZE = 50 * 1024 * 1024;
@@ -23,7 +23,6 @@ type UploadResult = {
 
 type LibraryVideo = {
   uid: string;
-  thumbnail: string;
   meta?: { name?: string };
   duration?: number;
   readyToStream: boolean;
@@ -54,6 +53,7 @@ export default function CloudflareVideoUploader({
   onUploaded: (result: UploadResult) => void;
 }) {
   const [mounted, setMounted] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const [activeTab, setActiveTab] = useState<ActiveTab>("upload");
 
   // Upload tab state
@@ -94,10 +94,7 @@ export default function CloudflareVideoUploader({
         }
       },
     });
-
     return instance;
-  // capturedUidRef is a stable ref — safe to omit from deps
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const files = useUppyState(uppy, (s) => Object.values(s.files));
@@ -182,6 +179,7 @@ export default function CloudflareVideoUploader({
     uppy.cancelAll();
     uppy.clear();
     capturedUidRef.current = null;
+    setActiveTab("upload");
     setUploadError("");
     setIsUploading(false);
     setSelectedUid(null);
@@ -191,6 +189,14 @@ export default function CloudflareVideoUploader({
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
+    const sync = () => setIsMobile(window.innerWidth < 640);
+    sync();
+    window.addEventListener("resize", sync);
+    return () => window.removeEventListener("resize", sync);
+  }, [mounted]);
 
   useEffect(() => {
     if (!open || !mounted) return;
@@ -207,6 +213,7 @@ export default function CloudflareVideoUploader({
 
   const selectedFile = files[0];
   const progressWidth = `${Math.max(0, Math.min(100, totalProgress || 0))}%`;
+  const dashboardHeight = isMobile ? 188 : 260;
 
   // ── Upload button handler: pre-init then upload ─────────────
   const handleStartUpload = async () => {
@@ -255,21 +262,21 @@ export default function CloudflareVideoUploader({
 
   // ── Render ──────────────────────────────────────────────────
   return createPortal(
-    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[120] flex items-end justify-center bg-black/55 p-0 sm:items-center sm:p-4 backdrop-blur-sm">
       <div
-        className="flex w-full max-w-lg flex-col overflow-hidden rounded-2xl"
+        className="flex h-[100dvh] w-full max-w-3xl flex-col overflow-hidden rounded-none sm:h-auto sm:max-h-[90dvh] sm:rounded-2xl"
         style={{ background: "var(--bg-card)", border: "1px solid var(--border)", boxShadow: "var(--shadow-lg)" }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between gap-4 border-b px-5 py-4" style={{ borderColor: "var(--border)" }}>
+        <div className="flex items-center justify-between gap-4 border-b px-4 py-3 sm:px-5 sm:py-4" style={{ borderColor: "var(--border)" }}>
           <div className="min-w-0">
             <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "#EA580C" }}>Cloudflare Stream</p>
-            <h3 className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>동영상</h3>
+            <h3 className="text-base font-bold sm:text-lg" style={{ color: "var(--text-primary)" }}>동영상</h3>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl sm:h-10 sm:w-10"
             style={{ background: "var(--bg-input)", color: "var(--text-muted)", border: "1px solid var(--border)" }}
             aria-label="닫기"
           >
@@ -278,7 +285,7 @@ export default function CloudflareVideoUploader({
         </div>
 
         {/* Tab bar */}
-        <div className="flex border-b" style={{ borderColor: "var(--border)" }}>
+        <div className="flex border-b px-2 sm:px-3" style={{ borderColor: "var(--border)" }}>
           {(["upload", "library"] as const).map((tab) => (
             <button
               key={tab}
@@ -299,22 +306,22 @@ export default function CloudflareVideoUploader({
 
         {/* ── Upload tab ── */}
         {activeTab === "upload" && (
-          <div className="flex flex-col gap-4 p-5">
+          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4 sm:gap-4 sm:p-5">
             <Dashboard
               uppy={uppy}
               width="100%"
-              height={260}
+              height={dashboardHeight}
               proudlyDisplayPoweredByUppy={false}
               hideUploadButton
               hidePauseResumeButton={false}
               hideRetryButton={false}
-              note="MP4, MOV, WebM 등 동영상 파일을 선택하세요."
+              note={isMobile ? "동영상 1개 선택" : "MP4, MOV, WebM 등 동영상 파일을 선택하세요."}
               singleFileFullScreen={false}
             />
 
             {selectedFile && (
               <div
-                className="flex items-center justify-between gap-4 rounded-xl px-4 py-3"
+                className="flex items-center justify-between gap-3 rounded-xl px-3.5 py-3 sm:px-4"
                 style={{ background: "rgba(255,255,255,0.03)", border: "1px solid var(--border)" }}
               >
                 <div className="min-w-0">
@@ -349,7 +356,7 @@ export default function CloudflareVideoUploader({
               </div>
             )}
 
-            <div className="flex gap-2">
+            <div className="sticky bottom-0 mt-auto flex gap-2 bg-[var(--bg-card)] pt-1">
               <button
                 type="button"
                 onClick={onClose}
@@ -377,7 +384,7 @@ export default function CloudflareVideoUploader({
 
         {/* ── Library tab ── */}
         {activeTab === "library" && (
-          <div className="flex flex-col gap-4 p-5">
+          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4 sm:gap-4 sm:p-5">
             {/* Search */}
             <form
               onSubmit={(e) => { e.preventDefault(); void loadLibrary(librarySearch); }}
@@ -415,7 +422,7 @@ export default function CloudflareVideoUploader({
             {/* Video grid */}
             <div
               className="overflow-y-auto scrollbar-hide"
-              style={{ maxHeight: 300, minHeight: 200 }}
+              style={{ maxHeight: isMobile ? "none" : 320, minHeight: isMobile ? 220 : 200 }}
             >
               {libraryLoading && libraryVideos.length === 0 && (
                 <div className="flex items-center justify-center py-16">
@@ -439,10 +446,7 @@ export default function CloudflareVideoUploader({
               )}
 
               {libraryVideos.length > 0 && (
-                <div
-                  className="grid gap-2"
-                  style={{ gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))" }}
-                >
+                <div className="grid gap-2">
                   {libraryVideos.map((video) => {
                     const isSelected = selectedUid === video.uid;
                     const name = video.meta?.name ?? video.uid;
@@ -451,29 +455,22 @@ export default function CloudflareVideoUploader({
                         key={video.uid}
                         type="button"
                         onClick={() => setSelectedUid(isSelected ? null : video.uid)}
-                        className="flex flex-col overflow-hidden rounded-xl text-left transition-opacity hover:opacity-80"
+                        className="flex items-center gap-3 overflow-hidden rounded-xl px-3 py-3 text-left transition-opacity hover:opacity-80"
                         style={{
                           border: isSelected ? "2px solid #EA580C" : "2px solid var(--border)",
                           background: isSelected ? "rgba(234,88,12,0.08)" : "var(--bg-input)",
                         }}
                       >
-                        {/* Thumbnail */}
-                        <div className="aspect-video w-full overflow-hidden bg-black">
-                          {video.thumbnail ? (
-                            <img
-                              src={video.thumbnail}
-                              alt={name}
-                              className="h-full w-full object-cover"
-                              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-                            />
-                          ) : (
-                            <div className="flex h-full items-center justify-center text-xs" style={{ color: "var(--text-muted)" }}>
-                              No preview
-                            </div>
-                          )}
+                        <div
+                          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+                          style={{
+                            background: isSelected ? "rgba(234,88,12,0.14)" : "rgba(255,255,255,0.05)",
+                            color: isSelected ? "#EA580C" : "var(--text-muted)",
+                          }}
+                        >
+                          <Film size={18} />
                         </div>
-                        {/* Info */}
-                        <div className="p-2">
+                        <div className="min-w-0 flex-1">
                           <p
                             className="truncate text-xs font-semibold leading-tight"
                             style={{ color: isSelected ? "#EA580C" : "var(--text-primary)" }}
@@ -481,11 +478,20 @@ export default function CloudflareVideoUploader({
                           >
                             {name}
                           </p>
-                          <p className="mt-0.5 text-xs" style={{ color: "var(--text-muted)" }}>
+                          <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
                             {video.readyToStream
                               ? (video.duration ? formatDuration(video.duration) : "준비됨")
                               : "처리 중"}
                           </p>
+                        </div>
+                        <div
+                          className="shrink-0 rounded-full px-2 py-1 text-[11px] font-semibold"
+                          style={{
+                            background: video.readyToStream ? "rgba(16,185,129,0.14)" : "rgba(255,255,255,0.06)",
+                            color: video.readyToStream ? "#10B981" : "var(--text-muted)",
+                          }}
+                        >
+                          {video.readyToStream ? "사용 가능" : "인코딩 중"}
                         </div>
                       </button>
                     );
@@ -495,7 +501,7 @@ export default function CloudflareVideoUploader({
             </div>
 
             {/* Buttons */}
-            <div className="flex gap-2">
+            <div className="sticky bottom-0 mt-auto flex gap-2 bg-[var(--bg-card)] pt-1">
               <button
                 type="button"
                 onClick={onClose}
