@@ -153,8 +153,8 @@ function BentoGrid({ initialBlogPosts }: { initialBlogPosts: BlogPostSummary[] }
         return <ErrorBoundary><FortuneWidget /></ErrorBoundary>;
       case "lotto":
         return <ErrorBoundary><LottoWidget /></ErrorBoundary>;
-      case "stock":
-        return <ErrorBoundary><StockWidget /></ErrorBoundary>;
+      // case "stock":
+      //   return <ErrorBoundary><StockWidget /></ErrorBoundary>;
       case "realestate":
         return <ErrorBoundary><RealEstateWidget /></ErrorBoundary>;
     }
