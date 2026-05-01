@@ -25,6 +25,7 @@ type LibraryVideo = {
   uid: string;
   meta?: { name?: string };
   duration?: number;
+  thumbnail?: string | null;
   readyToStream: boolean;
 };
 
@@ -462,13 +463,33 @@ export default function CloudflareVideoUploader({
                         }}
                       >
                         <div
-                          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+                          className="relative h-12 w-[72px] shrink-0 overflow-hidden rounded-xl"
                           style={{
                             background: isSelected ? "rgba(234,88,12,0.14)" : "rgba(255,255,255,0.05)",
-                            color: isSelected ? "#EA580C" : "var(--text-muted)",
+                            border: isSelected ? "1px solid rgba(234,88,12,0.28)" : "1px solid rgba(255,255,255,0.06)",
                           }}
                         >
-                          <Film size={18} />
+                          {video.thumbnail ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={video.thumbnail}
+                              alt=""
+                              className="h-full w-full object-cover"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center" style={{ color: isSelected ? "#EA580C" : "var(--text-muted)" }}>
+                              <Film size={18} />
+                            </div>
+                          )}
+                          {!video.readyToStream && (
+                            <div
+                              className="absolute inset-0 flex items-center justify-center text-[10px] font-semibold"
+                              style={{ background: "rgba(0,0,0,0.42)", color: "#fff" }}
+                            >
+                              처리 중
+                            </div>
+                          )}
                         </div>
                         <div className="min-w-0 flex-1">
                           <p

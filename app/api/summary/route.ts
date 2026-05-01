@@ -7,15 +7,65 @@ const PROMPTS: Record<SummaryTarget, (items: string[]) => string> = {
   blog: (titles) =>
     `다음은 최근 블로그 글 제목 목록입니다:\n${titles.map((t, i) => `${i + 1}. ${t}`).join("\n")}\n\n이 글들을 보고 블로그 전체 분위기를 유머러스하게 20자 이내로 한 줄 요약해주세요. 문장 부호 제외하고 텍스트만 반환하세요.`,
   budget: (entries) =>
-    `다음은 최근 가계부 내역 목록입니다:\n${entries.map((t, i) => `${i + 1}. ${t}`).join("\n")}\n\n이 소비 패턴을 보고 가계부 전체 분위기를 유머러스하게 20자 이내로 한 줄 요약해주세요. 문장 부호 제외하고 텍스트만 반환하세요.`,
+    `다음은 최근 가계부 내역 목록입니다:\n${entries.map((t, i) => `${i + 1}. ${t}`).join("\n")}\n\n이 소비 패턴을 보고 가계부 전체 분위기를 다정하고 산뜻하게 20자 이내로 한 줄 요약해주세요. 비속어, 한자, 냉소, 자조, 과장된 부정 표현은 사용하지 말고 한글과 숫자와 공백만 사용하세요. 문장 부호 제외하고 텍스트만 반환하세요.`,
 };
 
 // 캐시: target → { summary, generatedAt }
 const cache = new Map<string, { summary: string; generatedAt: number }>();
 const CACHE_TTL = 10 * 60 * 1000; // 10분
+const HANJA_REGEX = /[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF]/g;
+const BUDGET_PROFANITY = [
+  "씨발", "시발", "병신", "존나", "개같", "개판", "꺼져", "미친", "염병", "좆", "ㅅㅂ",
+];
+const BUDGET_NEGATIVE = [
+  "최악", "망했", "폭망", "거지", "빚", "파산", "한숨", "짜증", "우울", "불안", "후회",
+  "막막", "지옥", "헬", "죽겠", "고통", "스트레스", "절망", "답답", "눈물", "화난", "분노",
+];
+const SAFE_BUDGET_FALLBACKS = [
+  "차근차근 잘 챙기는 중",
+  "균형 있게 기록하는 중",
+  "알뜰한 흐름이 보여요",
+  "차분하게 쌓이는 소비 기록",
+];
 
 function isSummaryTarget(value: unknown): value is SummaryTarget {
   return value === "blog" || value === "budget";
+}
+
+function limitTextLength(value: string, maxLength: number) {
+  return Array.from(value).slice(0, maxLength).join("").trim();
+}
+
+function containsForbiddenWord(text: string, forbiddenWords: string[]) {
+  return forbiddenWords.some((word) => text.includes(word));
+}
+
+function sanitizeBudgetSummary(summary: string, items: string[]) {
+  const normalized = summary
+    .replace(/^"|"$/g, "")
+    .replace(HANJA_REGEX, "")
+    .replace(/[^0-9A-Za-z가-힣\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const hasForbiddenTone =
+    !normalized ||
+    containsForbiddenWord(normalized, BUDGET_PROFANITY) ||
+    containsForbiddenWord(normalized, BUDGET_NEGATIVE);
+
+  if (hasForbiddenTone) {
+    const fallbackIndex = items.join("|").length % SAFE_BUDGET_FALLBACKS.length;
+    return SAFE_BUDGET_FALLBACKS[fallbackIndex];
+  }
+
+  return limitTextLength(normalized, 20);
+}
+
+function sanitizeSummary(target: SummaryTarget, summary: string, items: string[]) {
+  if (target === "budget") {
+    return sanitizeBudgetSummary(summary, items);
+  }
+  return limitTextLength(summary.replace(/^"|"$/g, "").trim(), 20);
 }
 
 export async function POST(request: NextRequest) {
@@ -60,14 +110,14 @@ export async function POST(request: NextRequest) {
     const completion = await groq.chat.completions.create({
       model,
       messages: [
-        { role: "system", content: "당신은 재치 있는 한국어 카피라이터입니다. 요청한 텍스트만 반환하고 부연 설명은 하지 마세요." },
+        { role: "system", content: "당신은 짧고 재치 있는 한국어 카피라이터입니다. 요청한 텍스트만 반환하고 부연 설명은 하지 마세요. 공격적이거나 불쾌한 표현은 쓰지 마세요." },
         { role: "user", content: PROMPTS[target](items.slice(0, 10)) },
       ],
       temperature: 0.9,
       max_tokens: 60,
     });
 
-    const summary = (completion.choices[0]?.message?.content ?? "").trim().replace(/^"|"$/g, "");
+    const summary = sanitizeSummary(target, completion.choices[0]?.message?.content ?? "", items);
     cache.set(cacheKey, { summary, generatedAt: Date.now() });
 
     return NextResponse.json({ summary });

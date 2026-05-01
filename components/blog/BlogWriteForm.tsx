@@ -6,31 +6,13 @@ import { useRouter } from "next/navigation";
 import { BookmarkCheck, Calendar, Clock, LoaderCircle, PenLine, Trash2, X } from "lucide-react";
 import type { EditableBlogPost } from "@/lib/blog-shared";
 import { BLOG_CATEGORIES } from "@/lib/blog-shared";
+import BlogEditorLoading from "@/components/blog/BlogEditorLoading";
 
 // 에디터는 클라이언트 전용 무거운 번들이므로 dynamic import로 분리
 // → 글 작성 페이지의 초기 로드 속도 향상
 const BlogEditor = dynamic(() => import("@/components/blog/BlogEditor"), {
   ssr: false,
-  loading: () => (
-    <div
-      style={{
-        minHeight: 380,
-        borderRadius: "1.75rem",
-        background: "var(--bg-input)",
-        border: "1px solid var(--border)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: "0.5rem",
-        color: "var(--text-muted)",
-        fontSize: "0.875rem",
-      }}
-    >
-      <LoaderCircle size={16} style={{ animation: "spin 0.8s linear infinite" }} />
-      에디터 로딩 중...
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-    </div>
-  ),
+  loading: () => <BlogEditorLoading />,
 });
 
 const DEFAULT_HTML = "";
