@@ -1,4 +1,3 @@
-@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css");
 @import "tailwindcss";
 
 /* ── Dark theme (default) ─────────────────────────────────────────────────── */
@@ -118,14 +117,13 @@ html {
 body {
   background-color: var(--bg-base);
   color: var(--text-primary);
-  font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
   font-size: var(--text-base);
   line-height: var(--leading-normal);
   letter-spacing: -0.008em;
-  font-feature-settings: "ss01", "ss02", "cv01", "cv03";
   overflow-x: hidden;
   max-width: 100vw;
   transition: background-color 0.25s ease, color 0.2s ease;
