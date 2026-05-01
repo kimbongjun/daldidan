@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Uppy from "@uppy/core";
 import Tus, { type TusBody } from "@uppy/tus";
@@ -28,11 +28,7 @@ function encodeTusMetadata(value: string) {
   return window.btoa(unescape(encodeURIComponent(value)));
 }
 
-function extractUid(file: UppyFile<UploadMeta, TusBody> | undefined): string | null {
-  const xhr = file?.response?.body?.xhr;
-  const headerUid = xhr?.getResponseHeader("stream-media-id")?.trim();
-  if (headerUid) return headerUid;
-
+function extractUidFromUploadUrl(file: UppyFile<UploadMeta, TusBody> | undefined): string | null {
   const uploadUrl = file?.response?.uploadURL?.trim();
   if (!uploadUrl) return null;
   const match = uploadUrl.match(/\/([a-z0-9]{32})$/i);
@@ -51,6 +47,10 @@ export default function CloudflareVideoUploader({
   const [mounted, setMounted] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [isUploading, setIsUploading] = useState(false);
+
+  // stream-media-id는 우리 POST 엔드포인트 응답에만 존재하므로
+  // onAfterResponse에서 캡처해 ref에 보관한다.
+  const capturedUidRef = useRef<string | null>(null);
 
   const uppy = useMemo(() => {
     const instance = new Uppy<UploadMeta, TusBody>({
@@ -77,9 +77,17 @@ export default function CloudflareVideoUploader({
 
         req.setHeader("Upload-Metadata", nextMetadata);
       },
+      onAfterResponse(req, res) {
+        if (req.getMethod() === "POST" && req.getURL().includes("/api/upload/video")) {
+          const mediaId = res.getHeader("stream-media-id")?.trim();
+          if (mediaId) capturedUidRef.current = mediaId;
+        }
+      },
     });
 
     return instance;
+  // capturedUidRef는 안정적인 ref 객체이므로 deps 불필요
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const files = useUppyState(uppy, (state) => Object.values(state.files));
@@ -100,7 +108,8 @@ export default function CloudflareVideoUploader({
     };
 
     const onUploadSuccess = (file: UppyFile<UploadMeta, TusBody> | undefined) => {
-      const uid = extractUid(file);
+      const uid = capturedUidRef.current || extractUidFromUploadUrl(file);
+      capturedUidRef.current = null;
       if (!uid) {
         setUploadError("업로드는 완료됐지만 Cloudflare Stream video uid를 받지 못했습니다.");
         setIsUploading(false);
@@ -146,6 +155,7 @@ export default function CloudflareVideoUploader({
     if (open) return;
     uppy.cancelAll();
     uppy.clear();
+    capturedUidRef.current = null;
     setUploadError("");
     setIsUploading(false);
   }, [open, uppy]);
