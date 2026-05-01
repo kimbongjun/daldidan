@@ -12,6 +12,7 @@ import {
   type StockTheme,
   type WatchlistItem,
 } from "@/lib/stocks/types";
+import { getKrxMarketWindow } from "@/lib/stocks/cache-policy";
 
 const KRX_DOMAIN = "https://data-dbg.krx.co.kr";
 const DEFAULT_SYMBOLS = ["005930", "000660", "035420", "005380"];
@@ -649,7 +650,9 @@ export async function fetchStockOverview(
     };
   }
 
-  // 5분 캐시 확인 (noSparkline 버전과 full 버전 분리)
+  const cacheTtlMs = getKrxMarketWindow().cacheTtlMs;
+
+  // Market-window cache (30-minute buckets during trading, frozen after close)
   const cacheKey = makeOverviewCacheKey(resolvedItems, requestedRankingKinds, options.noSparkline ?? false);
   const cachedOverview = _overviewCache.get(cacheKey);
   if (cachedOverview && cachedOverview.expiry > Date.now()) return cachedOverview.data;
@@ -747,8 +750,7 @@ export async function fetchStockOverview(
       ...(errors.length > 0 ? { errors, message: errors[0] } : {}),
     };
 
-    // 성공 결과만 캐시 저장 (5분)
-    _overviewCache.set(cacheKey, { data: overviewResult, expiry: Date.now() + 300_000 });
+    _overviewCache.set(cacheKey, { data: overviewResult, expiry: Date.now() + cacheTtlMs });
     return overviewResult;
   } catch (error) {
     return {

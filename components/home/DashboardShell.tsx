@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useDeferredValue, Suspense, lazy, type CSSProperties } from "react";
+import { useEffect, useState, useDeferredValue, Suspense, lazy, startTransition, type CSSProperties } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -17,7 +17,6 @@ import Header from "@/components/Header";
 import BudgetWidget from "@/components/widgets/BudgetWidget";
 import BlogWidget from "@/components/widgets/BlogWidget";
 import RealEstateWidget from "@/components/widgets/RealEstateWidget";
-import StockWidget from "@/components/widgets/StockWidget";
 import FortuneWidget from "@/components/widgets/FortuneWidget";
 import LottoWidget from "@/components/widgets/LottoWidget";
 import ErrorBoundary from "@/components/ErrorBoundary";
@@ -27,6 +26,7 @@ import type { BlogPostSummary } from "@/lib/blog-shared";
 import { useLayoutStore, MOBILE_WIDGET_ORDER, type WidgetId } from "@/store/useLayoutStore";
 
 const CalendarWidget = lazy(() => import("@/components/widgets/CalendarWidget"));
+const StockWidget = lazy(() => import("@/components/widgets/StockWidget"));
 
 type DashboardShellProps = {
   initialBlogPosts: BlogPostSummary[];
@@ -59,6 +59,21 @@ function CalendarWidgetSkeleton() {
         border: "1px solid var(--border)",
         borderRadius: 12,
         minHeight: 320,
+        width: "100%",
+      }}
+      className="skeleton-shimmer"
+    />
+  );
+}
+
+function StockWidgetSkeleton() {
+  return (
+    <div
+      style={{
+        background: "var(--bg-card)",
+        border: "1px solid var(--border)",
+        borderRadius: 12,
+        minHeight: 360,
         width: "100%",
       }}
       className="skeleton-shimmer"
@@ -106,6 +121,8 @@ function BentoGrid({ initialBlogPosts }: { initialBlogPosts: BlogPostSummary[] }
   const [calendarReady, setCalendarReady] = useState(false);
   // useDeferredValue로 Fiber가 낮은 우선순위로 처리하게 함
   const deferredCalendarReady = useDeferredValue(calendarReady);
+  const [stockReady, setStockReady] = useState(false);
+  const deferredStockReady = useDeferredValue(stockReady);
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
@@ -133,6 +150,31 @@ function BentoGrid({ initialBlogPosts }: { initialBlogPosts: BlogPostSummary[] }
     setCalendarReady(true);
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const schedule = () => {
+      if (cancelled) return;
+      startTransition(() => {
+        if (!cancelled) setStockReady(true);
+      });
+    };
+
+    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+      const callbackId = window.requestIdleCallback(() => schedule(), { timeout: 2_000 });
+      return () => {
+        cancelled = true;
+        window.cancelIdleCallback(callbackId);
+      };
+    }
+
+    const timeoutId = setTimeout(schedule, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
+  }, []);
+
   const desktopWidgets = hydrated ? widgetOrder : DEFAULT_WIDGET_ORDER;
 
   function getWidgetContent(id: WidgetId): React.ReactNode {
@@ -153,8 +195,14 @@ function BentoGrid({ initialBlogPosts }: { initialBlogPosts: BlogPostSummary[] }
         return <ErrorBoundary><FortuneWidget /></ErrorBoundary>;
       case "lotto":
         return <ErrorBoundary><LottoWidget /></ErrorBoundary>;
-      // case "stock":
-      //   return <ErrorBoundary><StockWidget /></ErrorBoundary>;
+      case "stock":
+        return (
+          <ErrorBoundary>
+            <Suspense fallback={<StockWidgetSkeleton />}>
+              {deferredStockReady ? <StockWidget /> : <StockWidgetSkeleton />}
+            </Suspense>
+          </ErrorBoundary>
+        );
       case "realestate":
         return <ErrorBoundary><RealEstateWidget /></ErrorBoundary>;
     }

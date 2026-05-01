@@ -62,11 +62,13 @@ import {
   formatVolume,
   formatTradingValue,
 } from "@/lib/stocks/utils";
+import { getKrxMarketWindow } from "@/lib/stocks/cache-policy";
 
 const ACCENT = "#F05C6E";
 const DOWN = "#10B981";
 const STORAGE_KEY = "daldidan-stock-watchlist";
 const PORTFOLIO_STORAGE_KEY = "daldidan-stock-portfolio";
+const RESPONSE_STORAGE_PREFIX = "daldidan-stock-response";
 const PAGE_SIZE = 5;
 const FIXED_INDEX_SYMBOLS = ["IDX_1", "IDX_2"];
 const DEFAULT_WATCHLIST: WatchlistItem[] = [
@@ -79,6 +81,12 @@ type LoadPhase = "idle" | "quotes" | "charts" | "done" | "error";
 type WatchSort = "manual" | "change" | "value" | "name";
 type FlashDirection = "up" | "down";
 type PortfolioMap = Record<string, { avgPrice: number }>;
+type StockCacheSnapshot = {
+  data: StockOverviewResponse;
+  bucketKey: string | null;
+  tradingDay: string | null;
+  savedAt: string;
+};
 
 const RANK_META: Record<StockRankingKind, { label: string; icon: React.ReactNode }> = {
   amount: { label: "거래대금", icon: <BarChart3 size={11} /> },
@@ -131,27 +139,50 @@ function getRangePosition(quote: StockQuote): { low: number; high: number; pct: 
   return { low, high, pct: Math.min(100, Math.max(0, pct)) };
 }
 
-function getKrxMarketStatus(now = new Date()): { open: boolean; label: string } {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "Asia/Seoul",
-    weekday: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).formatToParts(now);
-  const weekday = parts.find((part) => part.type === "weekday")?.value ?? "";
-  const hour = Number(parts.find((part) => part.type === "hour")?.value ?? "0");
-  const minute = Number(parts.find((part) => part.type === "minute")?.value ?? "0");
-  const total = hour * 60 + minute;
-  const weekdayOpen = weekday !== "Sat" && weekday !== "Sun";
-  const open = weekdayOpen && total >= 9 * 60 && total < 15 * 60 + 30;
-  return { open, label: open ? "장중" : "마감" };
-}
-
 function changeColor(value: number): string {
   if (value > 0) return ACCENT;
   if (value < 0) return DOWN;
   return "var(--text-muted)";
+}
+
+function makeStockRequestKey(items: WatchlistItem[]): string {
+  return items.map(({ symbol, assetType }) => `${symbol}:${assetType}`).join(",");
+}
+
+function getResponseStorageKey(requestKey: string): string {
+  return `${RESPONSE_STORAGE_PREFIX}:${requestKey || "default"}`;
+}
+
+function readStockSnapshot(requestKey: string): StockCacheSnapshot | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(getResponseStorageKey(requestKey));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<StockCacheSnapshot> | null;
+    if (!parsed || typeof parsed !== "object" || !parsed.data) return null;
+    return {
+      data: parsed.data as StockOverviewResponse,
+      bucketKey: typeof parsed.bucketKey === "string" ? parsed.bucketKey : null,
+      tradingDay: typeof parsed.tradingDay === "string" ? parsed.tradingDay : null,
+      savedAt: typeof parsed.savedAt === "string" ? parsed.savedAt : "",
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeStockSnapshot(requestKey: string, snapshot: StockCacheSnapshot) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(getResponseStorageKey(requestKey), JSON.stringify(snapshot));
+  } catch {}
+}
+
+function snapshotMatchesWindow(snapshot: StockCacheSnapshot | null, requestKey: string, windowInfo = getKrxMarketWindow()): boolean {
+  if (!snapshot) return false;
+  if (!requestKey) return false;
+  if (windowInfo.open) return snapshot.bucketKey === windowInfo.bucketKey;
+  return snapshot.tradingDay === windowInfo.mostRecentTradingDay;
 }
 
 // ──────────────────────────────────────────────
@@ -739,7 +770,10 @@ export default function StockWidget() {
   const [loadPhase, setLoadPhase] = useState<LoadPhase>("idle");
   const [refreshNonce, setRefreshNonce] = useState(0);
   const [flashMap, setFlashMap] = useState<Record<string, FlashDirection>>({});
-  const [marketStatus, setMarketStatus] = useState(() => getKrxMarketStatus());
+  const [marketStatus, setMarketStatus] = useState(() => {
+    const { open, label } = getKrxMarketWindow();
+    return { open, label };
+  });
   const [selectedQuote, setSelectedQuote] = useState<StockQuote | null>(null);
   const [expandedTheme, setExpandedTheme] = useState<string | null>(null);
 
@@ -761,12 +795,14 @@ export default function StockWidget() {
   const feedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previousPricesRef = useRef<Map<string, number>>(new Map());
   const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const refreshTimerRef = useRef<number | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );
 
   const watchlistApiSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const requestKey = useMemo(() => makeStockRequestKey(watchlist), [watchlist]);
 
   // 초기 로드 — 로그인 시 Supabase 우선, 실패/비로그인 시 localStorage fallback
   useEffect(() => {
@@ -906,9 +942,19 @@ export default function StockWidget() {
   }, [hydrated, portfolio, portfolioKey]);
 
   useEffect(() => {
-    const timer = window.setInterval(() => setMarketStatus(getKrxMarketStatus()), 30_000);
+    const timer = window.setInterval(() => {
+      const { open, label } = getKrxMarketWindow();
+      setMarketStatus({ open, label });
+    }, 30_000);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    const snapshot = readStockSnapshot(requestKey);
+    if (!snapshot) return;
+    setData(snapshot.data);
+    setLoadPhase("done");
+  }, [requestKey]);
 
   // 탭 전환 시 해당 페이지 리셋
   const changeTab = useCallback((tab: Tab) => {
@@ -924,23 +970,48 @@ export default function StockWidget() {
     feedbackTimerRef.current = setTimeout(() => setFeedback(null), 2500);
   }, []);
 
-  // 2단계 fetch: Phase1 = 빠른 quotes, Phase2 = sparklines 포함 full
-  const fetchStocks = useCallback(async (signal?: AbortSignal) => {
+  // 2-stage fetch with client snapshot reuse:
+  // during market hours, reuse the same 30-minute bucket;
+  // after close, keep rendering the last trading-day snapshot until next open.
+  const fetchStocks = useCallback(async (signal?: AbortSignal, options?: { force?: boolean }) => {
+    const force = options?.force === true;
+    const windowInfo = getKrxMarketWindow();
+    setMarketStatus({ open: windowInfo.open, label: windowInfo.label });
+
+    const snapshot = readStockSnapshot(requestKey);
+    if (!force && snapshot && snapshotMatchesWindow(snapshot, requestKey, windowInfo)) {
+      setData(snapshot.data);
+      setLoadPhase("done");
+      return;
+    }
+
     setLoadPhase("quotes");
     const baseParams = new URLSearchParams({
       items: watchlist.map(({ symbol, assetType }) => `${symbol}:${assetType}`).join(","),
       rankings: STOCK_RANKING_KINDS.join(","),
     });
+    const fetchCacheMode: RequestCache = force ? "reload" : "force-cache";
+
+    const persistSnapshot = (payload: StockOverviewResponse) => {
+      if (payload.status !== "live") return;
+      writeStockSnapshot(requestKey, {
+        data: payload,
+        bucketKey: windowInfo.bucketKey,
+        tradingDay: payload.baseDate ?? windowInfo.mostRecentTradingDay,
+        savedAt: new Date().toISOString(),
+      });
+    };
 
     // Phase 1: noSparkline — 시세만 빠르게 (25s 타임아웃)
     try {
       const p1Signal = signal
         ? AbortSignal.any([signal, AbortSignal.timeout(25_000)])
         : AbortSignal.timeout(25_000);
-      const res = await fetch(`/api/stocks?${baseParams}&noSparkline=true`, { cache: "no-store", signal: p1Signal });
+      const res = await fetch(`/api/stocks?${baseParams}&noSparkline=true`, { cache: fetchCacheMode, signal: p1Signal });
       const d = await res.json() as StockOverviewResponse;
       if (signal?.aborted) return;
       setData(d);
+      persistSnapshot(d);
       setLoadPhase("charts");
     } catch (e: unknown) {
       if (signal?.aborted) return; // 컴포넌트 언마운트 — 조용히 종료
@@ -959,6 +1030,11 @@ export default function StockWidget() {
           ? "데이터 로딩 시간이 초과되었습니다."
           : "데이터를 불러오지 못했습니다.",
       });
+      if (snapshot) {
+        setData(snapshot.data);
+        setLoadPhase("done");
+        return;
+      }
       setLoadPhase("error");
       return;
     }
@@ -968,21 +1044,36 @@ export default function StockWidget() {
       const p2Signal = signal
         ? AbortSignal.any([signal, AbortSignal.timeout(30_000)])
         : AbortSignal.timeout(30_000);
-      const res = await fetch(`/api/stocks?${baseParams}`, { cache: "no-store", signal: p2Signal });
+      const res = await fetch(`/api/stocks?${baseParams}`, { cache: fetchCacheMode, signal: p2Signal });
       const d = await res.json() as StockOverviewResponse;
-      if (!signal?.aborted) { setData(d); setLoadPhase("done"); }
+      if (!signal?.aborted) {
+        setData(d);
+        persistSnapshot(d);
+        setLoadPhase("done");
+      }
     } catch {
       if (!signal?.aborted) setLoadPhase("done"); // Phase 1 데이터로 표시
     }
-  }, [watchlist]);
+  }, [requestKey, watchlist]);
 
   useEffect(() => {
     const controller = new AbortController();
-    void fetchStocks(controller.signal);
-    const timer = window.setInterval(() => { void fetchStocks(); }, 600_000);
+
+    const run = async (force = false) => {
+      await fetchStocks(controller.signal, { force });
+      if (controller.signal.aborted) return;
+      const nextWindow = getKrxMarketWindow();
+      if (refreshTimerRef.current) window.clearTimeout(refreshTimerRef.current);
+      refreshTimerRef.current = window.setTimeout(() => {
+        void run(false);
+      }, nextWindow.nextRefreshInMs);
+    };
+
+    void run(refreshNonce > 0);
+
     return () => {
       controller.abort();
-      window.clearInterval(timer);
+      if (refreshTimerRef.current) window.clearTimeout(refreshTimerRef.current);
     };
   }, [fetchStocks, refreshNonce]);
 
@@ -1027,6 +1118,7 @@ export default function StockWidget() {
       if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
       if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
       if (watchlistApiSaveRef.current) clearTimeout(watchlistApiSaveRef.current);
+      if (refreshTimerRef.current) window.clearTimeout(refreshTimerRef.current);
     };
   }, []);
 

@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fetchStockOverview } from "@/lib/stocks/krx";
+import { getKrxMarketWindow } from "@/lib/stocks/cache-policy";
 import { STOCK_RANKING_KINDS, type AssetType, type StockRankingKind, type WatchlistItem } from "@/lib/stocks/types";
-
-export const revalidate = 300; // 5분 — 모듈 캐시와 동일한 TTL
 
 function parseItems(value: string | null): WatchlistItem[] | null {
   if (!value) return null;
@@ -59,9 +58,11 @@ export async function GET(request: NextRequest) {
     { noSparkline },
   );
 
+  const windowInfo = getKrxMarketWindow();
+
   return NextResponse.json(data, {
     headers: {
-      "Cache-Control": "public, s-maxage=300, stale-while-revalidate=60",
+      "Cache-Control": `public, max-age=${windowInfo.cacheTtlSeconds}, s-maxage=${windowInfo.cacheTtlSeconds}, stale-while-revalidate=300`,
     },
   });
 }
