@@ -24,6 +24,7 @@ export const MOBILE_WIDGET_ORDER: WidgetId[] = [
   "blog",
   "calendar",
   "budget",
+  "lotto",
   "stock",
   "fortune",
   "realestate",

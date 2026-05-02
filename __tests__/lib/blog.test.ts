@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { slugifyBlogTitle, extractFirstImageFromHtml } from "@/lib/blog";
+import { slugifyBlogTitle, extractFirstImageFromHtml, extractFirstStreamVideoMetaFromHtml } from "@/lib/blog";
 
 describe("slugifyBlogTitle", () => {
   it("converts spaces to hyphens", () => {
@@ -54,5 +54,21 @@ describe("extractFirstImageFromHtml", () => {
   it("handles double and single quoted src attributes", () => {
     const html = "<img src='https://example.com/photo.jpg'>";
     expect(extractFirstImageFromHtml(html)).toBe("https://example.com/photo.jpg");
+  });
+});
+
+describe("extractFirstStreamVideoMetaFromHtml", () => {
+  it("returns the first cloudflare stream video uid", () => {
+    const html = '<div data-stream-video="true" data-video-uid="abc123" data-video-title="sample"></div>';
+    expect(extractFirstStreamVideoMetaFromHtml(html)).toEqual({ uid: "abc123", posterTime: null });
+  });
+
+  it("returns poster time when present", () => {
+    const html = '<div data-stream-video="true" data-video-uid="abc123" data-poster-time="1s"></div>';
+    expect(extractFirstStreamVideoMetaFromHtml(html)).toEqual({ uid: "abc123", posterTime: "1s" });
+  });
+
+  it("returns null when no stream video exists", () => {
+    expect(extractFirstStreamVideoMetaFromHtml("<p>plain text only</p>")).toBeNull();
   });
 });

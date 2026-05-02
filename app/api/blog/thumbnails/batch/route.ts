@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
-import { extractFirstImageFromHtml } from "@/lib/blog";
+import { extractFirstImageFromHtml, extractFirstVideoThumbnailFromHtml } from "@/lib/blog";
 import { generateAutoThumbnail } from "@/lib/blog-thumbnail";
 
 export const runtime = "nodejs";
@@ -48,7 +48,9 @@ export async function POST(request: NextRequest) {
   await Promise.all(
     posts.map(async (post) => {
       try {
-        const fromContent = extractFirstImageFromHtml(post.content_html ?? "");
+        const fromContent =
+          extractFirstVideoThumbnailFromHtml(post.content_html ?? "") ??
+          extractFirstImageFromHtml(post.content_html ?? "");
         const thumbUrl = fromContent ?? await generateAutoThumbnail(post.title, post.content_html ?? "", post.slug, post.category);
 
         if (thumbUrl) {

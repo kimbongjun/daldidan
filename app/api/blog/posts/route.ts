@@ -1,6 +1,6 @@
 import { after, NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
-import { ensureUniqueBlogSlug, extractFirstImageFromHtml, getPublishedBlogPosts } from "@/lib/blog";
+import { ensureUniqueBlogSlug, extractFirstImageFromHtml, extractFirstVideoThumbnailFromHtml, getPublishedBlogPosts } from "@/lib/blog";
 import { extractDescriptionFromHtml } from "@/lib/blog-shared";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { sendBlogPublishNotification } from "@/lib/resend";
@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
   const contentHtml = body.contentHtml?.trim() ?? "";
   const category = body.category?.trim() || null;
   const description = extractDescriptionFromHtml(contentHtml);
-  const resolvedThumbnail = extractFirstImageFromHtml(contentHtml);
+  const resolvedThumbnail = extractFirstVideoThumbnailFromHtml(contentHtml) ?? extractFirstImageFromHtml(contentHtml);
 
   if (!title || !contentHtml) {
     return NextResponse.json({ error: "제목과 본문을 입력해주세요." }, { status: 400 });
@@ -138,7 +138,7 @@ export async function PATCH(request: NextRequest) {
     ? candidateDate.toISOString()
     : null;
   const description = extractDescriptionFromHtml(contentHtml);
-  const resolvedThumbnail = extractFirstImageFromHtml(contentHtml);
+  const resolvedThumbnail = extractFirstVideoThumbnailFromHtml(contentHtml) ?? extractFirstImageFromHtml(contentHtml);
 
   if (!id || !title || !contentHtml) {
     return NextResponse.json({ error: "수정에 필요한 정보가 부족합니다." }, { status: 400 });

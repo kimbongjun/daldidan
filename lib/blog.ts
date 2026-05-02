@@ -1,3 +1,4 @@
+import { buildCloudflareStreamThumbnailUrl, getCloudflareStreamPublicConfig } from "@/lib/cloudflare-stream-public";
 import { createClient, createPublicClient } from "@/lib/supabase/server";
 import type { BlogPostDetail, BlogPostSummary, EditableBlogPost } from "@/lib/blog-shared";
 
@@ -17,7 +18,9 @@ function mapSummary(post: {
   category?: string | null;
 }): BlogPostSummary {
   // DB에 thumbnail_url이 있으면 HTML 파싱 생략 (성능)
-  const fallbackThumbnail = post.thumbnail_url ? null : extractFirstImageFromHtml(post.content_html ?? "");
+  const fallbackThumbnail = post.thumbnail_url
+    ? null
+    : extractFirstVideoThumbnailFromHtml(post.content_html ?? "") ?? extractFirstImageFromHtml(post.content_html ?? "");
   const comments = post.blog_comments ?? [];
   const latestCommentAt = comments.length > 0
     ? comments.reduce((latest, c) => c.created_at > latest ? c.created_at : latest, comments[0].created_at)
@@ -55,6 +58,30 @@ export function extractFirstImageFromHtml(contentHtml: string) {
     if (src && /^https?:\/\//i.test(src)) return src;
   }
   return null;
+}
+
+export function extractFirstStreamVideoMetaFromHtml(contentHtml: string) {
+  const tagMatch = contentHtml.match(/<div[^>]+data-stream-video=["']true["'][^>]*>/i);
+  const tag = tagMatch?.[0] ?? "";
+  const uid = tag.match(/data-video-uid=["']([^"']+)["']/i)?.[1]?.trim();
+  if (!uid) return null;
+  const posterTime = tag.match(/data-poster-time=["']([^"']+)["']/i)?.[1]?.trim() || null;
+  return { uid, posterTime };
+}
+
+export function extractFirstVideoThumbnailFromHtml(contentHtml: string) {
+  const video = extractFirstStreamVideoMetaFromHtml(contentHtml);
+  if (!video) return null;
+
+  const { customerCode } = getCloudflareStreamPublicConfig();
+  if (!customerCode) return null;
+
+  return buildCloudflareStreamThumbnailUrl(customerCode, video.uid, {
+    time: "0s",
+    width: 1200,
+    height: 630,
+    fit: "crop",
+  });
 }
 
 function resolveSlugCandidates(slug: string) {

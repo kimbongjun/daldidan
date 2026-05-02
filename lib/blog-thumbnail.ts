@@ -1,6 +1,8 @@
 import "server-only";
 
+import { buildCloudflareStreamThumbnailUrl, getCloudflareStreamPublicConfig } from "@/lib/cloudflare-stream-public";
 import { createAdminClient } from "@/lib/supabase/server";
+import { extractFirstStreamVideoMetaFromHtml } from "@/lib/blog";
 import { extractDescriptionFromHtml } from "@/lib/blog-shared";
 
 type ThumbnailCategoryProfile = {
@@ -64,13 +66,14 @@ function getCategoryProfile(category?: string | null): ThumbnailCategoryProfile 
 function buildPollinationsPrompt(title: string, snippet: string, category?: string | null): string {
   const profile = getCategoryProfile(category);
   const parts = [
-    `professional blog thumbnail: "${title}"`,
+    `professional blog background image for blog article: "${title}"`,
     `article category: ${profile.koreanLabel}`,
     `visual focus: ${profile.visualFocus}`,
     snippet ? snippet.slice(0, 80) : "",
     profile.promptStyle,
     profile.avoidKeywords?.length ? `avoid: ${profile.avoidKeywords.join(", ")}` : "",
-    "beautiful editorial photography, cinematic composition, relevant subject matter, high quality, 16:9",
+    "background image only, no text, no typography, no letters, no poster layout, no collage, no logo, no watermark",
+    "beautiful editorial photography, cinematic composition, relevant subject matter, high quality, 16:9, clean background-friendly composition",
   ].filter(Boolean).join(". ");
   return encodeURIComponent(parts);
 }
@@ -173,6 +176,19 @@ export async function generateAutoThumbnail(
   slug: string,
   category?: string | null,
 ): Promise<string> {
+  const firstVideo = extractFirstStreamVideoMetaFromHtml(contentHtml);
+  if (firstVideo) {
+    const { customerCode } = getCloudflareStreamPublicConfig();
+    if (customerCode) {
+      return buildCloudflareStreamThumbnailUrl(customerCode, firstVideo.uid, {
+        time: "0s",
+        width: 1200,
+        height: 630,
+        fit: "crop",
+      });
+    }
+  }
+
   const snippet = extractDescriptionFromHtml(contentHtml, 200);
   const prompt = buildPollinationsPrompt(title, snippet, category);
   const profile = getCategoryProfile(category);
