@@ -63,17 +63,31 @@ function getCategoryProfile(category?: string | null): ThumbnailCategoryProfile 
   return CATEGORY_THUMBNAIL_PROFILES[category] ?? CATEGORY_THUMBNAIL_PROFILES["기타"];
 }
 
+function sanitizeVisualTopic(value: string) {
+  return value
+    .replace(/<[^>]+>/g, " ")
+    .replace(/["'`]/g, " ")
+    .replace(/[^\p{L}\p{N}\s-]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 72);
+}
+
 function buildPollinationsPrompt(title: string, snippet: string, category?: string | null): string {
   const profile = getCategoryProfile(category);
+  const topic = sanitizeVisualTopic(title);
+  const sceneHint = sanitizeVisualTopic(snippet).slice(0, 96);
   const parts = [
-    `professional blog background image for blog article: "${title}"`,
+    "professional blog background image",
     `article category: ${profile.koreanLabel}`,
+    topic ? `visual topic keywords: ${topic}` : "",
     `visual focus: ${profile.visualFocus}`,
-    snippet ? snippet.slice(0, 80) : "",
+    sceneHint ? `scene hint: ${sceneHint}` : "",
     profile.promptStyle,
     profile.avoidKeywords?.length ? `avoid: ${profile.avoidKeywords.join(", ")}` : "",
-    "background image only, no text, no typography, no letters, no poster layout, no collage, no logo, no watermark",
-    "beautiful editorial photography, cinematic composition, relevant subject matter, high quality, 16:9, clean background-friendly composition",
+    "image only, zero text, zero typography, zero letters, zero words, zero caption, zero signage, zero poster layout, zero collage, zero logo, zero watermark",
+    "do not render Korean, English, numbers, symbols, handwriting, subtitles, overlays, stamps, banners, UI, labels or printed characters",
+    "beautiful editorial photography, cinematic composition, relevant subject matter, high quality, 16:9, clean background-friendly composition, text-free image",
   ].filter(Boolean).join(". ");
   return encodeURIComponent(parts);
 }

@@ -59,9 +59,8 @@ function extractNotificationPreview(payload: {
   const body = payload.data?.body ?? payload.notification?.body ?? "새 글이 등록되었습니다";
   const url = payload.data?.url ?? payload.fcmOptions?.link ?? "/blog";
   const createdAt = new Date().toISOString();
-  const id = payload.data?.url
-    ? `${payload.data.url}:${title}`
-    : `${url}:${title}:${createdAt}`;
+  const id = payload.data?.notificationKey
+    ?? (payload.data?.url ? `${payload.data.url}:${title}` : `${url}:${title}:${createdAt}`);
 
   return { id, title, body, url, createdAt };
 }
@@ -245,6 +244,7 @@ export default function Header() {
     if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
 
     const handleMessage = (event: MessageEvent<{ type?: string; payload?: {
+      id?: string;
       title?: string;
       body?: string;
       url?: string;
@@ -252,7 +252,7 @@ export default function Header() {
     } }>) => {
       if (event.data?.type !== "blog-notification" || !event.data.payload) return;
       addInboxNotification({
-        id: `${event.data.payload.url ?? "/blog"}:${event.data.payload.title ?? "달디단"}`,
+        id: event.data.payload.id ?? `${event.data.payload.url ?? "/blog"}:${event.data.payload.title ?? "달디단"}`,
         title: event.data.payload.title ?? "달디단",
         body: event.data.payload.body ?? "새 글이 등록되었습니다",
         url: event.data.payload.url ?? "/blog",

@@ -22,6 +22,10 @@ interface SendFcmMessageParams {
   imageUrl?: string;
 }
 
+function buildNotificationKey(params: Pick<SendFcmMessageParams, "title" | "body" | "url">) {
+  return `${params.url}::${params.title}::${params.body.slice(0, 80)}`;
+}
+
 let accessTokenCache: AccessTokenCache | null = null;
 
 function normalizePrivateKey(value?: string) {
@@ -159,6 +163,7 @@ export async function getFirebaseAccessToken() {
 export async function sendFcmMessage(params: SendFcmMessageParams) {
   const serviceAccount = getFirebaseServiceAccount();
   const accessToken = await getFirebaseAccessToken();
+  const notificationKey = buildNotificationKey(params);
   const response = await fetch(
     `https://fcm.googleapis.com/v1/projects/${serviceAccount.projectId}/messages:send`,
     {
@@ -184,18 +189,13 @@ export async function sendFcmMessage(params: SendFcmMessageParams) {
             },
           },
           webpush: {
-            notification: {
-              title: params.title,
-              body: params.body,
-              icon: params.iconUrl,
-              badge: params.badgeUrl,
-            },
             data: {
               title: params.title,
               body: params.body,
               icon: params.iconUrl,
               badge: params.badgeUrl,
               url: params.url,
+              notificationKey,
             },
             fcmOptions: {
               link: params.url,

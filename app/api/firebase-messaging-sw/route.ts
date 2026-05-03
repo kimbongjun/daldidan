@@ -40,13 +40,14 @@ messaging.onBackgroundMessage(function(payload) {
   const icon  = payload.data?.icon ?? payload.notification?.icon ?? '/favicon.ico';
   const badge = payload.data?.badge ?? '/favicon.ico';
   const url   = payload.data?.url ?? payload.fcmOptions?.link ?? '/blog';
+  const notificationKey = payload.data?.notificationKey ?? (url + '::' + title + '::' + body.slice(0, 80));
 
   // 열려 있는 탭에도 전달 (포그라운드 클라이언트 in-app 알림 표시용)
   clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
     clientList.forEach(function(client) {
       client.postMessage({
         type: 'blog-notification',
-        payload: { title, body, url, createdAt: new Date().toISOString() },
+        payload: { id: notificationKey, title, body, url, createdAt: new Date().toISOString() },
       });
     });
   });
@@ -56,7 +57,9 @@ messaging.onBackgroundMessage(function(payload) {
     body,
     icon,
     badge,
-    data: { url },
+    tag: notificationKey,
+    renotify: false,
+    data: { url, id: notificationKey },
     requireInteraction: false,
   });
 });

@@ -64,6 +64,36 @@ function trimTrailingSlash(value: string) {
   return value.replace(/\/$/, "");
 }
 
+const DISPATCH_DEDUP_TTL_MS = 30_000;
+
+function getDispatchRegistry() {
+  const globalStore = globalThis as typeof globalThis & {
+    __daldidanPushDispatchRegistry?: Map<string, number>;
+  };
+  if (!globalStore.__daldidanPushDispatchRegistry) {
+    globalStore.__daldidanPushDispatchRegistry = new Map<string, number>();
+  }
+  return globalStore.__daldidanPushDispatchRegistry;
+}
+
+function claimDispatchKey(key: string) {
+  const registry = getDispatchRegistry();
+  const now = Date.now();
+  const expiresAt = registry.get(key) ?? 0;
+  if (expiresAt > now) return false;
+  registry.set(key, now + DISPATCH_DEDUP_TTL_MS);
+  return true;
+}
+
+function buildDispatchKey(scope: string, params: PushDispatchParams) {
+  return [
+    scope,
+    params.url ?? "",
+    params.title,
+    params.body.slice(0, 120),
+  ].join("::");
+}
+
 function getBaseSiteUrl() {
   const candidate = process.env.NEXT_PUBLIC_SITE_URL?.trim() ?? "";
   return candidate ? trimTrailingSlash(candidate) : "";
@@ -266,6 +296,10 @@ export async function sendPushToAllSubscribers(
     return { sent: 0, failed: 0 };
   }
 
+  if (!claimDispatchKey(buildDispatchKey("all:new_post", params))) {
+    return { sent: 0, failed: 0 };
+  }
+
   const subscriptions = await getAllSubscriptions();
   const result = await dispatchPushToSubscriptions(subscriptions, params);
   savePushLog("new_post", params, result).catch((err) => {
@@ -288,12 +322,16 @@ export async function sendPushToUserIds(
     return { sent: 0, failed: 0 };
   }
   if (userIds.length === 0) return { sent: 0, failed: 0 };
+  const normalizedUserIds = [...new Set(userIds)].sort();
+  if (!claimDispatchKey(buildDispatchKey(`${type}:${normalizedUserIds.join(",")}`, params))) {
+    return { sent: 0, failed: 0 };
+  }
 
   const supabase = createAdminClient();
   const baseQuery = supabase
     .from("push_subscriptions")
     .select("fcm_token, device_type, user_id, user_agent, updated_at")
-    .in("user_id", userIds);
+    .in("user_id", normalizedUserIds);
 
   const col = type === "comment" ? "notify_comment" : "notify_new_post";
   const query = type === "all" ? baseQuery : baseQuery.or(`${col}.eq.true,${col}.is.null`);

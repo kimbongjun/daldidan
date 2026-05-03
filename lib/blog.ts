@@ -128,8 +128,8 @@ export async function getPublishedBlogPosts(limit = 9, category?: string | null,
   }
 
   const { data, error } = await query
-    .order("published_at", { ascending: false })
     .order("created_at", { ascending: false })
+    .order("published_at", { ascending: false })
     .range(offset, offset + limit - 1);
 
   if (error || !data) return [];
