@@ -74,6 +74,7 @@ export default async function BlogDetailPage({ params }: { params: Promise<{ slu
         <PageHeader
           title={post.title}
           subtitle={`${formatBlogDateTime(getBlogActivityTimestamp(post))} · ${post.authorName}`}
+          description={post.description}
           accentColor={ACCENT}
           actions={
             editable ? (
