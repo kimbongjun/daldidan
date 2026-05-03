@@ -189,6 +189,7 @@ export async function generateAutoThumbnail(
   contentHtml: string,
   slug: string,
   category?: string | null,
+  options?: { summary?: string | null },
 ): Promise<string> {
   const firstVideo = extractFirstStreamVideoMetaFromHtml(contentHtml);
   if (firstVideo) {
@@ -203,7 +204,7 @@ export async function generateAutoThumbnail(
     }
   }
 
-  const snippet = extractDescriptionFromHtml(contentHtml, 200);
+  const snippet = options?.summary?.trim() || extractDescriptionFromHtml(contentHtml, 200);
   const prompt = buildPollinationsPrompt(title, snippet, category);
   const profile = getCategoryProfile(category);
 
@@ -213,9 +214,11 @@ export async function generateAutoThumbnail(
 
   // 2. Unsplash Source (카테고리 중심 영어 키워드 우선)
   const normalizedTitle = title.replace(/[ㄱ-ㅎㅏ-ㅣ가-힣]+/g, " ").replace(/\s+/g, " ").trim();
+  const normalizedSummary = snippet.replace(/[ㄱ-ㅎㅏ-ㅣ가-힣]+/g, " ").replace(/\s+/g, " ").trim();
   const keywords = [
     ...profile.englishKeywords,
     normalizedTitle,
+    normalizedSummary,
   ].filter(Boolean).join(" ");
   const unsplashUrl = await tryUnsplashSource(keywords);
   if (unsplashUrl) return unsplashUrl;

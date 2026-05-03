@@ -5,6 +5,7 @@ import { extractDescriptionFromHtml } from "@/lib/blog-shared";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { sendBlogPublishNotification } from "@/lib/resend";
 import { generateAutoThumbnail } from "@/lib/blog-thumbnail";
+import { generateBlogAiSummary } from "@/lib/blog-ai-summary";
 
 export const runtime = "nodejs";
 
@@ -33,12 +34,14 @@ export async function POST(request: NextRequest) {
   const title = body.title?.trim() ?? "";
   const contentHtml = body.contentHtml?.trim() ?? "";
   const category = body.category?.trim() || null;
-  const description = extractDescriptionFromHtml(contentHtml);
+  const fallbackDescription = extractDescriptionFromHtml(contentHtml);
   const resolvedThumbnail = extractFirstVideoThumbnailFromHtml(contentHtml) ?? extractFirstImageFromHtml(contentHtml);
 
   if (!title || !contentHtml) {
     return NextResponse.json({ error: "제목과 본문을 입력해주세요." }, { status: 400 });
   }
+
+  const description = await generateBlogAiSummary(title, contentHtml) || fallbackDescription;
 
   const slug = await ensureUniqueBlogSlug(title);
 
@@ -85,7 +88,7 @@ export async function POST(request: NextRequest) {
     // 썸네일 없으면 자동 생성 후 DB 업데이트
     let finalThumbnail = resolvedThumbnail;
     if (!resolvedThumbnail) {
-      const autoThumb = await generateAutoThumbnail(title, contentHtml, slug, category);
+      const autoThumb = await generateAutoThumbnail(title, contentHtml, slug, category, { summary: description });
       if (autoThumb) {
         const adminClient = createAdminClient();
         await adminClient
@@ -137,12 +140,14 @@ export async function PATCH(request: NextRequest) {
   const publishedAt = (candidateDate && !isNaN(candidateDate.getTime()))
     ? candidateDate.toISOString()
     : null;
-  const description = extractDescriptionFromHtml(contentHtml);
+  const fallbackDescription = extractDescriptionFromHtml(contentHtml);
   const resolvedThumbnail = extractFirstVideoThumbnailFromHtml(contentHtml) ?? extractFirstImageFromHtml(contentHtml);
 
   if (!id || !title || !contentHtml) {
     return NextResponse.json({ error: "수정에 필요한 정보가 부족합니다." }, { status: 400 });
   }
+
+  const description = await generateBlogAiSummary(title, contentHtml) || fallbackDescription;
 
   const { data: existing, error: fetchError } = await supabase
     .from("blog_posts")
@@ -185,8 +190,9 @@ export async function PATCH(request: NextRequest) {
   if (!resolvedThumbnail) {
     const capturedId = id;
     const capturedSlug = slug;
+    const capturedDescription = description;
     after(async () => {
-      const autoThumb = await generateAutoThumbnail(title, contentHtml, capturedSlug, category);
+      const autoThumb = await generateAutoThumbnail(title, contentHtml, capturedSlug, category, { summary: capturedDescription });
       if (!autoThumb) return;
       const adminClient = createAdminClient();
       await adminClient

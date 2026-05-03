@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
 
   const { data: posts, error } = await supabase
     .from("blog_posts")
-    .select("id, slug, title, content_html, category")
+    .select("id, slug, title, description, content_html, category")
     .eq("is_published", true)
     .is("thumbnail_url", null)
     .limit(batchSize);
@@ -51,7 +51,13 @@ export async function POST(request: NextRequest) {
         const fromContent =
           extractFirstVideoThumbnailFromHtml(post.content_html ?? "") ??
           extractFirstImageFromHtml(post.content_html ?? "");
-        const thumbUrl = fromContent ?? await generateAutoThumbnail(post.title, post.content_html ?? "", post.slug, post.category);
+        const thumbUrl = fromContent ?? await generateAutoThumbnail(
+          post.title,
+          post.content_html ?? "",
+          post.slug,
+          post.category,
+          { summary: post.description ?? null },
+        );
 
         if (thumbUrl) {
           await adminClient
