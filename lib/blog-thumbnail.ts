@@ -1,9 +1,9 @@
 import "server-only";
 
 import { buildCloudflareStreamThumbnailUrl, getCloudflareStreamPublicConfig } from "@/lib/cloudflare-stream-public";
-import { createAdminClient } from "@/lib/supabase/server";
 import { extractFirstStreamVideoMetaFromHtml } from "@/lib/blog";
 import { extractDescriptionFromHtml } from "@/lib/blog-shared";
+import { generateBlogAiMetadata } from "@/lib/blog-ai-summary";
 
 type ThumbnailCategoryProfile = {
   koreanLabel: string;
@@ -11,6 +11,25 @@ type ThumbnailCategoryProfile = {
   promptStyle: string;
   englishKeywords: string[];
   avoidKeywords?: string[];
+};
+
+type UnsplashPhoto = {
+  id: string;
+  alt_description: string | null;
+  description: string | null;
+  blur_hash?: string | null;
+  urls: {
+    raw: string;
+    regular?: string;
+  };
+  links: {
+    download_location: string;
+    html: string;
+  };
+  user?: {
+    name?: string;
+    username?: string;
+  };
 };
 
 const CATEGORY_THUMBNAIL_PROFILES: Record<string, ThumbnailCategoryProfile> = {
@@ -97,30 +116,113 @@ function makePicsumUrl(slug: string): string {
   return `https://picsum.photos/seed/${seed}/1200/630`;
 }
 
-async function uploadToStorage(buffer: Buffer, ext: string): Promise<string | null> {
+function hasHangul(value: string) {
+  return /[가-힣]/.test(value);
+}
+
+function tokenizeKeywords(value: string) {
+  return sanitizeVisualTopic(value)
+    .split(/\s+/)
+    .map((item) => item.trim())
+    .filter((item) => item.length >= 2);
+}
+
+function dedupeKeywords(values: string[]) {
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  for (const value of values) {
+    const keyword = sanitizeVisualTopic(value).slice(0, 32);
+    if (!keyword) continue;
+    const key = keyword.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(keyword);
+  }
+
+  return result;
+}
+
+function toUnsplashSearchTerms(keywords: string[], category?: string | null) {
+  const profile = getCategoryProfile(category);
+  const koreanKeywords = dedupeKeywords(keywords.filter(hasHangul));
+  const latinKeywords = dedupeKeywords(keywords.filter((keyword) => !hasHangul(keyword)));
+
+  const searchTerms = [
+    ...latinKeywords,
+    ...profile.englishKeywords,
+    ...koreanKeywords.flatMap((keyword) => tokenizeKeywords(keyword)),
+  ];
+
+  return dedupeKeywords(searchTerms).slice(0, 8).join(" ");
+}
+
+function buildUnsplashImageUrl(rawUrl: string) {
+  const url = new URL(rawUrl);
+  url.searchParams.set("w", "1200");
+  url.searchParams.set("h", "630");
+  url.searchParams.set("fit", "crop");
+  url.searchParams.set("crop", "entropy");
+  url.searchParams.set("auto", "format");
+  url.searchParams.set("q", "80");
+  return url.toString();
+}
+
+async function reportUnsplashDownload(downloadLocation: string, accessKey: string) {
   try {
-    const supabase = createAdminClient();
-    const filename = `auto-thumb-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.${ext}`;
-    const path = `thumbnails/${filename}`;
-    const contentType = ext === "webp" ? "image/webp" : "image/jpeg";
+    await fetch(downloadLocation, {
+      headers: {
+        Authorization: `Client-ID ${accessKey}`,
+        "Accept-Version": "v1",
+      },
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch {
+    // 다운로드 통계 호출 실패는 썸네일 생성 실패로 보지 않음
+  }
+}
 
-    const { error } = await supabase.storage
-      .from("blog-images")
-      .upload(path, buffer, { contentType, upsert: false });
+async function tryUnsplashSearch(keywords: string, category?: string | null): Promise<string | null> {
+  const accessKey = process.env.UNSPLASH_ACCESS_KEY?.trim();
+  if (!accessKey || !keywords) return null;
 
-    if (error) return null;
+  try {
+    const profile = getCategoryProfile(category);
+    const query = toUnsplashSearchTerms(
+      [keywords, ...profile.englishKeywords],
+      category,
+    );
+    if (!query) return null;
 
-    const { data: { publicUrl } } = supabase.storage
-      .from("blog-images")
-      .getPublicUrl(path);
+    const url = new URL("https://api.unsplash.com/search/photos");
+    url.searchParams.set("query", query);
+    url.searchParams.set("per_page", "10");
+    url.searchParams.set("page", "1");
+    url.searchParams.set("orientation", "landscape");
+    url.searchParams.set("content_filter", "high");
+    url.searchParams.set("order_by", "relevant");
 
-    return publicUrl;
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Client-ID ${accessKey}`,
+        "Accept-Version": "v1",
+      },
+      signal: AbortSignal.timeout(15_000),
+    });
+
+    if (!res.ok) return null;
+
+    const data = await res.json() as { results?: UnsplashPhoto[] };
+    const photo = data.results?.find((item) => item.urls?.raw && item.links?.download_location);
+    if (!photo?.urls?.raw) return null;
+
+    await reportUnsplashDownload(photo.links.download_location, accessKey);
+    return buildUnsplashImageUrl(photo.urls.raw);
   } catch {
     return null;
   }
 }
 
-// Pollinations.ai — 무료 AI 이미지 생성 (API 키 불필요)
 async function tryPollinationsAI(prompt: string): Promise<string | null> {
   try {
     const seed = Math.floor(Math.random() * 99_999);
@@ -139,57 +241,35 @@ async function tryPollinationsAI(prompt: string): Promise<string | null> {
     if (!contentType.startsWith("image/")) return null;
 
     const buffer = Buffer.from(await res.arrayBuffer());
-    if (buffer.length < 8_000) return null; // 너무 작으면 오류 응답일 가능성
+    if (buffer.length < 8_000) return null;
 
-    return uploadToStorage(buffer, "jpg");
+    return res.url;
   } catch {
     return null;
   }
 }
 
-// Unsplash Source — 무료 stock 사진 (키워드 기반)
-async function tryUnsplashSource(keywords: string): Promise<string | null> {
-  try {
-    const query = encodeURIComponent(keywords.replace(/[^a-z0-9\s]/gi, " ").trim().slice(0, 60));
-    if (!query) return null;
-
-    const url = `https://source.unsplash.com/1200x630/?${query}`;
-    const res = await fetch(url, {
-      redirect: "follow",
-      signal: AbortSignal.timeout(12_000),
-    });
-
-    if (!res.ok) return null;
-
-    const contentType = res.headers.get("content-type") ?? "";
-    if (!contentType.startsWith("image/")) return null;
-
-    const buffer = Buffer.from(await res.arrayBuffer());
-    if (buffer.length < 5_000) return null;
-
-    return uploadToStorage(buffer, "jpg");
-  } catch {
-    return null;
-  }
+function buildThumbnailKeywords(
+  title: string,
+  snippet: string,
+  category?: string | null,
+  aiKeywords?: string[] | null,
+) {
+  const profile = getCategoryProfile(category);
+  return dedupeKeywords([
+    ...(aiKeywords ?? []),
+    title,
+    snippet,
+    ...profile.englishKeywords,
+  ]);
 }
 
-/**
- * 제목·본문을 분석해 자동 썸네일 URL을 반환합니다.
- *
- * 우선순위:
- *  1. Pollinations.ai — 무료 AI 이미지 생성
- *  2. Unsplash Source — 무료 stock 사진
- *  3. Picsum Photos  — 슬러그 기반 안정적 폴백 (항상 성공)
- *
- * 1·2 성공 시 Supabase storage에 업로드한 영구 URL을 반환합니다.
- * 3은 Picsum CDN URL을 그대로 반환합니다.
- */
 export async function generateAutoThumbnail(
   title: string,
   contentHtml: string,
   slug: string,
   category?: string | null,
-  options?: { summary?: string | null },
+  options?: { summary?: string | null; keywords?: string[] | null },
 ): Promise<string> {
   const firstVideo = extractFirstStreamVideoMetaFromHtml(contentHtml);
   if (firstVideo) {
@@ -205,24 +285,20 @@ export async function generateAutoThumbnail(
   }
 
   const snippet = options?.summary?.trim() || extractDescriptionFromHtml(contentHtml, 200);
-  const prompt = buildPollinationsPrompt(title, snippet, category);
-  const profile = getCategoryProfile(category);
+  const metadata = options?.keywords?.length
+    ? { summary: snippet, keywords: options.keywords }
+    : await generateBlogAiMetadata(title, contentHtml);
+  const keywords = buildThumbnailKeywords(title, metadata.summary || snippet, category, metadata.keywords);
 
-  // 1. Pollinations AI
+  // 1. Unsplash 공식 검색 API
+  const unsplashUrl = await tryUnsplashSearch(keywords.join(" "), category);
+  if (unsplashUrl) return unsplashUrl;
+
+  // 2. AI 키워드를 활용한 생성형 이미지
+  const prompt = buildPollinationsPrompt(title, keywords.join(", "), category);
   const pollinationsUrl = await tryPollinationsAI(prompt);
   if (pollinationsUrl) return pollinationsUrl;
 
-  // 2. Unsplash Source (카테고리 중심 영어 키워드 우선)
-  const normalizedTitle = title.replace(/[ㄱ-ㅎㅏ-ㅣ가-힣]+/g, " ").replace(/\s+/g, " ").trim();
-  const normalizedSummary = snippet.replace(/[ㄱ-ㅎㅏ-ㅣ가-힣]+/g, " ").replace(/\s+/g, " ").trim();
-  const keywords = [
-    ...profile.englishKeywords,
-    normalizedTitle,
-    normalizedSummary,
-  ].filter(Boolean).join(" ");
-  const unsplashUrl = await tryUnsplashSource(keywords);
-  if (unsplashUrl) return unsplashUrl;
-
-  // 3. Picsum 폴백 (슬러그 seed → 항상 같은 이미지)
+  // 3. 마지막 폴백
   return makePicsumUrl(slug);
 }

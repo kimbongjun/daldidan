@@ -3,6 +3,17 @@ import { extractDescriptionFromHtml } from "@/lib/blog-shared";
 
 const DEFAULT_BLOG_SUMMARY_MODEL = "gemma2-9b-it";
 const MAX_SUMMARY_LENGTH = 70;
+const MAX_KEYWORDS = 5;
+const HANJA_REGEX = /[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF]/g;
+const FORBIDDEN_TONE = [
+  "씨발", "시발", "병신", "존나", "개같", "개판", "꺼져", "좆", "ㅅㅂ",
+  "최악", "망했", "폭망", "후회", "지옥", "한숨", "짜증", "우울", "헬",
+];
+
+export type BlogAiMetadata = {
+  summary: string;
+  keywords: string[];
+};
 
 function decodeHtmlEntities(value: string) {
   return value
@@ -57,17 +68,18 @@ function dedupeBlocks(blocks: string[]) {
 function buildDigestBlocks(blocks: string[]) {
   if (blocks.length <= 6) return blocks;
 
-  const picks = new Set<number>();
   const lastIndex = blocks.length - 1;
-  const anchors = [0, 1, Math.floor(lastIndex * 0.33), Math.floor(lastIndex * 0.66), lastIndex - 1, lastIndex];
-
-  for (const index of anchors) {
-    if (index >= 0 && index < blocks.length) {
-      picks.add(index);
-    }
-  }
+  const picks = new Set([
+    0,
+    1,
+    Math.floor(lastIndex * 0.33),
+    Math.floor(lastIndex * 0.66),
+    lastIndex - 1,
+    lastIndex,
+  ]);
 
   return [...picks]
+    .filter((index) => index >= 0 && index < blocks.length)
     .sort((a, b) => a - b)
     .map((index) => blocks[index]);
 }
@@ -82,7 +94,6 @@ function buildSummarySource(title: string, contentHtml: string) {
 
   return {
     plainText,
-    blocks,
     digest: digest ? `- ${digest}` : "",
     fallback: extractDescriptionFromHtml(contentHtml),
     cleanedTitle: normalizeText(title),
@@ -130,27 +141,105 @@ export function isLikelyCopiedSummary(summary: string, sourceText: string) {
   return commonSpan >= Math.max(18, Math.floor(normalizedSummary.length * 0.45));
 }
 
-function buildHeuristicSummary(title: string) {
+function containsForbiddenTone(text: string) {
+  return FORBIDDEN_TONE.some((word) => text.includes(word));
+}
+
+function buildFallbackSummary(title: string, fallback: string) {
+  const base = takeFirstSentence(fallback);
+  if (base && base.length <= MAX_SUMMARY_LENGTH && !containsForbiddenTone(base)) {
+    return sanitizeBlogAiSummary(base, "");
+  }
+
   const topic = normalizeText(title).replace(/[.!?]+$/g, "").slice(0, 40) || "이 글";
-  return `${topic}의 핵심 내용과 흐름을 간단히 정리한 글입니다.`;
+  return sanitizeBlogAiSummary(`${topic} 이야기를 유쾌하게 톺아본 한 편입니다.`, "");
+}
+
+function extractKoreanNouns(value: string) {
+  const matches = normalizeText(value).match(/[가-힣]{2,}/g) ?? [];
+  return [...new Set(matches)];
+}
+
+function extractEnglishKeywords(value: string) {
+  const matches = normalizeText(value.toLowerCase()).match(/[a-z][a-z\s-]{2,}/g) ?? [];
+  return [...new Set(matches.map((item) => item.trim()).filter(Boolean))];
+}
+
+function normalizeKeyword(value: string) {
+  return normalizeText(value)
+    .replace(/^[-,•\d.\s]+/, "")
+    .replace(HANJA_REGEX, "")
+    .replace(/[^\p{L}\p{N}\s-]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 32);
+}
+
+function uniqueKeywords(values: string[]) {
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  for (const value of values) {
+    const normalized = normalizeKeyword(value);
+    if (!normalized) continue;
+
+    const key = normalized.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(normalized);
+
+    if (result.length >= MAX_KEYWORDS) break;
+  }
+
+  return result;
 }
 
 export function sanitizeBlogAiSummary(summary: string, fallback: string) {
   const normalized = normalizeText(summary)
     .replace(/^["'\s]+|["'\s]+$/g, "")
+    .replace(HANJA_REGEX, "")
     .trim();
 
   const singleSentence = takeFirstSentence(normalized);
   const fallbackSentence = takeFirstSentence(fallback);
 
-  if (!singleSentence) {
-    return fallbackSentence;
+  if (!singleSentence || containsForbiddenTone(singleSentence)) {
+    return takeFirstSentence(fallbackSentence);
   }
 
-  return singleSentence.slice(0, MAX_SUMMARY_LENGTH) || fallbackSentence;
+  return singleSentence.slice(0, MAX_SUMMARY_LENGTH) || takeFirstSentence(fallbackSentence);
 }
 
-async function requestSummary(
+function parseMetadataResponse(content: string) {
+  const normalized = normalizeText(content);
+  const summaryMatch = normalized.match(/SUMMARY\s*:\s*(.+?)(?=\s+KEYWORDS\s*:|$)/i);
+  const keywordsMatch = normalized.match(/KEYWORDS\s*:\s*(.+)$/i);
+
+  return {
+    summary: summaryMatch?.[1]?.trim() ?? "",
+    keywords: keywordsMatch?.[1]
+      ?.split(/[,|/]/)
+      .map((item) => item.trim())
+      .filter(Boolean) ?? [],
+  };
+}
+
+function buildFallbackKeywords(title: string, fallback: string) {
+  return uniqueKeywords([
+    ...extractKoreanNouns(title),
+    ...extractEnglishKeywords(title),
+    ...extractKoreanNouns(fallback),
+    ...extractEnglishKeywords(fallback),
+  ]);
+}
+
+function sanitizeKeywords(keywords: string[], title: string, fallback: string) {
+  const normalized = uniqueKeywords(keywords);
+  if (normalized.length > 0) return normalized;
+  return buildFallbackKeywords(title, fallback);
+}
+
+async function requestBlogAiMetadata(
   title: string,
   digest: string,
   groq: ReturnType<typeof createGroqClient>["client"],
@@ -162,10 +251,13 @@ async function requestSummary(
       {
         role: "system",
         content: [
-          "당신은 한국어 블로그 편집자입니다.",
-          "글의 의도와 핵심 내용을 이해한 뒤 독자가 빠르게 파악할 수 있게 한 문장으로 요약하세요.",
-          "본문 문장을 그대로 복사하지 말고, 의미를 재구성해서 자연스러운 한국어로 다시 써주세요.",
-          "출력은 45~70자 사이의 요약문 한 문장만 반환하세요.",
+          "당신은 한국어 블로그 편집자이자 재치 있는 카피라이터입니다.",
+          "글을 읽고 핵심 내용을 새롭게 해석해 유쾌하고 해학적인 한 줄 요약을 만드세요.",
+          "본문 문장을 그대로 복사하지 말고, 의미를 다시 엮어 자연스럽게 표현하세요.",
+          "비꼼, 독설, 냉소, 비속어, 과한 부정은 금지합니다.",
+          "반드시 아래 형식만 반환하세요.",
+          "SUMMARY: 45~70자 한 문장",
+          "KEYWORDS: 썸네일 검색용 핵심 키워드 3~5개, 쉼표로 구분",
         ].join(" "),
       },
       {
@@ -177,25 +269,31 @@ async function requestSummary(
           digest,
           "",
           "요약 조건:",
-          "- 글의 주제, 흐름, 핵심 포인트를 함께 반영할 것",
+          "- 글의 주제와 흐름이 함께 드러날 것",
+          "- 독자가 미소 지을 만큼 가볍고 유머러스할 것",
           "- 본문 표현을 그대로 옮기지 말 것",
-          "- 군더더기 설명이나 머리말 없이 요약문만 반환할 것",
+          "- 키워드는 이미지 검색에 바로 쓸 수 있게 명사 중심으로 만들 것",
         ].join("\n"),
       },
     ],
-    temperature: 0.2,
-    max_tokens: 140,
+    temperature: 0.8,
+    max_tokens: 180,
   });
 
   return completion.choices[0]?.message?.content ?? "";
 }
 
-export async function generateBlogAiSummary(title: string, contentHtml: string) {
+export async function generateBlogAiMetadata(title: string, contentHtml: string): Promise<BlogAiMetadata> {
   const { plainText, digest, fallback, cleanedTitle } = buildSummarySource(title, contentHtml);
   const plainTextSlice = plainText.slice(0, 5000);
+  const fallbackSummary = buildFallbackSummary(cleanedTitle, fallback);
+  const fallbackKeywords = buildFallbackKeywords(cleanedTitle, fallback);
 
   if (!plainTextSlice) {
-    return sanitizeBlogAiSummary(buildHeuristicSummary(cleanedTitle), fallback);
+    return {
+      summary: fallbackSummary,
+      keywords: fallbackKeywords,
+    };
   }
 
   try {
@@ -204,27 +302,44 @@ export async function generateBlogAiSummary(title: string, contentHtml: string) 
       || process.env.GROQ_GEMMA_MODEL?.trim()
       || DEFAULT_BLOG_SUMMARY_MODEL;
     const { client: groq, model } = createGroqClient({ model: configuredModel });
-    const firstPass = sanitizeBlogAiSummary(
-      await requestSummary(cleanedTitle, digest || `- ${plainTextSlice}`, groq, model),
-      fallback,
-    );
 
-    if (!isLikelyCopiedSummary(firstPass, plainTextSlice)) {
-      return firstPass;
+    const firstPass = parseMetadataResponse(
+      await requestBlogAiMetadata(cleanedTitle, digest || `- ${plainTextSlice}`, groq, model),
+    );
+    const firstSummary = sanitizeBlogAiSummary(firstPass.summary, fallbackSummary);
+
+    if (!isLikelyCopiedSummary(firstSummary, plainTextSlice)) {
+      return {
+        summary: firstSummary,
+        keywords: sanitizeKeywords(firstPass.keywords, cleanedTitle, fallback),
+      };
     }
 
-    const recoveryDigest = digest || `- ${plainTextSlice}`;
-    const secondPass = sanitizeBlogAiSummary(
-      await requestSummary(`${cleanedTitle} (문장 재서술 필수)`, recoveryDigest, groq, model),
-      fallback,
+    const secondPass = parseMetadataResponse(
+      await requestBlogAiMetadata(`${cleanedTitle} (요약은 반드시 재서술)`, digest || `- ${plainTextSlice}`, groq, model),
     );
+    const secondSummary = sanitizeBlogAiSummary(secondPass.summary, fallbackSummary);
 
-    if (!isLikelyCopiedSummary(secondPass, plainTextSlice)) {
-      return secondPass;
+    if (!isLikelyCopiedSummary(secondSummary, plainTextSlice)) {
+      return {
+        summary: secondSummary,
+        keywords: sanitizeKeywords(secondPass.keywords, cleanedTitle, fallback),
+      };
     }
 
-    return sanitizeBlogAiSummary(buildHeuristicSummary(cleanedTitle), fallback);
+    return {
+      summary: fallbackSummary,
+      keywords: fallbackKeywords,
+    };
   } catch {
-    return sanitizeBlogAiSummary(buildHeuristicSummary(cleanedTitle), fallback);
+    return {
+      summary: fallbackSummary,
+      keywords: fallbackKeywords,
+    };
   }
+}
+
+export async function generateBlogAiSummary(title: string, contentHtml: string) {
+  const metadata = await generateBlogAiMetadata(title, contentHtml);
+  return metadata.summary;
 }
