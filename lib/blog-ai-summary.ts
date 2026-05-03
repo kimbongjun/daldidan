@@ -10,17 +10,26 @@ function stripHtmlToPlainText(html: string) {
     .trim();
 }
 
+function takeFirstSentence(value: string) {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (!normalized) return "";
+  const match = normalized.match(/^.*?[.!?]|^.*?[。！？]|^[^.!?。！？]+/u);
+  return match?.[0]?.trim() ?? normalized;
+}
+
 export function sanitizeBlogAiSummary(summary: string, fallback: string) {
   const normalized = summary
     .replace(/^["'\s]+|["'\s]+$/g, "")
     .replace(/\s+/g, " ")
     .trim();
 
-  if (!normalized) {
-    return fallback;
+  const singleSentence = takeFirstSentence(normalized);
+
+  if (!singleSentence) {
+    return takeFirstSentence(fallback);
   }
 
-  return normalized.slice(0, 160);
+  return singleSentence.slice(0, 50);
 }
 
 export async function generateBlogAiSummary(title: string, contentHtml: string) {
@@ -44,7 +53,7 @@ export async function generateBlogAiSummary(title: string, contentHtml: string) 
         {
           role: "system",
           content:
-            "당신은 한국어 블로그 편집자입니다. 글의 핵심만 2문장 이내, 최대 160자 안쪽으로 자연스럽게 요약하세요. 문장 앞뒤 설명 없이 요약문만 반환하세요.",
+            "당신은 한국어 블로그 편집자입니다. 글의 핵심만 자연스럽고 간결한 한 문장으로, 50자 내외로 요약하세요. 문장 앞뒤 설명 없이 요약문만 반환하세요.",
         },
         {
           role: "user",
@@ -57,7 +66,7 @@ export async function generateBlogAiSummary(title: string, contentHtml: string) 
         },
       ],
       temperature: 0.4,
-      max_tokens: 180,
+      max_tokens: 120,
     });
 
     const summary = completion.choices[0]?.message?.content ?? "";
