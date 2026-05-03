@@ -5,10 +5,16 @@ const DEFAULT_BLOG_SUMMARY_MODEL = "gemma2-9b-it";
 const MAX_SUMMARY_LENGTH = 70;
 const MAX_KEYWORDS = 5;
 const HANJA_REGEX = /[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF]/g;
+const KOREAN_TRAILING_PARTICLE_REGEX = /(에서|으로|에게|까지|처럼|보다|마저|조차|부터|한테|하고|과의|과를|과가|으로는|으로도|이랑|랑|은|는|이|가|을|를|과|와|도|만|의|에|로|께|랑)$/u;
 const FORBIDDEN_TONE = [
   "씨발", "시발", "병신", "존나", "개같", "개판", "꺼져", "좆", "ㅅㅂ",
   "최악", "망했", "폭망", "후회", "지옥", "한숨", "짜증", "우울", "헬",
 ];
+const KEYWORD_STOPWORDS = new Set([
+  "이야기", "기록", "정리", "리뷰", "후기", "생각", "하루", "순간", "모습", "내용",
+  "이번", "처음", "정도", "요즘", "천천히", "정말", "조금", "하나", "여기", "거기",
+  "그리고", "하지만", "그래서", "아주", "너무", "가장", "여행기",
+]);
 
 export type BlogAiMetadata = {
   summary: string;
@@ -145,14 +151,19 @@ function containsForbiddenTone(text: string) {
   return FORBIDDEN_TONE.some((word) => text.includes(word));
 }
 
-function buildFallbackSummary(title: string, fallback: string) {
-  const base = takeFirstSentence(fallback);
-  if (base && base.length <= MAX_SUMMARY_LENGTH && !containsForbiddenTone(base)) {
-    return sanitizeBlogAiSummary(base, "");
+function buildHumorousSummary(title: string, keywords: string[]) {
+  const topic = normalizeText(title).replace(/[.!?]+$/g, "").slice(0, 36) || "이 글";
+  const picks = keywords.filter(Boolean).slice(0, 2);
+
+  if (picks.length >= 2) {
+    return sanitizeBlogAiSummary(`${picks[0]}와 ${picks[1]} 사이를 오가며 ${topic}의 맛을 유쾌하게 풀어낸 글입니다.`, "");
   }
 
-  const topic = normalizeText(title).replace(/[.!?]+$/g, "").slice(0, 40) || "이 글";
-  return sanitizeBlogAiSummary(`${topic} 이야기를 유쾌하게 톺아본 한 편입니다.`, "");
+  if (picks.length === 1) {
+    return sanitizeBlogAiSummary(`${picks[0]}를 중심으로 ${topic}의 흐름을 재치 있게 엮어낸 글입니다.`, "");
+  }
+
+  return sanitizeBlogAiSummary(`${topic}의 흐름과 분위기를 한 번 더 웃음기 있게 풀어낸 글입니다.`, "");
 }
 
 function extractKoreanNouns(value: string) {
@@ -166,13 +177,19 @@ function extractEnglishKeywords(value: string) {
 }
 
 function normalizeKeyword(value: string) {
-  return normalizeText(value)
+  const normalized = normalizeText(value)
     .replace(/^[-,•\d.\s]+/, "")
     .replace(HANJA_REGEX, "")
     .replace(/[^\p{L}\p{N}\s-]/gu, " ")
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 32);
+
+  if (/^[가-힣]{2,}$/u.test(normalized)) {
+    return normalized.replace(KOREAN_TRAILING_PARTICLE_REGEX, "").trim();
+  }
+
+  return normalized;
 }
 
 function uniqueKeywords(values: string[]) {
@@ -182,6 +199,9 @@ function uniqueKeywords(values: string[]) {
   for (const value of values) {
     const normalized = normalizeKeyword(value);
     if (!normalized) continue;
+    if (KEYWORD_STOPWORDS.has(normalized)) continue;
+    if (/^(하다|했다|입니다|있다|없다|됐다|같다)$/u.test(normalized)) continue;
+    if (/^[가-힣]$/u.test(normalized)) continue;
 
     const key = normalized.toLowerCase();
     if (seen.has(key)) continue;
@@ -286,8 +306,8 @@ async function requestBlogAiMetadata(
 export async function generateBlogAiMetadata(title: string, contentHtml: string): Promise<BlogAiMetadata> {
   const { plainText, digest, fallback, cleanedTitle } = buildSummarySource(title, contentHtml);
   const plainTextSlice = plainText.slice(0, 5000);
-  const fallbackSummary = buildFallbackSummary(cleanedTitle, fallback);
   const fallbackKeywords = buildFallbackKeywords(cleanedTitle, fallback);
+  const fallbackSummary = buildHumorousSummary(cleanedTitle, fallbackKeywords);
 
   if (!plainTextSlice) {
     return {
@@ -327,13 +347,14 @@ export async function generateBlogAiMetadata(title: string, contentHtml: string)
       };
     }
 
+    const repairedKeywords = sanitizeKeywords(secondPass.keywords, cleanedTitle, fallback);
     return {
-      summary: fallbackSummary,
-      keywords: fallbackKeywords,
+      summary: buildHumorousSummary(cleanedTitle, repairedKeywords),
+      keywords: repairedKeywords,
     };
   } catch {
     return {
-      summary: fallbackSummary,
+      summary: buildHumorousSummary(cleanedTitle, fallbackKeywords),
       keywords: fallbackKeywords,
     };
   }

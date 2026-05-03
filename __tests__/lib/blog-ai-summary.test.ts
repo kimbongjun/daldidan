@@ -31,6 +31,11 @@ describe("isLikelyCopiedSummary", () => {
     expect(isLikelyCopiedSummary("교토의 조용한 골목과 아침 시장, 오래된 찻집을 차례로 둘러본 여행기입니다.", source)).toBe(true);
   });
 
+  it("detects summaries that mostly reuse the opening phrasing", () => {
+    const source = "아침 시장에서 따뜻한 두부를 먹고, 조용한 골목을 걷다가 오래된 찻집에서 쉬었습니다.";
+    expect(isLikelyCopiedSummary("아침 시장에서 따뜻한 두부를 먹고, 조용한 골목을 걷다가 여유를 즐긴 여행 이야기입니다.", source)).toBe(true);
+  });
+
   it("allows summaries that reinterpret the source", () => {
     const source = "아기 수면 루틴을 바꾸고 밤중 수유 횟수를 줄이면서 가족의 생활 리듬이 조금씩 안정됐습니다.";
     expect(isLikelyCopiedSummary("수면 루틴을 다듬으며 집안의 박자가 조금씩 맞아간 육아 기록입니다.", source)).toBe(false);
