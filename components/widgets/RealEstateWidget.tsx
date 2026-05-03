@@ -10,6 +10,70 @@ import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 const ACCENT = "#5CABF2";
 
 type Tab = "청약" | "시세" | "금리";
+type SubscriptionRegionCategory =
+  | "전체"
+  | "서울"
+  | "경기"
+  | "인천"
+  | "강원"
+  | "충북"
+  | "충남"
+  | "대전"
+  | "세종"
+  | "전북"
+  | "전남"
+  | "광주"
+  | "경북"
+  | "대구"
+  | "경남"
+  | "부산"
+  | "울산"
+  | "제주";
+
+const SUBSCRIPTION_REGION_ORDER: SubscriptionRegionCategory[] = [
+  "전체",
+  "서울",
+  "경기",
+  "인천",
+  "강원",
+  "충북",
+  "충남",
+  "대전",
+  "세종",
+  "전북",
+  "전남",
+  "광주",
+  "경북",
+  "대구",
+  "경남",
+  "부산",
+  "울산",
+  "제주",
+];
+
+function resolveSubscriptionRegionCategory(region: string): SubscriptionRegionCategory {
+  const normalized = region.replace(/\s+/g, " ").trim();
+
+  if (normalized.startsWith("서울")) return "서울";
+  if (normalized.startsWith("경기")) return "경기";
+  if (normalized.startsWith("인천")) return "인천";
+  if (normalized.startsWith("강원")) return "강원";
+  if (normalized.startsWith("충북") || normalized.startsWith("충청북")) return "충북";
+  if (normalized.startsWith("충남") || normalized.startsWith("충청남")) return "충남";
+  if (normalized.startsWith("대전")) return "대전";
+  if (normalized.startsWith("세종")) return "세종";
+  if (normalized.startsWith("전북") || normalized.startsWith("전라북")) return "전북";
+  if (normalized.startsWith("전남") || normalized.startsWith("전라남")) return "전남";
+  if (normalized.startsWith("광주")) return "광주";
+  if (normalized.startsWith("경북") || normalized.startsWith("경상북")) return "경북";
+  if (normalized.startsWith("대구")) return "대구";
+  if (normalized.startsWith("경남") || normalized.startsWith("경상남")) return "경남";
+  if (normalized.startsWith("부산")) return "부산";
+  if (normalized.startsWith("울산")) return "울산";
+  if (normalized.startsWith("제주")) return "제주";
+
+  return "전체";
+}
 
 // ── 유틸 ────────────────────────────────────────────────────────────────────
 
@@ -74,6 +138,7 @@ function SubscriptionTab() {
   const [items, setItems] = useState<(SubscriptionItem & { dday: number })[]>([]);
   const [isMock, setIsMock] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [activeRegion, setActiveRegion] = useState<SubscriptionRegionCategory>("전체");
 
   useEffect(() => {
     const controller = new AbortController();
@@ -86,6 +151,13 @@ function SubscriptionTab() {
   }, []);
 
   if (loading) return <div className="flex flex-col gap-2">{[1, 2, 3].map((i) => <SkeletonRow key={i} />)}</div>;
+
+  const availableRegions = SUBSCRIPTION_REGION_ORDER.filter((region) => (
+    region === "전체" || items.some((item) => resolveSubscriptionRegionCategory(item.region) === region)
+  ));
+  const filteredItems = activeRegion === "전체"
+    ? items
+    : items.filter((item) => resolveSubscriptionRegionCategory(item.region) === activeRegion);
 
   return (
     <div className="flex flex-col gap-2">
@@ -103,8 +175,30 @@ function SubscriptionTab() {
           <span className="text-[10px]" style={{ color: "#F59E0B" }}>에서 확인</span>
         </div>
       )}
+
+      <div className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-0.5">
+        {availableRegions.map((region) => {
+          const active = activeRegion === region;
+          return (
+            <button
+              key={region}
+              type="button"
+              onClick={() => setActiveRegion(region)}
+              className="shrink-0 rounded-full px-3 py-1.5 text-[11px] font-semibold transition-all"
+              style={{
+                background: active ? ACCENT : "rgba(255,255,255,0.06)",
+                color: active ? "#fff" : "var(--text-muted)",
+                border: active ? `1px solid ${ACCENT}` : "1px solid rgba(255,255,255,0.08)",
+              }}
+            >
+              {region}
+            </button>
+          );
+        })}
+      </div>
+
       <div className="flex flex-col gap-2 overflow-y-auto scrollbar-hide" style={{ maxHeight: isMock ? 196 : 220 }}>
-        {items.map((item) => {
+        {filteredItems.map((item) => {
           const { label, urgent } = getDdayLabel(item.startDate);
           return (
             <a key={item.id} href={item.detailUrl} target="_blank" rel="noopener noreferrer"
@@ -144,6 +238,15 @@ function SubscriptionTab() {
             </a>
           );
         })}
+
+        {filteredItems.length === 0 && (
+          <div
+            className="rounded-xl px-3 py-6 text-center text-xs"
+            style={{ background: "rgba(255,255,255,0.04)", color: "var(--text-muted)" }}
+          >
+            {activeRegion} 지역의 청약 일정이 아직 없습니다.
+          </div>
+        )}
       </div>
     </div>
   );
