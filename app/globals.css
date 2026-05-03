@@ -511,6 +511,21 @@ input[type="reset"]:not(:disabled):active,
   padding-left: 1.4rem;
 }
 
+.blog-editor-content ul,
+.blog-prose ul {
+  list-style: disc;
+}
+
+.blog-editor-content ol,
+.blog-prose ol {
+  list-style: decimal;
+}
+
+.blog-editor-content li,
+.blog-prose li {
+  margin: 0.35rem 0;
+}
+
 .blog-editor-content blockquote,
 .blog-prose blockquote {
   border-left: 3px solid rgba(234,88,12,0.45);
