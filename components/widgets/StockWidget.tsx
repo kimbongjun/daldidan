@@ -103,6 +103,20 @@ function formatDateTime(value?: string): string {
   return date.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
+function formatAbsoluteDateTime(value?: string): string {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString("ko-KR", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+}
+
 function formatDate(value?: string): string {
   if (!value) return "일정 확인";
   const date = new Date(value);
@@ -1251,6 +1265,18 @@ export default function StockWidget() {
   const isLoading = loadPhase === "quotes" || loadPhase === "charts";
   const marketIndices = data?.marketIndices ?? [];
   const canManualDrag = watchSort === "manual";
+  const latestMarketTimestamp = useMemo(() => {
+    const candidates = [
+      data?.fetchedAt,
+      ...(data?.quotes ?? []).map((quote) => quote.fetchedAt),
+      ...(data?.marketIndices ?? []).map((quote) => quote.fetchedAt),
+    ].filter((value): value is string => Boolean(value));
+    if (candidates.length === 0) return "";
+    return candidates.reduce((latest, current) => {
+      if (!latest) return current;
+      return new Date(current).getTime() > new Date(latest).getTime() ? current : latest;
+    }, "");
+  }, [data]);
 
   const sortedQuotes = useMemo(() => {
     const next = [...quotes];
@@ -1323,8 +1349,11 @@ export default function StockWidget() {
             <StatusPill data={data} phase={loadPhase} marketStatus={marketStatus} />
             <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>
               {data?.provider ?? "KRX Open API"}
-              {data?.baseDate ? ` · 기준 ${data.baseDate}` : ""}
-              {data?.fetchedAt ? ` · ${formatDateTime(data.fetchedAt)}` : ""}
+              {latestMarketTimestamp
+                ? ` · 갱신 ${formatAbsoluteDateTime(latestMarketTimestamp)}`
+                : data?.fetchedAt
+                ? ` · 갱신 ${formatDateTime(data.fetchedAt)}`
+                : ""}
             </span>
           </div>
         </div>

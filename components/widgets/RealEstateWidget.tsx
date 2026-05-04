@@ -138,7 +138,6 @@ function SkeletonRow() {
 function SubscriptionTab() {
   const [items, setItems] = useState<(SubscriptionItem & { dday: number })[]>([]);
   const [illegalItems, setIllegalItems] = useState<IllegalResupplyItem[]>([]);
-  const [illegalApplicationUrl, setIllegalApplicationUrl] = useState("https://www.applyhome.co.kr/ap/aph/reqst/selectSubscrtReqstAptMainView.do?se=06&ty=20");
   const [isMock, setIsMock] = useState(false);
   const [loading, setLoading] = useState(true);
   const [activeRegion, setActiveRegion] = useState<SubscriptionRegionCategory>("전체");
@@ -156,12 +155,9 @@ function SubscriptionTab() {
   useEffect(() => {
     const controller = new AbortController();
     fetchWithTimeout("/api/realestate/illegal-resupply", { signal: controller.signal }, 12000)
-      .then((r) => r.json() as Promise<{ items: IllegalResupplyItem[]; applicationUrl?: string }>)
+      .then((r) => r.json() as Promise<{ items: IllegalResupplyItem[] }>)
       .then((d) => {
         setIllegalItems(Array.isArray(d.items) ? d.items : []);
-        if (typeof d.applicationUrl === "string" && d.applicationUrl) {
-          setIllegalApplicationUrl(d.applicationUrl);
-        }
       })
       .catch(() => null);
     return () => controller.abort();
@@ -175,6 +171,25 @@ function SubscriptionTab() {
   const filteredItems = activeRegion === "전체"
     ? items
     : items.filter((item) => resolveSubscriptionRegionCategory(item.region) === activeRegion);
+  const mergedIllegalItems = activeRegion === "전체"
+    ? illegalItems.map((item) => ({
+        id: `illegal-${item.id}`,
+        name: item.name,
+        region: "불법행위 재공급",
+        type: "불법행위 재공급",
+        totalUnits: 0,
+        startDate: item.announcementDate || item.winnerAnnouncementDate || new Date().toISOString().slice(0, 10),
+        endDate: item.winnerAnnouncementDate || item.announcementDate || new Date().toISOString().slice(0, 10),
+        announceDate: item.winnerAnnouncementDate || "",
+        minPrice: 0,
+        maxPrice: 0,
+        detailUrl: item.detailUrl,
+        dday: 0,
+        transferRestriction: item.transferRestriction,
+        isIllegalResupply: true,
+      }))
+    : [];
+  const mergedItems = [...filteredItems, ...mergedIllegalItems];
 
   return (
     <div className="flex flex-col gap-2">
@@ -215,7 +230,11 @@ function SubscriptionTab() {
       </div>
 
       <div className="flex flex-col gap-2 overflow-y-auto scrollbar-hide" style={{ maxHeight: isMock ? 196 : 220 }}>
-        {filteredItems.map((item) => {
+        {mergedItems.map((item) => {
+          const isIllegalResupply = "isIllegalResupply" in item && item.isIllegalResupply;
+          const transferRestriction: string = isIllegalResupply && "transferRestriction" in item
+            ? String(item.transferRestriction)
+            : "";
           const { label, urgent } = getDdayLabel(item.startDate);
           return (
             <a key={item.id} href={item.detailUrl} target="_blank" rel="noopener noreferrer"
@@ -223,31 +242,46 @@ function SubscriptionTab() {
               style={{ background: "rgba(255,255,255,0.04)", border: "1px solid transparent" }}>
               {/* D-day 배지 */}
               <div className="w-11 h-11 rounded-xl flex flex-col items-center justify-center shrink-0 text-center"
-                style={{ background: urgent ? `${ACCENT}22` : "rgba(255,255,255,0.06)" }}>
-                <span className="text-[9px] font-semibold uppercase" style={{ color: urgent ? ACCENT : "var(--text-muted)" }}>청약</span>
-                <span className="text-xs font-black leading-none" style={{ color: urgent ? ACCENT : "var(--text-muted)" }}>{label}</span>
+                style={{ background: isIllegalResupply ? "rgba(245,92,110,0.14)" : urgent ? `${ACCENT}22` : "rgba(255,255,255,0.06)" }}>
+                <span className="text-[9px] font-semibold uppercase" style={{ color: isIllegalResupply ? "#F05C6E" : urgent ? ACCENT : "var(--text-muted)" }}>
+                  {isIllegalResupply ? "재공급" : "청약"}
+                </span>
+                <span className="text-xs font-black leading-none" style={{ color: isIllegalResupply ? "#F05C6E" : urgent ? ACCENT : "var(--text-muted)" }}>{label}</span>
               </div>
               {/* 단지 정보 */}
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-bold truncate" style={{ color: "var(--text-primary)" }}>{item.name}</p>
                 <p className="text-[11px] truncate mt-0.5" style={{ color: "var(--text-muted)" }}>
-                  {item.region} · {item.totalUnits > 0 ? `${item.totalUnits.toLocaleString()}세대` : "세대수 미정"}
+                  {isIllegalResupply
+                    ? "불법행위 재공급 참고 매물"
+                    : `${item.region} · ${item.totalUnits > 0 ? `${item.totalUnits.toLocaleString()}세대` : "세대수 미정"}`}
                 </p>
                 <p className="text-[10px] mt-0.5" style={{ color: "var(--text-muted)" }}>
-                  {item.startDate.slice(5)} ~ {item.endDate.slice(5)}
+                  {isIllegalResupply
+                    ? `공고 ${item.startDate} · 발표 ${item.announceDate || item.endDate}`
+                    : `${item.startDate.slice(5)} ~ ${item.endDate.slice(5)}`}
                 </p>
               </div>
               {/* 분양가 + 타입 */}
               <div className="text-right shrink-0">
-                {item.minPrice > 0 && (
+                {!isIllegalResupply && item.minPrice > 0 && (
                   <p className="text-xs font-bold" style={{ color: "var(--text-primary)" }}>
                     {priceFmt(item.minPrice)}~
                   </p>
                 )}
+                {isIllegalResupply && transferRestriction ? (
+                  <p className="max-w-[110px] text-[10px] leading-tight" style={{ color: "var(--text-muted)" }}>
+                    {transferRestriction}
+                  </p>
+                ) : null}
                 <span className="text-[10px] px-1.5 py-0.5 rounded-md"
                   style={{
-                    background: item.type === "공공" ? "rgba(16,185,129,0.15)" : `${ACCENT}15`,
-                    color: item.type === "공공" ? "#10B981" : ACCENT,
+                    background: isIllegalResupply
+                      ? "rgba(240,92,110,0.15)"
+                      : item.type === "공공" ? "rgba(16,185,129,0.15)" : `${ACCENT}15`,
+                    color: isIllegalResupply
+                      ? "#F05C6E"
+                      : item.type === "공공" ? "#10B981" : ACCENT,
                   }}>
                   {item.type}
                 </span>
@@ -256,7 +290,7 @@ function SubscriptionTab() {
           );
         })}
 
-        {filteredItems.length === 0 && (
+        {mergedItems.length === 0 && (
           <div
             className="rounded-xl px-3 py-6 text-center text-xs"
             style={{ background: "rgba(255,255,255,0.04)", color: "var(--text-muted)" }}
@@ -264,58 +298,6 @@ function SubscriptionTab() {
             {activeRegion} 지역의 청약 일정이 아직 없습니다.
           </div>
         )}
-      </div>
-
-      <div className="rounded-xl p-3" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid var(--border)" }}>
-        <div className="flex items-center justify-between gap-2">
-          <div>
-            <p className="text-xs font-bold" style={{ color: "var(--text-primary)" }}>불법행위 재공급 참고 매물</p>
-            <p className="mt-0.5 text-[10px]" style={{ color: "var(--text-muted)" }}>청약홈 공개 매물 기준 빠르게 확인할 수 있게 묶었습니다.</p>
-          </div>
-          <a
-            href={illegalApplicationUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="shrink-0 rounded-lg px-2.5 py-1.5 text-[10px] font-semibold transition-opacity hover:opacity-80"
-            style={{ background: `${ACCENT}18`, color: ACCENT }}
-          >
-            청약홈 <ArrowRight size={10} className="inline" />
-          </a>
-        </div>
-
-        <div className="mt-3 flex flex-col gap-2">
-          {illegalItems.slice(0, 4).map((item) => (
-            <a
-              key={item.id}
-              href={item.detailUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded-xl px-3 py-2.5 transition-colors hover:opacity-80"
-              style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)" }}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="truncate text-xs font-bold" style={{ color: "var(--text-primary)" }}>{item.name}</p>
-                  <p className="mt-0.5 text-[10px]" style={{ color: "var(--text-muted)" }}>
-                    공고 {item.announcementDate || "-"} · 발표 {item.winnerAnnouncementDate || "-"}
-                  </p>
-                </div>
-                <span className="shrink-0 rounded-md px-1.5 py-0.5 text-[9px] font-semibold" style={{ background: `${ACCENT}15`, color: ACCENT }}>
-                  재공급
-                </span>
-              </div>
-              <p className="mt-1 line-clamp-2 text-[10px]" style={{ color: "var(--text-muted)" }}>
-                {item.transferRestriction}
-              </p>
-            </a>
-          ))}
-
-          {illegalItems.length === 0 && (
-            <div className="rounded-xl px-3 py-4 text-center text-xs" style={{ background: "rgba(255,255,255,0.04)", color: "var(--text-muted)" }}>
-              현재 표시할 참고 매물이 없습니다.
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );

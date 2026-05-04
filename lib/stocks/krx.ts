@@ -47,6 +47,12 @@ const STATIC_INDEX_RESULTS: StockSearchResult[] = [
 
 const INDEX_SEARCH_KEYWORDS = ["kospi", "kosdaq", "코스피", "코스닥", "지수", "krx", "200", "300"];
 
+const NAVER_INDEX_CODE_BY_SYMBOL: Record<string, string> = {
+  IDX_1: "KOSPI",
+  IDX_2: "KOSDAQ",
+  IDX_4: "KPI200",
+};
+
 type KrxConfig = {
   authKey: string;
   domain: string;
@@ -55,6 +61,36 @@ type KrxConfig = {
 type KrxApiResponse = {
   OutBlock_1?: Record<string, unknown>[];
   output?: Record<string, unknown>[];
+};
+
+type NaverCompareToPreviousPrice = {
+  code?: string;
+  text?: string;
+  name?: string;
+};
+
+type NaverBasicResponse = {
+  stockEndType?: "stock" | "etf" | "index";
+  itemCode?: string;
+  stockName?: string;
+  closePrice?: string;
+  compareToPreviousClosePrice?: string;
+  compareToPreviousPrice?: NaverCompareToPreviousPrice;
+  fluctuationsRatio?: string;
+  marketStatus?: string;
+  localTradedAt?: string;
+  stockExchangeType?: {
+    nameKor?: string;
+    nameEng?: string;
+    name?: string;
+  };
+  overMarketPriceInfo?: {
+    overMarketStatus?: string;
+    overPrice?: string;
+    compareToPreviousClosePrice?: string;
+    fluctuationsRatio?: string;
+    localTradedAt?: string;
+  };
 };
 
 type NaverIntegrationResponse = {
@@ -116,6 +152,46 @@ function infoValue(items: { code?: string; value?: string }[], code: string): st
   return items.find((item) => item.code === code)?.value?.trim() ?? "";
 }
 
+function parseScaledNumber(value: string): number {
+  const trimmed = value.trim();
+  if (!trimmed) return 0;
+  if (trimmed.includes("백만")) return toNumber(trimmed.replace("백만", "")) * 1_000_000;
+  if (trimmed.includes("천주")) return toNumber(trimmed.replace("천주", "")) * 1_000;
+  return toNumber(trimmed);
+}
+
+function parseKoreanMarketCap(value: string): number {
+  const trimmed = value.trim();
+  if (!trimmed) return 0;
+  const joMatch = trimmed.match(/([\d,.]+)\s*조/);
+  const ukMatch = trimmed.match(/([\d,.]+)\s*억/);
+  return toNumber(joMatch?.[1] ?? "0") * 1_000_000_000_000 + toNumber(ukMatch?.[1] ?? "0") * 100_000_000;
+}
+
+function resolveNaverQuotePrice(basic: NaverBasicResponse): number {
+  const over = basic.overMarketPriceInfo;
+  if (over?.overMarketStatus === "OPEN") {
+    const overPrice = toNumber(over.overPrice ?? "");
+    if (overPrice > 0) return overPrice;
+  }
+  return toNumber(basic.closePrice ?? "");
+}
+
+async function fetchNaverBasicQuote(item: WatchlistItem): Promise<NaverBasicResponse> {
+  const indexCode = item.assetType === "index" ? NAVER_INDEX_CODE_BY_SYMBOL[item.symbol] : null;
+  const endpoint = item.assetType === "index"
+    ? `https://m.stock.naver.com/api/index/${encodeURIComponent(indexCode ?? item.symbol.replace("IDX_", ""))}/basic`
+    : `https://m.stock.naver.com/api/stock/${encodeURIComponent(item.symbol)}/basic`;
+  const res = await fetch(endpoint, {
+    method: "GET",
+    headers: { accept: "application/json" },
+    cache: "no-store",
+    signal: AbortSignal.timeout(5_000),
+  });
+  if (!res.ok) throw new Error(`Naver basic HTTP ${res.status}`);
+  return (await res.json()) as NaverBasicResponse;
+}
+
 async function fetchNaverIntegration(symbol: string): Promise<Partial<StockQuote>> {
   const res = await fetch(`https://m.stock.naver.com/api/stock/${encodeURIComponent(symbol)}/integration`, {
     method: "GET",
@@ -129,6 +205,12 @@ async function fetchNaverIntegration(symbol: string): Promise<Partial<StockQuote
   const high52 = toNumber(infoValue(infos, "highPriceOf52Weeks"));
   const low52 = toNumber(infoValue(infos, "lowPriceOf52Weeks"));
   return {
+    open: parseScaledNumber(infoValue(infos, "openPrice")),
+    high: parseScaledNumber(infoValue(infos, "highPrice")),
+    low: parseScaledNumber(infoValue(infos, "lowPrice")),
+    volume: parseScaledNumber(infoValue(infos, "accumulatedTradingVolume")),
+    tradingValue: parseScaledNumber(infoValue(infos, "accumulatedTradingValue")),
+    marketCap: parseKoreanMarketCap(infoValue(infos, "marketValue")),
     ...(high52 > 0 ? { fiftyTwoWeekHigh: high52 } : {}),
     ...(low52 > 0 ? { fiftyTwoWeekLow: low52 } : {}),
     per: infoValue(infos, "per") || infoValue(infos, "cnsPer"),
@@ -136,6 +218,28 @@ async function fetchNaverIntegration(symbol: string): Promise<Partial<StockQuote
     eps: infoValue(infos, "eps") || infoValue(infos, "cnsEps"),
     dividendYield: infoValue(infos, "dividendYieldRatio"),
     foreignRate: infoValue(infos, "foreignRate"),
+  };
+}
+
+async function fetchNaverIndexIntegration(symbol: string): Promise<Partial<StockQuote>> {
+  const code = NAVER_INDEX_CODE_BY_SYMBOL[symbol] ?? symbol.replace("IDX_", "");
+  const res = await fetch(`https://m.stock.naver.com/api/index/${encodeURIComponent(code)}/integration`, {
+    method: "GET",
+    headers: { accept: "application/json" },
+    cache: "no-store",
+    signal: AbortSignal.timeout(5_000),
+  });
+  if (!res.ok) throw new Error(`Naver index integration HTTP ${res.status}`);
+  const data = (await res.json()) as NaverIntegrationResponse;
+  const infos = Array.isArray(data.totalInfos) ? data.totalInfos : [];
+  return {
+    open: parseScaledNumber(infoValue(infos, "openPrice")),
+    high: parseScaledNumber(infoValue(infos, "highPrice")),
+    low: parseScaledNumber(infoValue(infos, "lowPrice")),
+    volume: parseScaledNumber(infoValue(infos, "accumulatedTradingVolume")),
+    tradingValue: parseScaledNumber(infoValue(infos, "accumulatedTradingValue")),
+    fiftyTwoWeekHigh: parseScaledNumber(infoValue(infos, "highPriceOf52Weeks")),
+    fiftyTwoWeekLow: parseScaledNumber(infoValue(infos, "lowPriceOf52Weeks")),
   };
 }
 
@@ -531,6 +635,42 @@ function mapIndexQuote(record: Record<string, unknown>, baseDate: string): Stock
   };
 }
 
+function overlayWithRealtimeQuote(
+  quote: StockQuote,
+  basic: NaverBasicResponse,
+  detail?: Partial<StockQuote>,
+): StockQuote {
+  const price = resolveNaverQuotePrice(basic);
+  const change = toNumber(basic.overMarketPriceInfo?.compareToPreviousClosePrice ?? basic.compareToPreviousClosePrice ?? "");
+  const changePct = toNumber(basic.overMarketPriceInfo?.fluctuationsRatio ?? basic.fluctuationsRatio ?? "");
+  const previousClose = price > 0 ? price - change : quote.previousClose;
+  const market = basic.stockExchangeType?.nameKor || basic.stockExchangeType?.nameEng || basic.stockExchangeType?.name || quote.market;
+
+  return {
+    ...quote,
+    market,
+    name: basic.stockName?.trim() || quote.name,
+    price: price > 0 ? price : quote.price,
+    change,
+    changePct,
+    previousClose,
+    fetchedAt: basic.localTradedAt || quote.fetchedAt,
+    ...(detail?.open && detail.open > 0 ? { open: detail.open } : {}),
+    ...(detail?.high && detail.high > 0 ? { high: detail.high } : {}),
+    ...(detail?.low && detail.low > 0 ? { low: detail.low } : {}),
+    ...(detail?.volume && detail.volume > 0 ? { volume: detail.volume } : {}),
+    ...(detail?.tradingValue && detail.tradingValue > 0 ? { tradingValue: detail.tradingValue } : {}),
+    ...(detail?.fiftyTwoWeekHigh && detail.fiftyTwoWeekHigh > 0 ? { fiftyTwoWeekHigh: detail.fiftyTwoWeekHigh } : {}),
+    ...(detail?.fiftyTwoWeekLow && detail.fiftyTwoWeekLow > 0 ? { fiftyTwoWeekLow: detail.fiftyTwoWeekLow } : {}),
+    ...(detail?.marketCap && detail.marketCap > 0 ? { marketCap: detail.marketCap } : {}),
+    ...(detail?.per ? { per: detail.per } : {}),
+    ...(detail?.pbr ? { pbr: detail.pbr } : {}),
+    ...(detail?.eps ? { eps: detail.eps } : {}),
+    ...(detail?.dividendYield ? { dividendYield: detail.dividendYield } : {}),
+    ...(detail?.foreignRate ? { foreignRate: detail.foreignRate } : {}),
+  };
+}
+
 function mapRanking(row: StockQuote, kind: StockRankingKind, index: number): StockRankingItem {
   const scoreValue =
     kind === "amount" ? row.tradingValue :
@@ -758,8 +898,45 @@ export async function fetchStockOverview(
       }));
     }
 
+    const naverWatchlistResults = await Promise.allSettled(
+      stockEtfItems.map(async (item) => {
+        const basic = await fetchNaverBasicQuote(item);
+        const detail = options.noSparkline ? undefined : await fetchNaverIntegration(item.symbol);
+        return { item, basic, detail };
+      }),
+    );
+    const naverWatchlistMap = new Map(
+      naverWatchlistResults
+        .flatMap((result) => result.status === "fulfilled" ? [[result.value.item.symbol, result.value]] : []),
+    );
+    quotesWithHistory = quotesWithHistory.map((quote) => {
+      const realtime = naverWatchlistMap.get(quote.symbol);
+      return realtime ? overlayWithRealtimeQuote(quote, realtime.basic, realtime.detail) : quote;
+    });
+    naverWatchlistResults.forEach((result, index) => {
+      if (result.status === "rejected") {
+        errors.push(`${stockEtfItems[index].symbol}: ${result.reason instanceof Error ? result.reason.message : "실시간 시세 조회 실패"}`);
+      }
+    });
+
     // 지수 quotes
-    const indexQuotes = await fetchIndexQuotesWithFallback(config, baseDate, indexCodes);
+    let indexQuotes = await fetchIndexQuotesWithFallback(config, baseDate, indexCodes);
+    const naverIndexItems: WatchlistItem[] = indexCodes.map((code) => ({ symbol: `IDX_${code}`, assetType: "index" }));
+    const naverIndexResults = await Promise.allSettled(
+      naverIndexItems.map(async (item) => {
+        const basic = await fetchNaverBasicQuote(item);
+        const detail = options.noSparkline ? undefined : await fetchNaverIndexIntegration(item.symbol);
+        return { item, basic, detail };
+      }),
+    );
+    const naverIndexMap = new Map(
+      naverIndexResults
+        .flatMap((result) => result.status === "fulfilled" ? [[result.value.item.symbol, result.value]] : []),
+    );
+    indexQuotes = indexQuotes.map((quote) => {
+      const realtime = naverIndexMap.get(quote.symbol);
+      return realtime ? overlayWithRealtimeQuote(quote, realtime.basic, realtime.detail) : quote;
+    });
     const marketIndices = indexQuotes
       .filter((quote) => fixedIndexCodes.includes(quote.symbol.replace("IDX_", "")))
       .sort((a, b) => fixedIndexCodes.indexOf(a.symbol.replace("IDX_", "")) - fixedIndexCodes.indexOf(b.symbol.replace("IDX_", "")));
@@ -785,7 +962,7 @@ export async function fetchStockOverview(
 
     const overviewResult: StockOverviewResponse = {
       status: "live",
-      provider: "KRX Open API",
+      provider: "Naver 실시간 + KRX",
       fetchedAt: new Date().toISOString(),
       baseDate: normalizeDate(baseDate),
       marketDivCode: "KRX",
