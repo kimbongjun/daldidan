@@ -323,7 +323,23 @@ const _dateRowFetching = new Map<string, Promise<Record<string, unknown>[]>>();
 const _dateEtfRowCache = new Map<string, { rows: Record<string, unknown>[]; expiry: number }>();
 const _dateEtfRowFetching = new Map<string, Promise<Record<string, unknown>[]>>();
 
-async function getCachedMarketRows(config: KrxConfig, baseDate: string): Promise<Record<string, unknown>[]> {
+function getRowCacheExpiry(baseDate: string): number {
+  const windowInfo = getKrxMarketWindow();
+  if (normalizeDate(baseDate) === windowInfo.dateKey && windowInfo.open) {
+    return Date.now() + 15_000;
+  }
+  return endOfDayTimestamp(baseDate);
+}
+
+async function getCachedMarketRows(config: KrxConfig, baseDate: string, options: { force?: boolean } = {}): Promise<Record<string, unknown>[]> {
+  if (options.force) {
+    const rows = await fetchMarketRows(config, baseDate);
+    if (rows.length > 0) {
+      _dateRowCache.set(baseDate, { rows, expiry: getRowCacheExpiry(baseDate) });
+    }
+    return rows;
+  }
+
   const cached = _dateRowCache.get(baseDate);
   if (cached && cached.expiry > Date.now()) return cached.rows;
 
@@ -333,7 +349,7 @@ async function getCachedMarketRows(config: KrxConfig, baseDate: string): Promise
   const promise = fetchMarketRows(config, baseDate)
     .then((rows) => {
       if (rows.length > 0) {
-        _dateRowCache.set(baseDate, { rows, expiry: endOfDayTimestamp(baseDate) });
+        _dateRowCache.set(baseDate, { rows, expiry: getRowCacheExpiry(baseDate) });
       }
       _dateRowFetching.delete(baseDate);
       return rows;
@@ -347,7 +363,15 @@ async function getCachedMarketRows(config: KrxConfig, baseDate: string): Promise
   return promise;
 }
 
-async function getCachedEtfRows(config: KrxConfig, baseDate: string): Promise<Record<string, unknown>[]> {
+async function getCachedEtfRows(config: KrxConfig, baseDate: string, options: { force?: boolean } = {}): Promise<Record<string, unknown>[]> {
+  if (options.force) {
+    const rows = await fetchEtfRows(config, baseDate);
+    if (rows.length > 0) {
+      _dateEtfRowCache.set(baseDate, { rows, expiry: getRowCacheExpiry(baseDate) });
+    }
+    return rows;
+  }
+
   const cached = _dateEtfRowCache.get(baseDate);
   if (cached && cached.expiry > Date.now()) return cached.rows;
 
@@ -357,7 +381,7 @@ async function getCachedEtfRows(config: KrxConfig, baseDate: string): Promise<Re
   const promise = fetchEtfRows(config, baseDate)
     .then((rows) => {
       if (rows.length > 0) {
-        _dateEtfRowCache.set(baseDate, { rows, expiry: endOfDayTimestamp(baseDate) });
+        _dateEtfRowCache.set(baseDate, { rows, expiry: getRowCacheExpiry(baseDate) });
       }
       _dateEtfRowFetching.delete(baseDate);
       return rows;
@@ -381,6 +405,25 @@ async function fetchLatestMarketRows(config: KrxConfig): Promise<{ baseDate: str
     const baseDate = formatKrxDate(target);
     try {
       const rows = await getCachedMarketRows(config, baseDate);
+      if (rows.length > 0) return { baseDate, rows };
+    } catch {
+      // 해당 날짜 데이터 없음, 다음 날짜 시도
+    }
+  }
+
+  throw new Error("최근 14일 안에 조회 가능한 KRX 일별 매매정보가 없습니다.");
+}
+
+async function fetchLatestMarketRowsFresh(config: KrxConfig): Promise<{ baseDate: string; rows: Record<string, unknown>[] }> {
+  const today = new Date();
+  for (let offset = 0; offset < 14; offset += 1) {
+    const target = new Date(today.getTime() - offset * 86_400_000);
+    const day = target.getDay();
+    if (day === 0 || day === 6) continue;
+
+    const baseDate = formatKrxDate(target);
+    try {
+      const rows = await getCachedMarketRows(config, baseDate, { force: true });
       if (rows.length > 0) return { baseDate, rows };
     } catch {
       // 해당 날짜 데이터 없음, 다음 날짜 시도
@@ -628,7 +671,7 @@ function makeOverviewCacheKey(items: WatchlistItem[], kinds: StockRankingKind[],
 export async function fetchStockOverview(
   watchlistItems: WatchlistItem[],
   requestedRankingKinds: StockRankingKind[] = [...STOCK_RANKING_KINDS],
-  options: { noSparkline?: boolean } = {},
+  options: { noSparkline?: boolean; force?: boolean } = {},
 ): Promise<StockOverviewResponse> {
   const fetchedAt = new Date().toISOString();
   const config = readConfig();
@@ -655,13 +698,17 @@ export async function fetchStockOverview(
   // Market-window cache (30-minute buckets during trading, frozen after close)
   const cacheKey = makeOverviewCacheKey(resolvedItems, requestedRankingKinds, options.noSparkline ?? false);
   const cachedOverview = _overviewCache.get(cacheKey);
-  if (cachedOverview && cachedOverview.expiry > Date.now()) return cachedOverview.data;
+  if (!options.force && cachedOverview && cachedOverview.expiry > Date.now()) return cachedOverview.data;
 
   try {
-    const { baseDate, rows } = await fetchLatestMarketRows(config);
+    const { baseDate, rows } = options.force
+      ? await fetchLatestMarketRowsFresh(config)
+      : await fetchLatestMarketRows(config);
 
     // ETF rows 병렬 취득
-    const etfRows = await fetchEtfRows(config, baseDate);
+    const etfRows = options.force
+      ? await getCachedEtfRows(config, baseDate, { force: true })
+      : await getCachedEtfRows(config, baseDate);
     const allRows = [...rows, ...etfRows];
 
     // 전체 quote map (주식 + ETF)

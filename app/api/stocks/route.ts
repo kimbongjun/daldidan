@@ -51,18 +51,21 @@ export async function GET(request: NextRequest) {
     parseSymbolsAsItems(searchParams.get("symbols"));
 
   const noSparkline = searchParams.get("noSparkline") === "true";
+  const force = searchParams.get("force") === "true";
 
   const data = await fetchStockOverview(
     watchlistItems,
     parseRankingKinds(searchParams.get("rankings")),
-    { noSparkline },
+    { noSparkline, force },
   );
 
   const windowInfo = getKrxMarketWindow();
 
   return NextResponse.json(data, {
     headers: {
-      "Cache-Control": `public, max-age=${windowInfo.cacheTtlSeconds}, s-maxage=${windowInfo.cacheTtlSeconds}, stale-while-revalidate=300`,
+      "Cache-Control": force
+        ? "no-store, max-age=0"
+        : `public, max-age=${windowInfo.cacheTtlSeconds}, s-maxage=${windowInfo.cacheTtlSeconds}, stale-while-revalidate=300`,
     },
   });
 }

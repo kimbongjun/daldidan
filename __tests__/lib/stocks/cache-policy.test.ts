@@ -2,14 +2,14 @@ import { describe, expect, it } from "vitest";
 import { getKrxMarketWindow } from "@/lib/stocks/cache-policy";
 
 describe("getKrxMarketWindow", () => {
-  it("treats trading hours as open and rounds to the current 30-minute bucket", () => {
+  it("treats trading hours as open and rounds to the current 30-second bucket", () => {
     const windowInfo = getKrxMarketWindow(new Date("2026-05-04T01:12:00Z"));
 
     expect(windowInfo.open).toBe(true);
     expect(windowInfo.label).toBe("장중");
-    expect(windowInfo.bucketKey).toBe("2026-05-04:600");
+    expect(windowInfo.bucketKey).toBe(`2026-05-04:${Math.floor(new Date("2026-05-04T01:12:00Z").getTime() / 30_000)}`);
     expect(windowInfo.mostRecentTradingDay).toBe("2026-05-04");
-    expect(windowInfo.nextRefreshAt).toBe("2026-05-04T01:30:00.000Z");
+    expect(windowInfo.nextRefreshAt).toBe("2026-05-04T01:12:30.000Z");
   });
 
   it("freezes after close until the next market open", () => {

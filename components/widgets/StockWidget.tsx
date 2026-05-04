@@ -990,7 +990,11 @@ export default function StockWidget() {
       items: watchlist.map(({ symbol, assetType }) => `${symbol}:${assetType}`).join(","),
       rankings: STOCK_RANKING_KINDS.join(","),
     });
-    const fetchCacheMode: RequestCache = force ? "reload" : "force-cache";
+    if (force) {
+      baseParams.set("force", "true");
+      baseParams.set("ts", String(Date.now()));
+    }
+    const fetchCacheMode: RequestCache = force || windowInfo.open ? "no-store" : "force-cache";
 
     const persistSnapshot = (payload: StockOverviewResponse) => {
       if (payload.status !== "live") return;
@@ -1007,7 +1011,9 @@ export default function StockWidget() {
       const p1Signal = signal
         ? AbortSignal.any([signal, AbortSignal.timeout(25_000)])
         : AbortSignal.timeout(25_000);
-      const res = await fetch(`/api/stocks?${baseParams}&noSparkline=true`, { cache: fetchCacheMode, signal: p1Signal });
+      const phase1Params = new URLSearchParams(baseParams);
+      phase1Params.set("noSparkline", "true");
+      const res = await fetch(`/api/stocks?${phase1Params.toString()}`, { cache: fetchCacheMode, signal: p1Signal });
       const d = await res.json() as StockOverviewResponse;
       if (signal?.aborted) return;
       setData(d);
@@ -1044,7 +1050,7 @@ export default function StockWidget() {
       const p2Signal = signal
         ? AbortSignal.any([signal, AbortSignal.timeout(30_000)])
         : AbortSignal.timeout(30_000);
-      const res = await fetch(`/api/stocks?${baseParams}`, { cache: fetchCacheMode, signal: p2Signal });
+      const res = await fetch(`/api/stocks?${baseParams.toString()}`, { cache: fetchCacheMode, signal: p2Signal });
       const d = await res.json() as StockOverviewResponse;
       if (!signal?.aborted) {
         setData(d);

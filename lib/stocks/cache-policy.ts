@@ -1,7 +1,7 @@
 const KRX_TIME_ZONE = "Asia/Seoul";
 const MARKET_OPEN_MINUTES = 9 * 60;
 const MARKET_CLOSE_MINUTES = 15 * 60 + 30;
-const HALF_HOUR_MINUTES = 30;
+const LIVE_REFRESH_SECONDS = 30;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 type KstParts = {
@@ -111,20 +111,11 @@ export function getKrxMarketWindow(now = new Date()): KrxMarketWindow {
   const open = weekdayOpen && totalMinutes >= MARKET_OPEN_MINUTES && totalMinutes < MARKET_CLOSE_MINUTES;
 
   const nextRefreshDate = open
-    ? (() => {
-        const offset = totalMinutes - MARKET_OPEN_MINUTES;
-        const bucketStartMinutes = MARKET_OPEN_MINUTES + Math.floor(offset / HALF_HOUR_MINUTES) * HALF_HOUR_MINUTES;
-        const bucketEndMinutes = Math.min(bucketStartMinutes + HALF_HOUR_MINUTES, MARKET_CLOSE_MINUTES);
-        return makeKstDate(dateKey, Math.floor(bucketEndMinutes / 60), bucketEndMinutes % 60);
-      })()
+    ? new Date((Math.floor(now.getTime() / (LIVE_REFRESH_SECONDS * 1_000)) + 1) * LIVE_REFRESH_SECONDS * 1_000)
     : getNextTradingOpen(now, dateKey, totalMinutes);
 
   const bucketKey = open
-    ? (() => {
-        const offset = totalMinutes - MARKET_OPEN_MINUTES;
-        const bucketStartMinutes = MARKET_OPEN_MINUTES + Math.floor(offset / HALF_HOUR_MINUTES) * HALF_HOUR_MINUTES;
-        return `${dateKey}:${bucketStartMinutes}`;
-      })()
+    ? `${dateKey}:${Math.floor(now.getTime() / (LIVE_REFRESH_SECONDS * 1_000))}`
     : null;
 
   const nextRefreshInMs = Math.max(nextRefreshDate.getTime() - now.getTime(), 1_000);

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { ArrowRight, ArrowUp, ArrowDown, Minus, TrendingUp, Home, Wallet, CalendarCheck } from "lucide-react";
 import type { SubscriptionItem } from "@/app/api/realestate/subscriptions/route";
+import type { IllegalResupplyItem } from "@/app/api/realestate/illegal-resupply/route";
 import type { PolicyRate } from "@/app/api/realestate/rates/route";
 import type { TransactionItem, MarketIndex } from "@/app/api/realestate/transactions/route";
 import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
@@ -136,6 +137,8 @@ function SkeletonRow() {
 
 function SubscriptionTab() {
   const [items, setItems] = useState<(SubscriptionItem & { dday: number })[]>([]);
+  const [illegalItems, setIllegalItems] = useState<IllegalResupplyItem[]>([]);
+  const [illegalApplicationUrl, setIllegalApplicationUrl] = useState("https://www.applyhome.co.kr/ap/aph/reqst/selectSubscrtReqstAptMainView.do?se=06&ty=20");
   const [isMock, setIsMock] = useState(false);
   const [loading, setLoading] = useState(true);
   const [activeRegion, setActiveRegion] = useState<SubscriptionRegionCategory>("전체");
@@ -147,6 +150,20 @@ function SubscriptionTab() {
       .then((d) => { setItems(d.subscriptions); setIsMock(d.isMock ?? false); })
       .catch(() => null)
       .finally(() => setLoading(false));
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchWithTimeout("/api/realestate/illegal-resupply", { signal: controller.signal }, 12000)
+      .then((r) => r.json() as Promise<{ items: IllegalResupplyItem[]; applicationUrl?: string }>)
+      .then((d) => {
+        setIllegalItems(Array.isArray(d.items) ? d.items : []);
+        if (typeof d.applicationUrl === "string" && d.applicationUrl) {
+          setIllegalApplicationUrl(d.applicationUrl);
+        }
+      })
+      .catch(() => null);
     return () => controller.abort();
   }, []);
 
@@ -247,6 +264,58 @@ function SubscriptionTab() {
             {activeRegion} 지역의 청약 일정이 아직 없습니다.
           </div>
         )}
+      </div>
+
+      <div className="rounded-xl p-3" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid var(--border)" }}>
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <p className="text-xs font-bold" style={{ color: "var(--text-primary)" }}>불법행위 재공급 참고 매물</p>
+            <p className="mt-0.5 text-[10px]" style={{ color: "var(--text-muted)" }}>청약홈 공개 매물 기준 빠르게 확인할 수 있게 묶었습니다.</p>
+          </div>
+          <a
+            href={illegalApplicationUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="shrink-0 rounded-lg px-2.5 py-1.5 text-[10px] font-semibold transition-opacity hover:opacity-80"
+            style={{ background: `${ACCENT}18`, color: ACCENT }}
+          >
+            청약홈 <ArrowRight size={10} className="inline" />
+          </a>
+        </div>
+
+        <div className="mt-3 flex flex-col gap-2">
+          {illegalItems.slice(0, 4).map((item) => (
+            <a
+              key={item.id}
+              href={item.detailUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-xl px-3 py-2.5 transition-colors hover:opacity-80"
+              style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)" }}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate text-xs font-bold" style={{ color: "var(--text-primary)" }}>{item.name}</p>
+                  <p className="mt-0.5 text-[10px]" style={{ color: "var(--text-muted)" }}>
+                    공고 {item.announcementDate || "-"} · 발표 {item.winnerAnnouncementDate || "-"}
+                  </p>
+                </div>
+                <span className="shrink-0 rounded-md px-1.5 py-0.5 text-[9px] font-semibold" style={{ background: `${ACCENT}15`, color: ACCENT }}>
+                  재공급
+                </span>
+              </div>
+              <p className="mt-1 line-clamp-2 text-[10px]" style={{ color: "var(--text-muted)" }}>
+                {item.transferRestriction}
+              </p>
+            </a>
+          ))}
+
+          {illegalItems.length === 0 && (
+            <div className="rounded-xl px-3 py-4 text-center text-xs" style={{ background: "rgba(255,255,255,0.04)", color: "var(--text-muted)" }}>
+              현재 표시할 참고 매물이 없습니다.
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

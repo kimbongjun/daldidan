@@ -114,6 +114,7 @@ function currentMonthStr() {
 
 export default function BudgetPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [chartTransactions, setChartTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -161,6 +162,20 @@ export default function BudgetPage() {
     }
   }, [selectedMonth]);
 
+  const loadChartTransactions = useCallback(async () => {
+    try {
+      const res = await fetch("/api/transactions?limit=1000");
+      if (!res.ok) {
+        setChartTransactions([]);
+        return;
+      }
+      const data = await res.json() as TransactionApiResponse[];
+      setChartTransactions(Array.isArray(data) ? data.map(normalizeTransaction) : []);
+    } catch {
+      setChartTransactions([]);
+    }
+  }, []);
+
   const loadCurrentUser = useCallback(async () => {
     try {
       const res = await fetch("/api/me");
@@ -194,6 +209,7 @@ export default function BudgetPage() {
   useEffect(() => { void loadCurrentUser(); }, [loadCurrentUser]);
   useEffect(() => { void loadSettings(); }, [loadSettings]);
   useEffect(() => { loadTransactions(); }, [loadTransactions]);
+  useEffect(() => { void loadChartTransactions(); }, [loadChartTransactions]);
 
   const navigateMonth = (dir: -1 | 1) => {
     const [y, m] = selectedMonth.split("-").map(Number);
@@ -265,6 +281,7 @@ export default function BudgetPage() {
         }
         const updated = normalizeTransaction(await res.json() as TransactionApiResponse);
         setTransactions((prev) => prev.map((t) => (t.id === editingId ? updated : t)));
+        setChartTransactions((prev) => prev.map((t) => (t.id === editingId ? updated : t)));
       } else {
         const res = await fetch("/api/transactions", {
           method: "POST",
@@ -277,6 +294,7 @@ export default function BudgetPage() {
         }
         const created = normalizeTransaction(await res.json() as TransactionApiResponse);
         setTransactions((prev) => [created, ...prev]);
+        setChartTransactions((prev) => [created, ...prev]);
         setCurrentPage(1);
         sendNativeNotification(
           "가계부 내역이 추가되었어요",
@@ -295,6 +313,7 @@ export default function BudgetPage() {
   const handleDelete = async (id: string) => {
     await fetch(`/api/transactions/${id}`, { method: "DELETE" });
     setTransactions((prev) => prev.filter((t) => t.id !== id));
+    setChartTransactions((prev) => prev.filter((t) => t.id !== id));
     if (editingId === id) resetForm();
   };
 
@@ -721,9 +740,19 @@ export default function BudgetPage() {
                       </button>
                     ))}
                   </div>
-                  {period === "daily"   && <DailyBarChart transactions={transactions} />}
-                  {period === "monthly" && <MonthlyLineChart transactions={transactions} />}
-                  {period === "yearly"  && <YearlyBarChart transactions={transactions} />}
+                  {period === "daily" && <DailyBarChart transactions={transactions} />}
+                  {period === "monthly" && (
+                    <MonthlyLineChart
+                      transactions={chartTransactions}
+                      anchorMonth={selectedMonth}
+                    />
+                  )}
+                  {period === "yearly" && (
+                    <YearlyBarChart
+                      transactions={chartTransactions}
+                      year={Number(selectedMonth.slice(0, 4))}
+                    />
+                  )}
                 </div>
               )}
             </div>
@@ -1151,7 +1180,13 @@ function DailyBarChart({ transactions }: { transactions: Transaction[] }) {
   );
 }
 
-function MonthlyLineChart({ transactions }: { transactions: Transaction[] }) {
+function MonthlyLineChart({
+  transactions,
+  anchorMonth,
+}: {
+  transactions: Transaction[];
+  anchorMonth: string;
+}) {
   const months = useMemo(() => {
     const map: Record<string, { income: number; expense: number }> = {};
     transactions.forEach((t) => {
@@ -1159,26 +1194,42 @@ function MonthlyLineChart({ transactions }: { transactions: Transaction[] }) {
       if (!map[key]) map[key] = { income: 0, expense: 0 };
       map[key][t.type] += t.amount;
     });
-    const now = new Date();
+    let runningIncome = 0;
+    let runningExpense = 0;
+    const [anchorYear, anchorMonthNumber] = anchorMonth.split("-").map(Number);
     return Array.from({ length: 6 }, (_, i) => {
-      const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+      const d = new Date(anchorYear, anchorMonthNumber - 1 - (5 - i), 1);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      return { label: `${d.getMonth() + 1}월`, ...(map[key] ?? { income: 0, expense: 0 }) };
+      const income = map[key]?.income ?? 0;
+      const expense = map[key]?.expense ?? 0;
+      runningIncome += income;
+      runningExpense += expense;
+      return {
+        key,
+        label: `${d.getMonth() + 1}월`,
+        income,
+        expense,
+        cumulativeIncome: runningIncome,
+        cumulativeExpense: runningExpense,
+        balance: runningIncome - runningExpense,
+      };
     });
-  }, [transactions]);
-  const maxValue = Math.max(...months.flatMap((m) => [m.income, m.expense]), 1);
+  }, [anchorMonth, transactions]);
+  const maxValue = Math.max(...months.flatMap((m) => [m.cumulativeIncome, m.cumulativeExpense, Math.abs(m.balance)]), 1);
   const W = 300, H = 90, P = 16;
   const step = (W - P * 2) / Math.max(months.length - 1, 1);
   const toY = (v: number) => H - P - (v / maxValue) * (H - P * 2);
-  const ipts = months.map((m, i) => `${P + i * step},${toY(m.income)}`).join(" ");
-  const epts = months.map((m, i) => `${P + i * step},${toY(m.expense)}`).join(" ");
+  const ipts = months.map((m, i) => `${P + i * step},${toY(m.cumulativeIncome)}`).join(" ");
+  const epts = months.map((m, i) => `${P + i * step},${toY(m.cumulativeExpense)}`).join(" ");
+  const bpts = months.map((m, i) => `${P + i * step},${toY(Math.abs(m.balance))}`).join(" ");
 
   return (
     <div>
-      <p className="text-xs font-semibold mb-3" style={{ color: "var(--text-muted)" }}>월별 수입/지출 추이</p>
+      <p className="text-xs font-semibold mb-3" style={{ color: "var(--text-muted)" }}>최근 6개월 누적 흐름</p>
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 90 }}>
         <polyline points={ipts} fill="none" stroke="#10B981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         <polyline points={epts} fill="none" stroke="#F43F5E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        <polyline points={bpts} fill="none" stroke={ACCENT} strokeWidth="1.75" strokeDasharray="4 3" strokeLinecap="round" strokeLinejoin="round" />
         {months.map((m, i) => (
           <text key={m.label} x={P + i * step} y={H - 2} textAnchor="middle" fontSize="8" fill="var(--text-muted)">{m.label}</text>
         ))}
@@ -1190,39 +1241,80 @@ function MonthlyLineChart({ transactions }: { transactions: Transaction[] }) {
         </div>
         <div className="flex items-center gap-1.5">
           <div className="w-2.5 h-1.5 rounded-sm" style={{ background: "#F43F5E" }} />
-          <span className="text-xs" style={{ color: "var(--text-muted)" }}>지출</span>
+          <span className="text-xs" style={{ color: "var(--text-muted)" }}>누적 지출</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="w-2.5 h-1.5 rounded-sm" style={{ background: ACCENT }} />
+          <span className="text-xs" style={{ color: "var(--text-muted)" }}>누적 순증감</span>
         </div>
       </div>
     </div>
   );
 }
 
-function YearlyBarChart({ transactions }: { transactions: Transaction[] }) {
-  const year = new Date().getFullYear();
+function YearlyBarChart({
+  transactions,
+  year,
+}: {
+  transactions: Transaction[];
+  year: number;
+}) {
   const months = useMemo(() => Array.from({ length: 12 }, (_, i) => {
     const key = `${year}-${String(i + 1).padStart(2, "0")}`;
+    const income = transactions
+      .filter((t) => t.type === "income" && t.date.startsWith(key))
+      .reduce((s, t) => s + t.amount, 0);
     const expense = transactions
       .filter((t) => t.type === "expense" && t.date.startsWith(key))
       .reduce((s, t) => s + t.amount, 0);
-    return { label: `${i + 1}`, expense };
+    return { label: `${i + 1}`, income, expense, balance: income - expense };
   }), [transactions, year]);
-  const maxValue = Math.max(...months.map((m) => m.expense), 1);
+  const maxValue = Math.max(...months.flatMap((m) => [m.income, m.expense]), 1);
 
   return (
     <div>
-      <p className="text-xs font-semibold mb-3" style={{ color: "var(--text-muted)" }}>{year}년 월별 지출</p>
-      <div className="flex items-end gap-1 h-24">
+      <p className="text-xs font-semibold mb-3" style={{ color: "var(--text-muted)" }}>{year}년 월별 수입·지출</p>
+      <div className="flex items-end gap-1 h-28">
         {months.map((m) => (
           <div key={m.label} className="flex-1 flex flex-col items-center gap-1">
-            <div className="w-full rounded-t transition-all"
-              style={{
-                height: `${Math.max((m.expense / maxValue) * 80, m.expense ? 3 : 0)}px`,
-                background: m.expense > 0 ? `linear-gradient(180deg, ${ACCENT}, ${ACCENT}66)` : "var(--border)",
-                minHeight: m.expense ? 3 : 1,
-              }} />
+            <div className="w-full flex items-end justify-center gap-[2px]" style={{ height: 92 }}>
+              <div
+                className="w-[44%] rounded-t transition-all"
+                style={{
+                  height: `${Math.max((m.income / maxValue) * 84, m.income ? 3 : 0)}px`,
+                  background: m.income > 0 ? "linear-gradient(180deg, #10B981, #10B98166)" : "var(--border)",
+                  minHeight: m.income ? 3 : 1,
+                }}
+              />
+              <div
+                className="w-[44%] rounded-t transition-all"
+                style={{
+                  height: `${Math.max((m.expense / maxValue) * 84, m.expense ? 3 : 0)}px`,
+                  background: m.expense > 0 ? "linear-gradient(180deg, #F43F5E, #F43F5E66)" : "var(--border)",
+                  minHeight: m.expense ? 3 : 1,
+                }}
+              />
+            </div>
+            <span
+              className="text-[9px] font-semibold"
+              style={{ color: m.balance >= 0 ? "#10B981" : "#F43F5E" }}
+            >
+              {m.balance === 0 ? "0" : `${m.balance > 0 ? "+" : ""}${(m.balance / 10000).toFixed(0)}`}
+            </span>
             <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>{m.label}</p>
           </div>
         ))}
+      </div>
+      <div className="flex gap-4 mt-2">
+        <div className="flex items-center gap-1.5">
+          <div className="w-2.5 h-1.5 rounded-sm" style={{ background: "#10B981" }} />
+          <span className="text-xs" style={{ color: "var(--text-muted)" }}>수입</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="w-2.5 h-1.5 rounded-sm" style={{ background: "#F43F5E" }} />
+          <span className="text-xs" style={{ color: "var(--text-muted)" }}>지출</span>
+        </div>
+        <span className="text-xs" style={{ color: "var(--text-muted)" }}>숫자는 월 순증감(만원)</span>
       </div>
     </div>
   );

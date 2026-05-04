@@ -58,7 +58,9 @@ export default function LottoQrScannerModal({ open, onClose }: Props) {
   const scannerRegionId = useId().replace(/:/g, "-");
   const captureInputRef = useRef<HTMLInputElement | null>(null);
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
+  const qrLibraryRef = useRef<Promise<typeof import("html5-qrcode")> | null>(null);
   const lastScanRef = useRef<string | null>(null);
+  const statusRef = useRef<ScanStatus>("idle");
   const mountedRef = useRef(true);
 
   const [status, setStatus] = useState<ScanStatus>("idle");
@@ -66,6 +68,10 @@ export default function LottoQrScannerModal({ open, onClose }: Props) {
   const [manualQr, setManualQr] = useState("");
   const [result, setResult] = useState<LottoQrResponse | null>(null);
   const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -91,6 +97,9 @@ export default function LottoQrScannerModal({ open, onClose }: Props) {
       lastScanRef.current = null;
       return;
     }
+
+    void loadQrLibrary();
+    void startScanner();
 
     return () => {
       void stopScanner();
@@ -162,7 +171,12 @@ export default function LottoQrScannerModal({ open, onClose }: Props) {
     }
   };
 
-  const loadQrLibrary = () => import("html5-qrcode");
+  const loadQrLibrary = () => {
+    if (!qrLibraryRef.current) {
+      qrLibraryRef.current = import("html5-qrcode");
+    }
+    return qrLibraryRef.current;
+  };
 
   const pickPreferredCamera = (cameras: CameraDevice[]): CameraDevice | null => {
     if (cameras.length === 0) return null;
@@ -197,30 +211,42 @@ export default function LottoQrScannerModal({ open, onClose }: Props) {
       );
       html5QrCodeRef.current = scanner;
 
-      const cameras = await Html5Qrcode.getCameras() as CameraDevice[];
-      const preferredCamera = pickPreferredCamera(cameras);
-      const cameraConfig = preferredCamera?.id
-        ? preferredCamera.id
-        : { facingMode: { ideal: "environment" } };
+      const startWith = async (cameraConfig: string | MediaTrackConstraints) => {
+        await scanner.start(
+          cameraConfig,
+          {
+            fps: 18,
+            qrbox: { width: 260, height: 260 },
+            aspectRatio: 1,
+            disableFlip: true,
+          },
+          (decodedText) => {
+            const rawValue = decodedText.trim();
+            if (
+              !rawValue ||
+              rawValue === lastScanRef.current ||
+              statusRef.current === "submitting" ||
+              statusRef.current === "success"
+            ) return;
+            lastScanRef.current = rawValue;
+            void submitQr(rawValue);
+          },
+          () => {
+            // 검출 실패는 정상 플로우라 무시한다.
+          },
+        );
+      };
 
-      await scanner.start(
-        cameraConfig,
-        {
-          fps: 10,
-          qrbox: { width: 220, height: 220 },
-          aspectRatio: 1,
-          disableFlip: false,
-        },
-        (decodedText) => {
-          const rawValue = decodedText.trim();
-          if (!rawValue || rawValue === lastScanRef.current || status === "submitting" || status === "success") return;
-          lastScanRef.current = rawValue;
-          void submitQr(rawValue);
-        },
-        () => {
-          // 검출 실패는 정상 플로우라 무시한다.
-        },
-      );
+      try {
+        await startWith({ facingMode: { ideal: "environment" } });
+      } catch {
+        const cameras = await Html5Qrcode.getCameras() as CameraDevice[];
+        const preferredCamera = pickPreferredCamera(cameras);
+        if (!preferredCamera?.id) {
+          throw new Error("사용 가능한 카메라를 찾지 못했습니다.");
+        }
+        await startWith(preferredCamera.id);
+      }
 
       if (!mountedRef.current) return;
       setStatus("scanning");
