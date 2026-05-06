@@ -1,15 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowRight, ArrowUp, ArrowDown, Minus, TrendingUp, Home, Wallet, CalendarCheck } from "lucide-react";
+import { ArrowRight, ArrowUp, ArrowDown, Minus, TrendingUp, Home, Wallet, CalendarCheck, AlertTriangle } from "lucide-react";
 import type { SubscriptionItem } from "@/app/api/realestate/subscriptions/route";
 import type { PolicyRate } from "@/app/api/realestate/rates/route";
 import type { TransactionItem, MarketIndex } from "@/app/api/realestate/transactions/route";
+import type { IllegalResupplyItem } from "@/app/api/realestate/illegal-resupply/route";
 import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 
 const ACCENT = "#5CABF2";
 
-type Tab = "청약" | "시세" | "금리";
+type Tab = "청약" | "시세" | "금리" | "재공급";
 type SubscriptionRegionCategory =
   | "전체"
   | "서울"
@@ -389,15 +390,122 @@ function RateTab() {
   );
 }
 
+// ── 재공급 탭 ─────────────────────────────────────────────────────────────────
+
+function IllegalResupplyTab() {
+  const [items, setItems] = useState<IllegalResupplyItem[]>([]);
+  const [isMock, setIsMock] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [activeRegion, setActiveRegion] = useState<SubscriptionRegionCategory>("전체");
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchWithTimeout("/api/realestate/illegal-resupply", { signal: controller.signal }, 12000)
+      .then((r) => r.json() as Promise<{ items: IllegalResupplyItem[]; isMock?: boolean }>)
+      .then((d) => { setItems(d.items); setIsMock(d.isMock ?? false); })
+      .catch(() => null)
+      .finally(() => setLoading(false));
+    return () => controller.abort();
+  }, []);
+
+  if (loading) return <div className="flex flex-col gap-2">{[1, 2, 3].map((i) => <SkeletonRow key={i} />)}</div>;
+
+  const availableRegions = SUBSCRIPTION_REGION_ORDER.filter((region) =>
+    region === "전체" || items.some((item) => resolveSubscriptionRegionCategory(item.region) === region)
+  );
+  const filteredItems = activeRegion === "전체"
+    ? items
+    : items.filter((item) => resolveSubscriptionRegionCategory(item.region) === activeRegion);
+
+  return (
+    <div className="flex flex-col gap-2">
+      {isMock && (
+        <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg"
+          style={{ background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.2)" }}>
+          <span className="text-[10px]" style={{ color: "#F59E0B" }}>샘플 데이터 · 실제 재공급 일정은</span>
+          <a href="https://www.applyhome.co.kr/rs/rsa/selectResaleIlglActListView.do"
+            target="_blank" rel="noopener noreferrer"
+            className="text-[10px] font-semibold underline" style={{ color: "#F59E0B" }}>
+            청약홈
+          </a>
+          <span className="text-[10px]" style={{ color: "#F59E0B" }}>에서 확인</span>
+        </div>
+      )}
+
+      <div className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-0.5">
+        {availableRegions.map((region) => {
+          const active = activeRegion === region;
+          return (
+            <button key={region} type="button" onClick={() => setActiveRegion(region)}
+              className="shrink-0 rounded-full px-3 py-1.5 text-[11px] font-semibold transition-all"
+              style={{
+                background: active ? "#F43F5E" : "rgba(255,255,255,0.06)",
+                color: active ? "#fff" : "var(--text-muted)",
+                border: active ? "1px solid #F43F5E" : "1px solid rgba(255,255,255,0.08)",
+              }}>
+              {region}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="flex flex-col gap-2 overflow-y-auto scrollbar-hide" style={{ maxHeight: isMock ? 196 : 220 }}>
+        {filteredItems.map((item) => {
+          const { label, urgent } = getDdayLabel(item.announcementDate);
+          return (
+            <a key={item.id} href={item.detailUrl} target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors hover:opacity-80"
+              style={{ background: "rgba(255,255,255,0.04)", border: "1px solid transparent" }}>
+              {/* D-day 배지 */}
+              <div className="w-11 h-11 rounded-xl flex flex-col items-center justify-center shrink-0 text-center"
+                style={{ background: urgent ? "rgba(244,63,94,0.14)" : "rgba(255,255,255,0.06)" }}>
+                <span className="text-[9px] font-semibold uppercase"
+                  style={{ color: urgent ? "#F43F5E" : "var(--text-muted)" }}>재공급</span>
+                <span className="text-xs font-black leading-none"
+                  style={{ color: urgent ? "#F43F5E" : "var(--text-muted)" }}>{label}</span>
+              </div>
+              {/* 단지 정보 */}
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold truncate" style={{ color: "var(--text-primary)" }}>{item.name}</p>
+                <p className="text-[11px] truncate mt-0.5" style={{ color: "var(--text-muted)" }}>
+                  {item.region} · {item.units > 0 ? `${item.units}세대` : "세대수 미정"}
+                </p>
+                <p className="text-[10px] mt-0.5" style={{ color: "var(--text-muted)" }}>
+                  공고 {item.announcementDate.slice(5)} · 발표 {item.winnerAnnouncementDate ? item.winnerAnnouncementDate.slice(5) : "-"}
+                </p>
+              </div>
+              {/* 전매제한 배지 */}
+              <div className="text-right shrink-0 max-w-[80px]">
+                <span className="text-[10px] px-1.5 py-0.5 rounded-md block truncate"
+                  style={{ background: "rgba(244,63,94,0.12)", color: "#F43F5E" }}>
+                  {item.transferRestriction.length > 8 ? item.transferRestriction.slice(0, 8) + "…" : item.transferRestriction}
+                </span>
+              </div>
+            </a>
+          );
+        })}
+
+        {filteredItems.length === 0 && (
+          <div className="rounded-xl px-3 py-6 text-center text-xs"
+            style={{ background: "rgba(255,255,255,0.04)", color: "var(--text-muted)" }}>
+            {activeRegion} 지역의 불법행위 재공급 일정이 없습니다.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── 메인 위젯 ─────────────────────────────────────────────────────────────────
 
 export default function RealEstateWidget() {
   const [activeTab, setActiveTab] = useState<Tab>("청약");
 
   const TABS: { key: Tab; icon: React.ReactNode; label: string }[] = [
-    { key: "청약", icon: <CalendarCheck size={11} />, label: "청약" },
-    { key: "시세", icon: <TrendingUp size={11} />,   label: "시세" },
-    { key: "금리", icon: <Wallet size={11} />,        label: "금리" },
+    { key: "청약",  icon: <CalendarCheck size={11} />,   label: "청약" },
+    { key: "시세",  icon: <TrendingUp size={11} />,      label: "시세" },
+    { key: "금리",  icon: <Wallet size={11} />,          label: "금리" },
+    { key: "재공급", icon: <AlertTriangle size={11} />,  label: "재공급" },
   ];
 
   return (
@@ -412,7 +520,7 @@ export default function RealEstateWidget() {
             부동산 정보
           </h2>
           <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-            청약 · 실거래 · 정책 금리
+            청약 · 실거래 · 금리 · 재공급
           </p>
         </div>
         <a
@@ -427,16 +535,17 @@ export default function RealEstateWidget() {
       </div>
 
       {/* 탭 */}
-      <div className="flex gap-1.5">
+      <div className="flex gap-1">
         {TABS.map(({ key, icon, label }) => {
           const active = activeTab === key;
+          const activeColor = key === "재공급" ? "#F43F5E" : ACCENT;
           return (
             <button
               key={key}
               onClick={() => setActiveTab(key)}
-              className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg flex-1 justify-center transition-all"
+              className="flex items-center gap-1 text-xs font-semibold px-2 py-1.5 rounded-lg flex-1 justify-center transition-all"
               style={{
-                background: active ? ACCENT : `${ACCENT}15`,
+                background: active ? activeColor : `${ACCENT}15`,
                 color: active ? "#fff" : "var(--text-muted)",
               }}
             >
@@ -449,9 +558,10 @@ export default function RealEstateWidget() {
 
       {/* 탭 콘텐츠 */}
       <div className="flex-1 overflow-hidden">
-        {activeTab === "청약" && <SubscriptionTab />}
-        {activeTab === "시세" && <TransactionTab />}
-        {activeTab === "금리" && <RateTab />}
+        {activeTab === "청약"   && <SubscriptionTab />}
+        {activeTab === "시세"   && <TransactionTab />}
+        {activeTab === "금리"   && <RateTab />}
+        {activeTab === "재공급" && <IllegalResupplyTab />}
       </div>
     </div>
   );
