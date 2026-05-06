@@ -223,6 +223,39 @@ async function tryUnsplashSearch(keywords: string, category?: string | null): Pr
   }
 }
 
+// Magnific API: https://api.magnific.ai — requires MAGNIFIC_API_KEY in .env.local
+// Endpoint path may need adjustment based on Magnific's current API docs
+async function tryMagnificAI(prompt: string): Promise<{ url: string | null; rateLimited: boolean }> {
+  const apiKey = process.env.MAGNIFIC_API_KEY?.trim();
+  if (!apiKey) return { url: null, rateLimited: false };
+
+  try {
+    const res = await fetch("https://api.magnific.ai/v1/generate", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        prompt: decodeURIComponent(prompt),
+        width: 1200,
+        height: 630,
+      }),
+      signal: AbortSignal.timeout(30_000),
+    });
+
+    if (res.status === 429) return { url: null, rateLimited: true };
+    if (!res.ok) return { url: null, rateLimited: false };
+
+    const data = await res.json() as Record<string, unknown>;
+    const images = data?.images as { url?: string }[] | undefined;
+    const url = images?.[0]?.url ?? (data?.url as string | undefined) ?? null;
+    return { url: url ?? null, rateLimited: false };
+  } catch {
+    return { url: null, rateLimited: false };
+  }
+}
+
 async function tryPollinationsAI(prompt: string): Promise<string | null> {
   try {
     const seed = Math.floor(Math.random() * 99_999);
@@ -289,16 +322,20 @@ export async function generateAutoThumbnail(
     ? { summary: snippet, keywords: options.keywords }
     : await generateBlogAiMetadata(title, contentHtml);
   const keywords = buildThumbnailKeywords(title, metadata.summary || snippet, category, metadata.keywords);
+  const prompt = buildPollinationsPrompt(title, keywords.join(", "), category);
 
-  // 1. Unsplash 공식 검색 API
+  // 1. Magnific AI 생성 (고품질, MAGNIFIC_API_KEY 필요)
+  const magnific = await tryMagnificAI(prompt);
+  if (magnific.url) return magnific.url;
+
+  // 2. Unsplash: Magnific 한도 초과 또는 미설정 시 기존 정책 적용
   const unsplashUrl = await tryUnsplashSearch(keywords.join(" "), category);
   if (unsplashUrl) return unsplashUrl;
 
-  // 2. AI 키워드를 활용한 생성형 이미지
-  const prompt = buildPollinationsPrompt(title, keywords.join(", "), category);
+  // 3. Pollinations AI (생성형 폴백)
   const pollinationsUrl = await tryPollinationsAI(prompt);
   if (pollinationsUrl) return pollinationsUrl;
 
-  // 3. 마지막 폴백
+  // 4. 마지막 폴백
   return makePicsumUrl(slug);
 }

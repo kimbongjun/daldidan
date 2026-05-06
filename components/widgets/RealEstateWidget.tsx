@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { ArrowRight, ArrowUp, ArrowDown, Minus, TrendingUp, Home, Wallet, CalendarCheck } from "lucide-react";
 import type { SubscriptionItem } from "@/app/api/realestate/subscriptions/route";
-import type { IllegalResupplyItem } from "@/app/api/realestate/illegal-resupply/route";
 import type { PolicyRate } from "@/app/api/realestate/rates/route";
 import type { TransactionItem, MarketIndex } from "@/app/api/realestate/transactions/route";
 import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
@@ -76,20 +75,9 @@ function resolveSubscriptionRegionCategory(region: string): SubscriptionRegionCa
   return "전체";
 }
 
-function normalizeComplexName(name: string): string {
-  return name
-    .replace(/\([^)]*\)/g, "")
-    .replace(/\[[^\]]*\]/g, "")
-    .replace(/\s+/g, "")
-    .trim()
-    .toLowerCase();
-}
 
 type DisplaySubscriptionItem = SubscriptionItem & {
   dday: number;
-  isIllegalResupply?: boolean;
-  isLinkedResupply?: boolean;
-  transferRestriction?: string;
 };
 
 // ── 유틸 ────────────────────────────────────────────────────────────────────
@@ -103,13 +91,6 @@ function priceFmt(manwon: number): string {
   return `${manwon.toLocaleString()}만원`;
 }
 
-function getDdayNum(dateStr: string): number {
-  const target = new Date(dateStr);
-  target.setHours(0, 0, 0, 0);
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  return Math.ceil((target.getTime() - now.getTime()) / 86400000);
-}
 
 function getDdayLabel(dateStr: string): { label: string; urgent: boolean } {
   const target = new Date(dateStr);
@@ -161,7 +142,6 @@ function SkeletonRow() {
 
 function SubscriptionTab() {
   const [items, setItems] = useState<DisplaySubscriptionItem[]>([]);
-  const [illegalItems, setIllegalItems] = useState<IllegalResupplyItem[]>([]);
   const [isMock, setIsMock] = useState(false);
   const [loading, setLoading] = useState(true);
   const [activeRegion, setActiveRegion] = useState<SubscriptionRegionCategory>("전체");
@@ -176,87 +156,15 @@ function SubscriptionTab() {
     return () => controller.abort();
   }, []);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    fetchWithTimeout("/api/realestate/illegal-resupply", { signal: controller.signal }, 12000)
-      .then((r) => r.json() as Promise<{ items: IllegalResupplyItem[] }>)
-      .then((d) => {
-        setIllegalItems(Array.isArray(d.items) ? d.items : []);
-      })
-      .catch(() => null);
-    return () => controller.abort();
-  }, []);
-
   if (loading) return <div className="flex flex-col gap-2">{[1, 2, 3].map((i) => <SkeletonRow key={i} />)}</div>;
-
-  const findLinkedSubscription = (illegalItem: IllegalResupplyItem): DisplaySubscriptionItem | null => {
-    const byHouseManageNo = items.find((item) => item.houseManageNo && item.houseManageNo === illegalItem.houseManageNo);
-    if (byHouseManageNo) return byHouseManageNo;
-
-    const illegalName = normalizeComplexName(illegalItem.name);
-    if (!illegalName) return null;
-
-    return items.find((item) => {
-      const subscriptionName = normalizeComplexName(item.name);
-      return subscriptionName === illegalName
-        || subscriptionName.includes(illegalName)
-        || illegalName.includes(subscriptionName);
-    }) ?? null;
-  };
-
-  const mappedIllegalItems = illegalItems.map<DisplaySubscriptionItem>((illegalItem) => {
-    const subscription = findLinkedSubscription(illegalItem);
-    const announcementDate = illegalItem.announcementDate || new Date().toISOString().slice(0, 10);
-
-    if (subscription) {
-      return {
-        ...subscription,
-        id: `illegal-${illegalItem.id}`,
-        name: illegalItem.name,
-        region: subscription.region,
-        type: "불법행위 재공급",
-        startDate: announcementDate,
-        endDate: illegalItem.subscriptionEndDate || illegalItem.winnerAnnouncementDate || subscription.endDate,
-        announceDate: illegalItem.winnerAnnouncementDate || subscription.announceDate,
-        detailUrl: subscription.detailUrl || illegalItem.detailUrl,
-        transferRestriction: illegalItem.transferRestriction,
-        isIllegalResupply: true,
-        isLinkedResupply: true,
-      };
-    }
-
-    return {
-      id: `illegal-standalone-${illegalItem.id}`,
-      name: illegalItem.name,
-      region: illegalItem.region || "지역 미확인",
-      houseManageNo: illegalItem.houseManageNo,
-      pblancNo: illegalItem.pblancNo,
-      type: "불법행위 재공급",
-      totalUnits: illegalItem.units || 0,
-      startDate: announcementDate,
-      endDate: illegalItem.subscriptionEndDate || illegalItem.winnerAnnouncementDate || announcementDate,
-      announceDate: illegalItem.winnerAnnouncementDate || "",
-      minPrice: 0,
-      maxPrice: 0,
-      detailUrl: illegalItem.detailUrl,
-      transferRestriction: illegalItem.transferRestriction,
-      isIllegalResupply: true,
-      isLinkedResupply: false,
-      dday: getDdayNum(announcementDate),
-    };
-  });
 
   const availableRegions = SUBSCRIPTION_REGION_ORDER.filter((region) => (
     region === "전체"
-    || [...items, ...mappedIllegalItems].some((item) => resolveSubscriptionRegionCategory(item.region) === region)
+    || items.some((item) => resolveSubscriptionRegionCategory(item.region) === region)
   ));
-  const filteredItems = activeRegion === "전체"
+  const mergedItems = activeRegion === "전체"
     ? items
     : items.filter((item) => resolveSubscriptionRegionCategory(item.region) === activeRegion);
-  const mergedIllegalItems = activeRegion === "전체"
-    ? mappedIllegalItems
-    : mappedIllegalItems.filter((item) => resolveSubscriptionRegionCategory(item.region) === activeRegion);
-  const mergedItems = [...filteredItems, ...mergedIllegalItems];
 
   return (
     <div className="flex flex-col gap-2">
@@ -298,10 +206,6 @@ function SubscriptionTab() {
 
       <div className="flex flex-col gap-2 overflow-y-auto scrollbar-hide" style={{ maxHeight: isMock ? 196 : 220 }}>
         {mergedItems.map((item) => {
-          const isIllegalResupply = "isIllegalResupply" in item && item.isIllegalResupply;
-          const transferRestriction: string = isIllegalResupply && "transferRestriction" in item
-            ? String(item.transferRestriction)
-            : "";
           const { label, urgent } = getDdayLabel(item.startDate);
           return (
             <a key={item.id} href={item.detailUrl} target="_blank" rel="noopener noreferrer"
@@ -309,46 +213,33 @@ function SubscriptionTab() {
               style={{ background: "rgba(255,255,255,0.04)", border: "1px solid transparent" }}>
               {/* D-day 배지 */}
               <div className="w-11 h-11 rounded-xl flex flex-col items-center justify-center shrink-0 text-center"
-                style={{ background: isIllegalResupply ? "rgba(245,92,110,0.14)" : urgent ? `${ACCENT}22` : "rgba(255,255,255,0.06)" }}>
-                <span className="text-[9px] font-semibold uppercase" style={{ color: isIllegalResupply ? "#F05C6E" : urgent ? ACCENT : "var(--text-muted)" }}>
-                  {isIllegalResupply ? "재공급" : "청약"}
+                style={{ background: urgent ? `${ACCENT}22` : "rgba(255,255,255,0.06)" }}>
+                <span className="text-[9px] font-semibold uppercase" style={{ color: urgent ? ACCENT : "var(--text-muted)" }}>
+                  청약
                 </span>
-                <span className="text-xs font-black leading-none" style={{ color: isIllegalResupply ? "#F05C6E" : urgent ? ACCENT : "var(--text-muted)" }}>{label}</span>
+                <span className="text-xs font-black leading-none" style={{ color: urgent ? ACCENT : "var(--text-muted)" }}>{label}</span>
               </div>
               {/* 단지 정보 */}
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-bold truncate" style={{ color: "var(--text-primary)" }}>{item.name}</p>
                 <p className="text-[11px] truncate mt-0.5" style={{ color: "var(--text-muted)" }}>
-                  {isIllegalResupply
-                    ? `${item.region}${item.isLinkedResupply ? " · 청약 연계" : item.totalUnits > 0 ? ` · ${item.totalUnits}세대 재공급` : " · 재공급 청약"}`
-                    : `${item.region} · ${item.totalUnits > 0 ? `${item.totalUnits.toLocaleString()}세대` : "세대수 미정"}`}
+                  {item.region} · {item.totalUnits > 0 ? `${item.totalUnits.toLocaleString()}세대` : "세대수 미정"}
                 </p>
                 <p className="text-[10px] mt-0.5" style={{ color: "var(--text-muted)" }}>
-                  {isIllegalResupply
-                    ? `공고 ${item.startDate} · 발표 ${item.announceDate || item.endDate}`
-                    : `${item.startDate.slice(5)} ~ ${item.endDate.slice(5)}`}
+                  {item.startDate.slice(5)} ~ {item.endDate.slice(5)}
                 </p>
               </div>
               {/* 분양가 + 타입 */}
               <div className="text-right shrink-0">
-                {!isIllegalResupply && item.minPrice > 0 && (
+                {item.minPrice > 0 && (
                   <p className="text-xs font-bold" style={{ color: "var(--text-primary)" }}>
                     {priceFmt(item.minPrice)}~
                   </p>
                 )}
-                {isIllegalResupply && transferRestriction ? (
-                  <p className="max-w-[110px] text-[10px] leading-tight" style={{ color: "var(--text-muted)" }}>
-                    {transferRestriction}
-                  </p>
-                ) : null}
                 <span className="text-[10px] px-1.5 py-0.5 rounded-md"
                   style={{
-                    background: isIllegalResupply
-                      ? "rgba(240,92,110,0.15)"
-                      : item.type === "공공" ? "rgba(16,185,129,0.15)" : `${ACCENT}15`,
-                    color: isIllegalResupply
-                      ? "#F05C6E"
-                      : item.type === "공공" ? "#10B981" : ACCENT,
+                    background: item.type === "공공" ? "rgba(16,185,129,0.15)" : `${ACCENT}15`,
+                    color: item.type === "공공" ? "#10B981" : ACCENT,
                   }}>
                   {item.type}
                 </span>

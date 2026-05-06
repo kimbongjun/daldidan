@@ -15,6 +15,8 @@
 | `NAVER_CLOVA_OCR_INVOKE_URL` | Clova OCR 엔드포인트 | 서버 전용 |
 | `NEXT_PUBLIC_FIREBASE_*` | Firebase FCM | 클라이언트 노출 가능 |
 | `FIREBASE_ADMIN_*` | Firebase Admin | 서버 전용 |
+| `MAGNIFIC_API_KEY` | Magnific AI 이미지 생성 (블로그 썸네일 1순위) | 서버 전용 |
+| `UNSPLASH_ACCESS_KEY` | Unsplash 이미지 (Magnific 한도 초과 시 폴백) | 서버 전용 |
 | `RESEND_API_KEY` | 이메일 발송 | 서버 전용 |
 | `CRON_SECRET` | Vercel Cron 인증 | 서버 전용 |
 
