@@ -88,6 +88,7 @@ function normalizeComplexName(name: string): string {
 type DisplaySubscriptionItem = SubscriptionItem & {
   dday: number;
   isIllegalResupply?: boolean;
+  isLinkedResupply?: boolean;
   transferRestriction?: string;
 };
 
@@ -100,6 +101,14 @@ function priceFmt(manwon: number): string {
     return man > 0 ? `${uk}억 ${man.toLocaleString()}만` : `${uk}억`;
   }
   return `${manwon.toLocaleString()}만원`;
+}
+
+function getDdayNum(dateStr: string): number {
+  const target = new Date(dateStr);
+  target.setHours(0, 0, 0, 0);
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  return Math.ceil((target.getTime() - now.getTime()) / 86400000);
 }
 
 function getDdayLabel(dateStr: string): { label: string; urgent: boolean } {
@@ -195,36 +204,58 @@ function SubscriptionTab() {
     }) ?? null;
   };
 
-  const linkedIllegalItems = illegalItems.reduce<DisplaySubscriptionItem[]>((acc, illegalItem) => {
+  const mappedIllegalItems = illegalItems.map<DisplaySubscriptionItem>((illegalItem) => {
     const subscription = findLinkedSubscription(illegalItem);
-    if (!subscription) return acc;
+    const announcementDate = illegalItem.announcementDate || new Date().toISOString().slice(0, 10);
 
-    acc.push({
-      ...subscription,
-      id: `illegal-${illegalItem.id}`,
+    if (subscription) {
+      return {
+        ...subscription,
+        id: `illegal-${illegalItem.id}`,
+        name: illegalItem.name,
+        region: subscription.region,
+        type: "불법행위 재공급",
+        startDate: announcementDate,
+        endDate: illegalItem.subscriptionEndDate || illegalItem.winnerAnnouncementDate || subscription.endDate,
+        announceDate: illegalItem.winnerAnnouncementDate || subscription.announceDate,
+        detailUrl: subscription.detailUrl || illegalItem.detailUrl,
+        transferRestriction: illegalItem.transferRestriction,
+        isIllegalResupply: true,
+        isLinkedResupply: true,
+      };
+    }
+
+    return {
+      id: `illegal-standalone-${illegalItem.id}`,
       name: illegalItem.name,
-      region: subscription.region,
+      region: illegalItem.region || "지역 미확인",
+      houseManageNo: illegalItem.houseManageNo,
+      pblancNo: illegalItem.pblancNo,
       type: "불법행위 재공급",
-      startDate: illegalItem.announcementDate || subscription.startDate,
-      endDate: illegalItem.winnerAnnouncementDate || illegalItem.announcementDate || subscription.endDate,
-      announceDate: illegalItem.winnerAnnouncementDate || subscription.announceDate,
-      detailUrl: subscription.detailUrl || illegalItem.detailUrl,
+      totalUnits: illegalItem.units || 0,
+      startDate: announcementDate,
+      endDate: illegalItem.subscriptionEndDate || illegalItem.winnerAnnouncementDate || announcementDate,
+      announceDate: illegalItem.winnerAnnouncementDate || "",
+      minPrice: 0,
+      maxPrice: 0,
+      detailUrl: illegalItem.detailUrl,
       transferRestriction: illegalItem.transferRestriction,
       isIllegalResupply: true,
-    });
-    return acc;
-  }, []);
+      isLinkedResupply: false,
+      dday: getDdayNum(announcementDate),
+    };
+  });
 
   const availableRegions = SUBSCRIPTION_REGION_ORDER.filter((region) => (
     region === "전체"
-    || [...items, ...linkedIllegalItems].some((item) => resolveSubscriptionRegionCategory(item.region) === region)
+    || [...items, ...mappedIllegalItems].some((item) => resolveSubscriptionRegionCategory(item.region) === region)
   ));
   const filteredItems = activeRegion === "전체"
     ? items
     : items.filter((item) => resolveSubscriptionRegionCategory(item.region) === activeRegion);
   const mergedIllegalItems = activeRegion === "전체"
-    ? linkedIllegalItems
-    : linkedIllegalItems.filter((item) => resolveSubscriptionRegionCategory(item.region) === activeRegion);
+    ? mappedIllegalItems
+    : mappedIllegalItems.filter((item) => resolveSubscriptionRegionCategory(item.region) === activeRegion);
   const mergedItems = [...filteredItems, ...mergedIllegalItems];
 
   return (
@@ -289,7 +320,7 @@ function SubscriptionTab() {
                 <p className="text-xs font-bold truncate" style={{ color: "var(--text-primary)" }}>{item.name}</p>
                 <p className="text-[11px] truncate mt-0.5" style={{ color: "var(--text-muted)" }}>
                   {isIllegalResupply
-                    ? `${item.region} · 청약 매물 연계`
+                    ? `${item.region}${item.isLinkedResupply ? " · 청약 연계" : item.totalUnits > 0 ? ` · ${item.totalUnits}세대 재공급` : " · 재공급 청약"}`
                     : `${item.region} · ${item.totalUnits > 0 ? `${item.totalUnits.toLocaleString()}세대` : "세대수 미정"}`}
                 </p>
                 <p className="text-[10px] mt-0.5" style={{ color: "var(--text-muted)" }}>
