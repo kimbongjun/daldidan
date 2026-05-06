@@ -76,6 +76,21 @@ function resolveSubscriptionRegionCategory(region: string): SubscriptionRegionCa
   return "전체";
 }
 
+function normalizeComplexName(name: string): string {
+  return name
+    .replace(/\([^)]*\)/g, "")
+    .replace(/\[[^\]]*\]/g, "")
+    .replace(/\s+/g, "")
+    .trim()
+    .toLowerCase();
+}
+
+type DisplaySubscriptionItem = SubscriptionItem & {
+  dday: number;
+  isIllegalResupply?: boolean;
+  transferRestriction?: string;
+};
+
 // ── 유틸 ────────────────────────────────────────────────────────────────────
 
 function priceFmt(manwon: number): string {
@@ -136,7 +151,7 @@ function SkeletonRow() {
 // ── 청약 탭 ──────────────────────────────────────────────────────────────────
 
 function SubscriptionTab() {
-  const [items, setItems] = useState<(SubscriptionItem & { dday: number })[]>([]);
+  const [items, setItems] = useState<DisplaySubscriptionItem[]>([]);
   const [illegalItems, setIllegalItems] = useState<IllegalResupplyItem[]>([]);
   const [isMock, setIsMock] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -165,30 +180,51 @@ function SubscriptionTab() {
 
   if (loading) return <div className="flex flex-col gap-2">{[1, 2, 3].map((i) => <SkeletonRow key={i} />)}</div>;
 
+  const findLinkedSubscription = (illegalItem: IllegalResupplyItem): DisplaySubscriptionItem | null => {
+    const byHouseManageNo = items.find((item) => item.houseManageNo && item.houseManageNo === illegalItem.houseManageNo);
+    if (byHouseManageNo) return byHouseManageNo;
+
+    const illegalName = normalizeComplexName(illegalItem.name);
+    if (!illegalName) return null;
+
+    return items.find((item) => {
+      const subscriptionName = normalizeComplexName(item.name);
+      return subscriptionName === illegalName
+        || subscriptionName.includes(illegalName)
+        || illegalName.includes(subscriptionName);
+    }) ?? null;
+  };
+
+  const linkedIllegalItems = illegalItems.reduce<DisplaySubscriptionItem[]>((acc, illegalItem) => {
+    const subscription = findLinkedSubscription(illegalItem);
+    if (!subscription) return acc;
+
+    acc.push({
+      ...subscription,
+      id: `illegal-${illegalItem.id}`,
+      name: illegalItem.name,
+      region: subscription.region,
+      type: "불법행위 재공급",
+      startDate: illegalItem.announcementDate || subscription.startDate,
+      endDate: illegalItem.winnerAnnouncementDate || illegalItem.announcementDate || subscription.endDate,
+      announceDate: illegalItem.winnerAnnouncementDate || subscription.announceDate,
+      detailUrl: subscription.detailUrl || illegalItem.detailUrl,
+      transferRestriction: illegalItem.transferRestriction,
+      isIllegalResupply: true,
+    });
+    return acc;
+  }, []);
+
   const availableRegions = SUBSCRIPTION_REGION_ORDER.filter((region) => (
-    region === "전체" || items.some((item) => resolveSubscriptionRegionCategory(item.region) === region)
+    region === "전체"
+    || [...items, ...linkedIllegalItems].some((item) => resolveSubscriptionRegionCategory(item.region) === region)
   ));
   const filteredItems = activeRegion === "전체"
     ? items
     : items.filter((item) => resolveSubscriptionRegionCategory(item.region) === activeRegion);
   const mergedIllegalItems = activeRegion === "전체"
-    ? illegalItems.map((item) => ({
-        id: `illegal-${item.id}`,
-        name: item.name,
-        region: "불법행위 재공급",
-        type: "불법행위 재공급",
-        totalUnits: 0,
-        startDate: item.announcementDate || item.winnerAnnouncementDate || new Date().toISOString().slice(0, 10),
-        endDate: item.winnerAnnouncementDate || item.announcementDate || new Date().toISOString().slice(0, 10),
-        announceDate: item.winnerAnnouncementDate || "",
-        minPrice: 0,
-        maxPrice: 0,
-        detailUrl: item.detailUrl,
-        dday: 0,
-        transferRestriction: item.transferRestriction,
-        isIllegalResupply: true,
-      }))
-    : [];
+    ? linkedIllegalItems
+    : linkedIllegalItems.filter((item) => resolveSubscriptionRegionCategory(item.region) === activeRegion);
   const mergedItems = [...filteredItems, ...mergedIllegalItems];
 
   return (
@@ -253,7 +289,7 @@ function SubscriptionTab() {
                 <p className="text-xs font-bold truncate" style={{ color: "var(--text-primary)" }}>{item.name}</p>
                 <p className="text-[11px] truncate mt-0.5" style={{ color: "var(--text-muted)" }}>
                   {isIllegalResupply
-                    ? "불법행위 재공급 참고 매물"
+                    ? `${item.region} · 청약 매물 연계`
                     : `${item.region} · ${item.totalUnits > 0 ? `${item.totalUnits.toLocaleString()}세대` : "세대수 미정"}`}
                 </p>
                 <p className="text-[10px] mt-0.5" style={{ color: "var(--text-muted)" }}>

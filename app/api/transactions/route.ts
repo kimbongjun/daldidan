@@ -40,6 +40,7 @@ export async function GET(request: NextRequest) {
   let query = admin
     .from("transactions")
     .select("id, user_id, type, category, buyer, merchant_name, location, receipt_image_url, amount, note, date")
+    .eq("type", "expense")
     .order("date", { ascending: false })
     .order("created_at", { ascending: false });
 
@@ -78,7 +79,7 @@ export async function POST(request: NextRequest) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await request.json() as {
-    type: "income" | "expense";
+    type?: "expense";
     category: string;
     buyer?: string;
     merchantName?: string;
@@ -92,8 +93,8 @@ export async function POST(request: NextRequest) {
   if (!body.amount || body.amount <= 0) {
     return NextResponse.json({ error: "금액은 0보다 커야 합니다." }, { status: 400 });
   }
-  if (!["income", "expense"].includes(body.type)) {
-    return NextResponse.json({ error: "거래 유형이 올바르지 않습니다." }, { status: 400 });
+  if (body.type && body.type !== "expense") {
+    return NextResponse.json({ error: "가계부에는 지출만 기록할 수 있습니다." }, { status: 400 });
   }
   if (body.date && isNaN(new Date(body.date).getTime())) {
     return NextResponse.json({ error: "날짜 형식이 올바르지 않습니다." }, { status: 400 });
@@ -103,7 +104,7 @@ export async function POST(request: NextRequest) {
     .from("transactions")
     .insert({
       user_id: user.id,
-      type: body.type,
+      type: "expense",
       category: body.category,
       buyer: body.buyer ?? "공동",
       merchant_name: body.merchantName ?? "",

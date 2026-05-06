@@ -17,12 +17,15 @@ export async function PATCH(
   if (body.amount !== undefined && (typeof body.amount !== "number" || body.amount <= 0)) {
     return NextResponse.json({ error: "금액은 0보다 커야 합니다." }, { status: 400 });
   }
+  if (body.type !== undefined && body.type !== "expense") {
+    return NextResponse.json({ error: "가계부에는 지출만 기록할 수 있습니다." }, { status: 400 });
+  }
   if (body.date !== undefined && typeof body.date === "string" && isNaN(new Date(body.date).getTime())) {
     return NextResponse.json({ error: "날짜 형식이 올바르지 않습니다." }, { status: 400 });
   }
 
   const patch = {
-    ...(body.type !== undefined ? { type: body.type } : {}),
+    type: "expense",
     ...(body.category !== undefined ? { category: body.category } : {}),
     ...(body.buyer !== undefined ? { buyer: body.buyer } : {}),
     ...(body.merchantName !== undefined ? { merchant_name: body.merchantName } : {}),

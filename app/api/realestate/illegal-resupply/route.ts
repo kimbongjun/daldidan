@@ -4,6 +4,7 @@ export interface IllegalResupplyItem {
   id: string;
   name: string;
   houseManageNo: string;
+  pblancNo: string;
   announcementDate: string;
   winnerAnnouncementDate: string;
   transferRestriction: string;
@@ -41,11 +42,12 @@ async function fetchIllegalResupplyItems(): Promise<IllegalResupplyItem[]> {
   const items: IllegalResupplyItem[] = [];
   let match: RegExpExecArray | null;
 
-  while ((match = rowRegex.exec(html)) !== null && items.length < 6) {
+  while ((match = rowRegex.exec(html)) !== null && items.length < 30) {
     const attrs = match[1] ?? "";
     const block = match[2] ?? "";
     const name = stripTags(block.match(/<div class="aptName">[\s\S]*?<a[^>]*>([\s\S]*?)<\/a>/)?.[1] ?? "");
     const houseManageNo = attrs.match(/data-hmno="([^"]+)"/)?.[1] ?? "";
+    const pblancNo = attrs.match(/data-pbno="([^"]+)"/)?.[1] ?? "";
     const rows = [...block.matchAll(/<tr>\s*<td>(.*?)<\/td>\s*<td>([\s\S]*?)<\/td>\s*<\/tr>/g)];
     const rowMap = new Map(rows.map(([, key, value]) => [stripTags(key), stripTags(value)]));
 
@@ -55,6 +57,7 @@ async function fetchIllegalResupplyItems(): Promise<IllegalResupplyItem[]> {
       id: houseManageNo,
       name,
       houseManageNo,
+      pblancNo,
       announcementDate: normalizeDate(rowMap.get("공고일") ?? ""),
       winnerAnnouncementDate: normalizeDate(rowMap.get("당첨자 발표일") ?? ""),
       transferRestriction: rowMap.get("전매제한") ?? "정보 없음",

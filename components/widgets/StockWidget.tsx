@@ -65,7 +65,8 @@ import {
 import { getKrxMarketWindow } from "@/lib/stocks/cache-policy";
 
 const ACCENT = "#F05C6E";
-const DOWN = "#10B981";
+const RISE = "var(--stock-rise)";
+const FALL = "var(--stock-fall)";
 const STORAGE_KEY = "daldidan-stock-watchlist";
 const PORTFOLIO_STORAGE_KEY = "daldidan-stock-portfolio";
 const RESPONSE_STORAGE_PREFIX = "daldidan-stock-response";
@@ -154,8 +155,8 @@ function getRangePosition(quote: StockQuote): { low: number; high: number; pct: 
 }
 
 function changeColor(value: number): string {
-  if (value > 0) return ACCENT;
-  if (value < 0) return DOWN;
+  if (value > 0) return RISE;
+  if (value < 0) return FALL;
   return "var(--text-muted)";
 }
 
@@ -535,7 +536,7 @@ function ThemeStrip({
     <div className="flex flex-col gap-2">
       <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-0.5">
         {themes.map((theme) => {
-          const color = theme.tone === "hot" ? ACCENT : theme.tone === "cool" ? DOWN : "var(--text-muted)";
+          const color = theme.tone === "hot" ? RISE : theme.tone === "cool" ? FALL : "var(--text-muted)";
           const active = expandedTheme === theme.label;
           return (
             <button

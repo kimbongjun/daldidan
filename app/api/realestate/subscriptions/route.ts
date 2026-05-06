@@ -4,6 +4,8 @@ export interface SubscriptionItem {
   id: string;
   name: string;          // 단지명
   region: string;        // 지역 (시/구)
+  houseManageNo?: string;
+  pblancNo?: string;
   type: string;          // "민영" | "공공"
   totalUnits: number;    // 총 공급 세대수
   startDate: string;     // 청약 시작일 (YYYY-MM-DD)
@@ -175,6 +177,8 @@ async function fetchSubscriptionsFromHtml(): Promise<SubscriptionItem[]> {
       id: `sub-live-${rowIndex}`,
       name,
       region,
+      houseManageNo: hmno,
+      pblancNo: pbno,
       type,
       totalUnits: 0,
       startDate,

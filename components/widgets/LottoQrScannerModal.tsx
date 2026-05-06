@@ -5,7 +5,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Camera, ImagePlus, Link as LinkIcon, LoaderCircle, ScanLine, TriangleAlert, X } from "lucide-react";
 import type { LottoQrResponse } from "@/app/api/lotto/qr/route";
-import type { Html5Qrcode } from "html5-qrcode";
+import type { Html5Qrcode, Html5QrcodeCameraScanConfig } from "html5-qrcode";
 
 const ACCENT = "#F59E0B";
 
@@ -27,6 +27,37 @@ function getBallColor(n: number): string {
   if (n <= 30) return "#EAB308";
   if (n <= 40) return "#22C55E";
   return "#3B82F6";
+}
+
+function readErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "string" && error.trim()) return error;
+  return fallback;
+}
+
+function createQrBox(viewfinderWidth: number, viewfinderHeight: number) {
+  const safeWidth = Math.max(viewfinderWidth - 24, 160);
+  const safeHeight = Math.max(viewfinderHeight - 24, 160);
+  const size = Math.min(320, Math.max(190, Math.floor(Math.min(safeWidth, safeHeight) * 0.76)));
+  return { width: Math.min(size, safeWidth), height: Math.min(size, safeHeight) };
+}
+
+function createVideoConstraints(deviceId?: string): MediaTrackConstraints {
+  return {
+    ...(deviceId ? { deviceId: { exact: deviceId } } : { facingMode: { ideal: "environment" } }),
+    width: { ideal: 1280 },
+    height: { ideal: 720 },
+    frameRate: { ideal: 30, max: 30 },
+  };
+}
+
+function createScanConfig(videoConstraints?: MediaTrackConstraints): Html5QrcodeCameraScanConfig {
+  return {
+    fps: 24,
+    qrbox: createQrBox,
+    disableFlip: true,
+    ...(videoConstraints ? { videoConstraints } : {}),
+  };
 }
 
 function LottoBall({ n, dimmed = false }: { n: number; dimmed?: boolean }) {
@@ -165,7 +196,7 @@ export default function LottoQrScannerModal({ open, onClose }: Props) {
       setStatus("success");
     } catch (e) {
       if (!mountedRef.current) return;
-      setError(e instanceof Error ? e.message : "QR 결과 조회에 실패했습니다.");
+      setError(readErrorMessage(e, "QR 결과 조회에 실패했습니다."));
       setStatus("error");
       lastScanRef.current = null;
     }
@@ -178,6 +209,20 @@ export default function LottoQrScannerModal({ open, onClose }: Props) {
     return qrLibraryRef.current;
   };
 
+  const openCapturePicker = () => {
+    const input = captureInputRef.current;
+    if (!input) return;
+    try {
+      if (typeof input.showPicker === "function") {
+        input.showPicker();
+        return;
+      }
+    } catch {
+      // iOS Safari 등 일부 브라우저는 showPicker 대신 click만 허용한다.
+    }
+    input.click();
+  };
+
   const pickPreferredCamera = (cameras: CameraDevice[]): CameraDevice | null => {
     if (cameras.length === 0) return null;
 
@@ -185,6 +230,22 @@ export default function LottoQrScannerModal({ open, onClose }: Props) {
     if (rearCamera) return rearCamera;
 
     return cameras[cameras.length - 1] ?? null;
+  };
+
+  const applyFastCameraConstraints = async (scanner: Html5Qrcode) => {
+    try {
+      const capabilities = scanner.getRunningTrackCapabilities() as Record<string, unknown>;
+      const advanced: Record<string, unknown>[] = [];
+      const focusModes = capabilities.focusMode;
+      if (Array.isArray(focusModes) && focusModes.includes("continuous")) {
+        advanced.push({ focusMode: "continuous" });
+      }
+      if (advanced.length > 0) {
+        await scanner.applyVideoConstraints({ advanced: advanced as MediaTrackConstraintSet[] });
+      }
+    } catch {
+      // 일부 모바일 브라우저는 focusMode/capabilities를 노출하지 않는다.
+    }
   };
 
   const startScanner = async () => {
@@ -201,6 +262,11 @@ export default function LottoQrScannerModal({ open, onClose }: Props) {
     try {
       await stopScanner();
       const { Html5Qrcode, Html5QrcodeSupportedFormats } = await loadQrLibrary();
+      await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+      if (!document.getElementById(scannerRegionId)) {
+        throw new Error("스캐너 영역이 아직 준비되지 않았습니다. 다시 시도해 주세요.");
+      }
+
       const scanner = new Html5Qrcode(
         scannerRegionId,
         {
@@ -211,15 +277,10 @@ export default function LottoQrScannerModal({ open, onClose }: Props) {
       );
       html5QrCodeRef.current = scanner;
 
-      const startWith = async (cameraConfig: string | MediaTrackConstraints) => {
+      const startWith = async (cameraConfig: string | MediaTrackConstraints, videoConstraints?: MediaTrackConstraints) => {
         await scanner.start(
           cameraConfig,
-          {
-            fps: 18,
-            qrbox: { width: 260, height: 260 },
-            aspectRatio: 1,
-            disableFlip: true,
-          },
+          createScanConfig(videoConstraints),
           (decodedText) => {
             const rawValue = decodedText.trim();
             if (
@@ -229,23 +290,33 @@ export default function LottoQrScannerModal({ open, onClose }: Props) {
               statusRef.current === "success"
             ) return;
             lastScanRef.current = rawValue;
-            void submitQr(rawValue);
+            void (async () => {
+              await stopScanner();
+              await submitQr(rawValue);
+            })();
           },
           () => {
             // 검출 실패는 정상 플로우라 무시한다.
           },
         );
+        await applyFastCameraConstraints(scanner);
       };
 
+      let startError: unknown = null;
       try {
-        await startWith({ facingMode: { ideal: "environment" } });
-      } catch {
+        await startWith({ facingMode: "environment" }, createVideoConstraints());
+      } catch (error) {
+        startError = error;
         const cameras = await Html5Qrcode.getCameras() as CameraDevice[];
         const preferredCamera = pickPreferredCamera(cameras);
         if (!preferredCamera?.id) {
-          throw new Error("사용 가능한 카메라를 찾지 못했습니다.");
+          throw startError ?? new Error("사용 가능한 카메라를 찾지 못했습니다.");
         }
-        await startWith(preferredCamera.id);
+        try {
+          await startWith(preferredCamera.id, createVideoConstraints(preferredCamera.id));
+        } catch {
+          await startWith(preferredCamera.id);
+        }
       }
 
       if (!mountedRef.current) return;
@@ -253,7 +324,7 @@ export default function LottoQrScannerModal({ open, onClose }: Props) {
     } catch (e) {
       await stopScanner();
       setStatus("error");
-      setError(e instanceof Error ? e.message : "카메라를 시작하지 못했습니다. 사진 업로드나 QR 주소 입력을 사용해 주세요.");
+      setError(readErrorMessage(e, "카메라를 시작하지 못했습니다. 사진 업로드나 QR 주소 입력을 사용해 주세요."));
     }
   };
 
@@ -293,7 +364,7 @@ export default function LottoQrScannerModal({ open, onClose }: Props) {
     } catch (e) {
       await stopScanner();
       setStatus("error");
-      setError(e instanceof Error ? e.message : "촬영 이미지에서 QR을 읽지 못했습니다.");
+      setError(readErrorMessage(e, "촬영 이미지에서 QR을 읽지 못했습니다."));
     }
   };
 
@@ -480,13 +551,13 @@ export default function LottoQrScannerModal({ open, onClose }: Props) {
             </button>
             <button
               type="button"
-              onClick={() => captureInputRef.current?.click()}
+              onClick={openCapturePicker}
               disabled={status === "submitting"}
               className="flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold transition-opacity hover:opacity-85 disabled:opacity-50"
               style={{ background: "rgba(255,255,255,0.04)", color: "var(--text-primary)", border: "1px solid var(--border)" }}
             >
               <ImagePlus size={15} />
-              사진 업로드로 QR 확인
+              카메라 촬영/사진으로 QR 확인
             </button>
 
             <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>

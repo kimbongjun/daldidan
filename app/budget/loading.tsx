@@ -27,18 +27,13 @@ export default function BudgetLoading() {
         `}</style>
         <div className="budget-sk-grid" style={{ display: "grid", gap: "1.5rem" }}>
 
-          {/* 왼쪽: 입력 폼 + 거래 목록 */}
+          {/* 왼쪽: 입력 폼 + 지출 목록 */}
           <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
 
             {/* 입력 폼 카드 */}
             <div className="bento-card" style={{ padding: "1.25rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
               {/* 폼 제목 */}
               <SkeletonBlock width={80} height={14} radius={6} />
-              {/* 수입/지출 토글 */}
-              <div style={{ display: "flex", gap: "0.5rem" }}>
-                <SkeletonBlock height={38} radius={8} style={{ flex: 1 }} />
-                <SkeletonBlock height={38} radius={8} style={{ flex: 1 }} />
-              </div>
               {/* OCR 업로더 */}
               <SkeletonBlock height={48} radius={10} />
               {/* 카테고리 + 구매자 */}
@@ -83,7 +78,7 @@ export default function BudgetLoading() {
               <SkeletonBlock height={44} radius={10} />
             </div>
 
-            {/* 거래 내역 목록 카드 */}
+            {/* 지출 내역 목록 카드 */}
             <div className="bento-card" style={{ padding: "1.25rem" }}>
               <SkeletonBlock width={80} height={14} radius={6} style={{ marginBottom: "0.75rem" }} />
               <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
@@ -119,7 +114,7 @@ export default function BudgetLoading() {
               <SkeletonBlock width={80} height={14} radius={6} style={{ marginBottom: "0.75rem" }} />
               <SkeletonBlock width={130} height={32} radius={8} style={{ marginBottom: "0.75rem" }} />
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
-                {["수입", "지출"].map((_, i) => (
+                {["총지출", "건평균"].map((_, i) => (
                   <div key={i}>
                     <SkeletonBlock width={36} height={12} radius={6} />
                     <SkeletonBlock width={80} height={20} radius={6} style={{ marginTop: 4 }} />

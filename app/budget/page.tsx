@@ -8,7 +8,7 @@ import { analyzeReceiptImage } from "@/lib/receipt-ocr";
 import {
   ArrowLeft, ArrowRight, CheckCircle2, ChevronDown, ChevronUp,
   ImagePlus, LoaderCircle, MapPin, Pencil, ReceiptText, Store, Trash2, TrendingDown,
-  TrendingUp, User, Users, Wallet, X, XCircle,
+  User, Users, X, XCircle,
 } from "lucide-react";
 import OcrScanModal from "@/components/OcrScanModal";
 import { preprocessReceiptImage } from "@/lib/image-preprocess";
@@ -17,7 +17,7 @@ import AiSummarySubtitle from "@/components/AiSummarySubtitle";
 const ACCENT = "#6366F1";
 const TRANSACTIONS_PER_PAGE = 10;
 
-const CATEGORIES = ["식비", "교통", "쇼핑", "문화", "의료", "통신", "공과금", "구독비", "대출", "급여", "기타"];
+const CATEGORIES = ["식비", "교통", "쇼핑", "문화", "의료", "통신", "공과금", "구독비", "대출", "기타"];
 
 const CATEGORY_COLORS: Record<string, string> = {
   식비: "#F59E0B",
@@ -29,7 +29,6 @@ const CATEGORY_COLORS: Record<string, string> = {
   공과금: "#EC4899",
   구독비: "#14B8A6",
   대출: "#EF4444",
-  급여: "#10B981",
   기타: "#8B8BA7",
 };
 
@@ -50,7 +49,7 @@ interface Transaction {
   id: string;
   userId: string;
   authorName: string;
-  type: "income" | "expense";
+  type: "expense";
   category: string;
   buyer: string;
   merchantName: string;
@@ -64,7 +63,7 @@ interface Transaction {
 interface TransactionApiResponse {
   id: string;
   user_id: string;
-  type: "income" | "expense";
+  type: "expense";
   category: string;
   buyer?: string;
   merchant_name?: string;
@@ -81,7 +80,7 @@ function normalizeTransaction(t: TransactionApiResponse): Transaction {
     id: t.id,
     userId: t.user_id,
     authorName: t.author_display ?? "사용자",
-    type: t.type,
+    type: "expense",
     category: t.category,
     buyer: t.buyer ?? "공동",
     merchantName: t.merchant_name ?? "",
@@ -227,7 +226,7 @@ export default function BudgetPage() {
     if (!matched) return;
     setEditingId(matched.id);
     setForm({
-      type: matched.type,
+      type: "expense",
       category: matched.category,
       buyer: matched.buyer,
       merchantName: matched.merchantName,
@@ -239,10 +238,20 @@ export default function BudgetPage() {
     });
   }, [transactions]);
 
-  const income = useMemo(() => transactions.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0), [transactions]);
-  const expense = useMemo(() => transactions.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0), [transactions]);
-  const balance = income - expense;
-  const savingsRate = income > 0 ? Math.round(((income - expense) / income) * 100) : 0;
+  const expense = useMemo(() => transactions.reduce((s, t) => s + t.amount, 0), [transactions]);
+  const averageExpense = transactions.length > 0 ? Math.round(expense / transactions.length) : 0;
+  const topExpenseCategory = useMemo(() => {
+    const map: Record<string, number> = {};
+    transactions.forEach((t) => {
+      map[t.category] = (map[t.category] ?? 0) + t.amount;
+    });
+    const [category = "-", amount = 0] = Object.entries(map).sort((a, b) => b[1] - a[1])[0] ?? [];
+    return {
+      category,
+      amount,
+      share: expense > 0 ? Math.round((amount / expense) * 100) : 0,
+    };
+  }, [expense, transactions]);
   const totalPages = Math.max(1, Math.ceil(transactions.length / TRANSACTIONS_PER_PAGE));
   const paginatedTransactions = useMemo(() => {
     const start = (currentPage - 1) * TRANSACTIONS_PER_PAGE;
@@ -273,7 +282,7 @@ export default function BudgetPage() {
         const res = await fetch(`/api/transactions/${editingId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(form),
+          body: JSON.stringify({ ...form, type: "expense" }),
         });
         if (!res.ok) {
           const d = await res.json() as { error?: string };
@@ -286,7 +295,7 @@ export default function BudgetPage() {
         const res = await fetch("/api/transactions", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(form),
+          body: JSON.stringify({ ...form, type: "expense" }),
         });
         if (!res.ok) {
           const d = await res.json() as { error?: string };
@@ -320,7 +329,7 @@ export default function BudgetPage() {
   const startEdit = (tx: Transaction) => {
     setEditingId(tx.id);
     setForm({
-      type: tx.type, category: tx.category, buyer: tx.buyer,
+      type: "expense", category: tx.category, buyer: tx.buyer,
       merchantName: tx.merchantName, location: tx.location,
       receiptImageUrl: tx.receiptImageUrl, amount: tx.amount,
       note: tx.note, date: tx.date,
@@ -441,8 +450,8 @@ export default function BudgetPage() {
           subtitle={
             <AiSummarySubtitle
               target="budget"
-              items={transactions.map((t) => `${t.type === "income" ? "수입" : "지출"} ${t.category} ${t.merchantName || t.note} ${t.amount.toLocaleString()}원`)}
-              fallback="내역 입력 및 소비 분석"
+              items={transactions.map((t) => `지출 ${t.category} ${t.merchantName || t.note} ${t.amount.toLocaleString()}원`)}
+              fallback="지출 입력 및 소비 분석"
               accentColor={ACCENT}
             />
           }
@@ -482,7 +491,7 @@ export default function BudgetPage() {
             <div className="bento-card p-5 flex flex-col gap-4">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
-                  {editingId ? "내역 수정" : "거래 추가"}
+                  {editingId ? "지출 수정" : "지출 추가"}
                 </p>
                 {editingId && (
                   <button onClick={resetForm} className="text-xs font-semibold hover:opacity-70 transition-opacity"
@@ -490,22 +499,6 @@ export default function BudgetPage() {
                     취소
                   </button>
                 )}
-              </div>
-
-              {/* 수입/지출 토글 */}
-              <div className="flex gap-2">
-                {(["expense", "income"] as const).map((type) => (
-                  <button key={type} onClick={() => setForm((f) => ({ ...f, type }))}
-                    className="flex-1 py-2 rounded-lg text-sm font-semibold transition-colors"
-                    style={{
-                      background: form.type === type ? ACCENT : "transparent",
-                      color: form.type === type ? "#fff" : "var(--text-muted)",
-                      border: "1px solid",
-                      borderColor: form.type === type ? ACCENT : "var(--border)",
-                    }}>
-                    {type === "expense" ? "지출" : "수입"}
-                  </button>
-                ))}
               </div>
 
               {/* 영수증 OCR */}
@@ -602,14 +595,14 @@ export default function BudgetPage() {
               >
                 {saveStatus === "saving" && <LoaderCircle size={14} className="animate-spin" />}
                 {saveStatus === "success" && <CheckCircle2 size={14} />}
-                {saveStatus === "saving" ? "저장 중..." : saveStatus === "success" ? "저장됨!" : (editingId ? "수정 저장" : "거래 추가")}
+                {saveStatus === "saving" ? "저장 중..." : saveStatus === "success" ? "저장됨!" : (editingId ? "수정 저장" : "지출 추가")}
               </button>
             </div>
 
             {/* 거래 내역 목록 */}
             <div className="bento-card p-4 flex flex-col gap-2">
               <p className="text-sm font-bold mb-1" style={{ color: "var(--text-primary)" }}>
-                {displayMonth} 내역 <span className="font-normal text-xs" style={{ color: "var(--text-muted)" }}>({transactions.length}건)</span>
+                {displayMonth} 지출 내역 <span className="font-normal text-xs" style={{ color: "var(--text-muted)" }}>({transactions.length}건)</span>
               </p>
 
               {loading ? (
@@ -618,7 +611,7 @@ export default function BudgetPage() {
                 </div>
               ) : transactions.length === 0 ? (
                 <p className="text-sm text-center py-8" style={{ color: "var(--text-muted)" }}>
-                  아직 거래 내역이 없습니다.<br />위 폼에서 첫 거래를 추가해 보세요.
+                  아직 지출 내역이 없습니다.<br />위 폼에서 첫 지출을 추가해 보세요.
                 </p>
               ) : (
                 <>
@@ -653,9 +646,9 @@ export default function BudgetPage() {
               <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{displayMonth} 요약</p>
               <div className="flex flex-col gap-3">
                 {[
-                  { label: "잔액", value: balance, color: balance >= 0 ? "#10B981" : "#F43F5E", icon: <Wallet size={15} /> },
-                  { label: "총 수입", value: income, color: "#10B981", icon: <TrendingUp size={15} /> },
                   { label: "총 지출", value: expense, color: "#F43F5E", icon: <TrendingDown size={15} /> },
+                  { label: "건당 평균", value: averageExpense, color: ACCENT, icon: <ReceiptText size={15} /> },
+                  { label: "지출 건수", value: transactions.length, color: "var(--text-muted)", icon: <ReceiptText size={15} />, raw: true },
                 ].map((item) => (
                   <div key={item.label} className="flex items-center justify-between rounded-xl px-3 py-2.5"
                     style={{ background: "rgba(255,255,255,0.03)", border: "1px solid var(--border)" }}>
@@ -665,36 +658,38 @@ export default function BudgetPage() {
                     </div>
                     <div className="text-right">
                       <p className="text-sm font-black" style={{ color: item.color }}>
-                        {(Math.abs(item.value) / 10000).toFixed(1)}만원
+                        {item.raw ? `${item.value}건` : `${(Math.abs(item.value) / 10000).toFixed(1)}만원`}
                       </p>
-                      <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                        {item.value.toLocaleString()}원
-                      </p>
+                      {!item.raw && (
+                        <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                          {item.value.toLocaleString()}원
+                        </p>
+                      )}
                     </div>
                   </div>
                 ))}
               </div>
 
-              {/* 저축률 */}
-              {income > 0 && (
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>저축률</span>
-                    <span className="text-sm font-black"
-                      style={{ color: balance >= 0 ? "#10B981" : "#F43F5E" }}>
-                      {savingsRate}%
-                    </span>
-                  </div>
-                  <div style={{ height: 6, borderRadius: 999, background: "var(--border)", overflow: "hidden" }}>
-                    <div style={{
-                      width: `${Math.min(Math.max(savingsRate, 0), 100)}%`,
-                      height: "100%", borderRadius: 999,
-                      background: balance >= 0 ? "#10B981" : "#F43F5E",
-                      transition: "width 0.6s ease",
-                    }} />
-                  </div>
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>최다 지출 카테고리</span>
+                  <span className="text-sm font-black" style={{ color: ACCENT }}>
+                    {topExpenseCategory.share}%
+                  </span>
                 </div>
-              )}
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <span className="text-xs font-bold truncate" style={{ color: "var(--text-primary)" }}>{topExpenseCategory.category}</span>
+                  <span className="text-xs tabular-nums" style={{ color: "var(--text-muted)" }}>{topExpenseCategory.amount.toLocaleString()}원</span>
+                </div>
+                <div style={{ height: 6, borderRadius: 999, background: "var(--border)", overflow: "hidden" }}>
+                  <div style={{
+                    width: `${Math.min(Math.max(topExpenseCategory.share, 0), 100)}%`,
+                    height: "100%", borderRadius: 999,
+                    background: ACCENT,
+                    transition: "width 0.6s ease",
+                  }} />
+                </div>
+              </div>
             </div>
 
             {/* 구매자별 지출 */}
@@ -895,10 +890,10 @@ function TransactionRow({
         </div>
       </div>
       <span
-        className={`text-sm font-bold shrink-0 text-right ${tx.type === "income" ? "text-emerald-400" : "text-rose-400"}`}
+        className="text-sm font-bold shrink-0 text-right text-rose-400"
         style={{ maxWidth: "7rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
       >
-        {tx.type === "income" ? "+" : "-"}{tx.amount.toLocaleString()}원
+        -{tx.amount.toLocaleString()}원
       </span>
       {onViewReceipt && (
         <button
@@ -1150,26 +1145,23 @@ function BudgetLimitsPanel({
 // ── 차트들 ──────────────────────────────────────────────────────
 function DailyBarChart({ transactions }: { transactions: Transaction[] }) {
   const days = useMemo(() => {
-    const map: Record<string, { income: number; expense: number }> = {};
+    const map: Record<string, number> = {};
     transactions.forEach((t) => {
-      if (!map[t.date]) map[t.date] = { income: 0, expense: 0 };
-      map[t.date][t.type] += t.amount;
+      map[t.date] = (map[t.date] ?? 0) + t.amount;
     });
     return Object.entries(map).sort((a, b) => a[0].localeCompare(b[0])).slice(-10);
   }, [transactions]);
-  const maxValue = Math.max(...days.flatMap(([, v]) => [v.income, v.expense]), 1);
+  const maxValue = Math.max(...days.map(([, amount]) => amount), 1);
 
   return (
     <div>
-      <p className="text-xs font-semibold mb-3" style={{ color: "var(--text-muted)" }}>일별 수입/지출 (최근 10일)</p>
+      <p className="text-xs font-semibold mb-3" style={{ color: "var(--text-muted)" }}>일별 지출 (최근 10일)</p>
       <div className="flex items-end gap-2 h-32">
-        {days.map(([date, v]) => (
+        {days.map(([date, amount]) => (
           <div key={date} className="flex-1 flex flex-col items-center gap-1">
-            <div className="w-full flex items-end justify-center gap-0.5" style={{ height: 100 }}>
-              <div className="w-[45%] rounded-t"
-                style={{ height: `${(v.income / maxValue) * 90}px`, background: "#10B98188", minHeight: v.income ? 3 : 0 }} />
-              <div className="w-[45%] rounded-t"
-                style={{ height: `${(v.expense / maxValue) * 90}px`, background: "#F43F5E88", minHeight: v.expense ? 3 : 0 }} />
+            <div className="w-full flex items-end justify-center" style={{ height: 100 }}>
+              <div className="w-[62%] rounded-t"
+                style={{ height: `${(amount / maxValue) * 90}px`, background: "#F43F5E88", minHeight: amount ? 3 : 0 }} />
             </div>
             <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>{date.slice(5)}</p>
           </div>
@@ -1188,64 +1180,45 @@ function MonthlyLineChart({
   anchorMonth: string;
 }) {
   const months = useMemo(() => {
-    const map: Record<string, { income: number; expense: number }> = {};
+    const map: Record<string, number> = {};
     transactions.forEach((t) => {
       const key = t.date.slice(0, 7);
-      if (!map[key]) map[key] = { income: 0, expense: 0 };
-      map[key][t.type] += t.amount;
+      map[key] = (map[key] ?? 0) + t.amount;
     });
-    let runningIncome = 0;
     let runningExpense = 0;
     const [anchorYear, anchorMonthNumber] = anchorMonth.split("-").map(Number);
     return Array.from({ length: 6 }, (_, i) => {
       const d = new Date(anchorYear, anchorMonthNumber - 1 - (5 - i), 1);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      const income = map[key]?.income ?? 0;
-      const expense = map[key]?.expense ?? 0;
-      runningIncome += income;
+      const expense = map[key] ?? 0;
       runningExpense += expense;
       return {
         key,
         label: `${d.getMonth() + 1}월`,
-        income,
         expense,
-        cumulativeIncome: runningIncome,
         cumulativeExpense: runningExpense,
-        balance: runningIncome - runningExpense,
       };
     });
   }, [anchorMonth, transactions]);
-  const maxValue = Math.max(...months.flatMap((m) => [m.cumulativeIncome, m.cumulativeExpense, Math.abs(m.balance)]), 1);
+  const maxValue = Math.max(...months.map((m) => m.cumulativeExpense), 1);
   const W = 300, H = 90, P = 16;
   const step = (W - P * 2) / Math.max(months.length - 1, 1);
   const toY = (v: number) => H - P - (v / maxValue) * (H - P * 2);
-  const ipts = months.map((m, i) => `${P + i * step},${toY(m.cumulativeIncome)}`).join(" ");
   const epts = months.map((m, i) => `${P + i * step},${toY(m.cumulativeExpense)}`).join(" ");
-  const bpts = months.map((m, i) => `${P + i * step},${toY(Math.abs(m.balance))}`).join(" ");
 
   return (
     <div>
-      <p className="text-xs font-semibold mb-3" style={{ color: "var(--text-muted)" }}>최근 6개월 누적 흐름</p>
+      <p className="text-xs font-semibold mb-3" style={{ color: "var(--text-muted)" }}>최근 6개월 누적 지출</p>
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 90 }}>
-        <polyline points={ipts} fill="none" stroke="#10B981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         <polyline points={epts} fill="none" stroke="#F43F5E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-        <polyline points={bpts} fill="none" stroke={ACCENT} strokeWidth="1.75" strokeDasharray="4 3" strokeLinecap="round" strokeLinejoin="round" />
         {months.map((m, i) => (
           <text key={m.label} x={P + i * step} y={H - 2} textAnchor="middle" fontSize="8" fill="var(--text-muted)">{m.label}</text>
         ))}
       </svg>
       <div className="flex gap-4 mt-1">
         <div className="flex items-center gap-1.5">
-          <div className="w-2.5 h-1.5 rounded-sm" style={{ background: "#10B981" }} />
-          <span className="text-xs" style={{ color: "var(--text-muted)" }}>수입</span>
-        </div>
-        <div className="flex items-center gap-1.5">
           <div className="w-2.5 h-1.5 rounded-sm" style={{ background: "#F43F5E" }} />
           <span className="text-xs" style={{ color: "var(--text-muted)" }}>누적 지출</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <div className="w-2.5 h-1.5 rounded-sm" style={{ background: ACCENT }} />
-          <span className="text-xs" style={{ color: "var(--text-muted)" }}>누적 순증감</span>
         </div>
       </div>
     </div>
@@ -1261,33 +1234,22 @@ function YearlyBarChart({
 }) {
   const months = useMemo(() => Array.from({ length: 12 }, (_, i) => {
     const key = `${year}-${String(i + 1).padStart(2, "0")}`;
-    const income = transactions
-      .filter((t) => t.type === "income" && t.date.startsWith(key))
-      .reduce((s, t) => s + t.amount, 0);
     const expense = transactions
-      .filter((t) => t.type === "expense" && t.date.startsWith(key))
+      .filter((t) => t.date.startsWith(key))
       .reduce((s, t) => s + t.amount, 0);
-    return { label: `${i + 1}`, income, expense, balance: income - expense };
+    return { label: `${i + 1}`, expense };
   }), [transactions, year]);
-  const maxValue = Math.max(...months.flatMap((m) => [m.income, m.expense]), 1);
+  const maxValue = Math.max(...months.map((m) => m.expense), 1);
 
   return (
     <div>
-      <p className="text-xs font-semibold mb-3" style={{ color: "var(--text-muted)" }}>{year}년 월별 수입·지출</p>
+      <p className="text-xs font-semibold mb-3" style={{ color: "var(--text-muted)" }}>{year}년 월별 지출</p>
       <div className="flex items-end gap-1 h-28">
         {months.map((m) => (
           <div key={m.label} className="flex-1 flex flex-col items-center gap-1">
-            <div className="w-full flex items-end justify-center gap-[2px]" style={{ height: 92 }}>
+            <div className="w-full flex items-end justify-center" style={{ height: 92 }}>
               <div
-                className="w-[44%] rounded-t transition-all"
-                style={{
-                  height: `${Math.max((m.income / maxValue) * 84, m.income ? 3 : 0)}px`,
-                  background: m.income > 0 ? "linear-gradient(180deg, #10B981, #10B98166)" : "var(--border)",
-                  minHeight: m.income ? 3 : 1,
-                }}
-              />
-              <div
-                className="w-[44%] rounded-t transition-all"
+                className="w-[68%] rounded-t transition-all"
                 style={{
                   height: `${Math.max((m.expense / maxValue) * 84, m.expense ? 3 : 0)}px`,
                   background: m.expense > 0 ? "linear-gradient(180deg, #F43F5E, #F43F5E66)" : "var(--border)",
@@ -1295,11 +1257,8 @@ function YearlyBarChart({
                 }}
               />
             </div>
-            <span
-              className="text-[9px] font-semibold"
-              style={{ color: m.balance >= 0 ? "#10B981" : "#F43F5E" }}
-            >
-              {m.balance === 0 ? "0" : `${m.balance > 0 ? "+" : ""}${(m.balance / 10000).toFixed(0)}`}
+            <span className="text-[9px] font-semibold" style={{ color: "#F43F5E" }}>
+              {m.expense > 0 ? `${(m.expense / 10000).toFixed(0)}` : "0"}
             </span>
             <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>{m.label}</p>
           </div>
@@ -1307,14 +1266,10 @@ function YearlyBarChart({
       </div>
       <div className="flex gap-4 mt-2">
         <div className="flex items-center gap-1.5">
-          <div className="w-2.5 h-1.5 rounded-sm" style={{ background: "#10B981" }} />
-          <span className="text-xs" style={{ color: "var(--text-muted)" }}>수입</span>
-        </div>
-        <div className="flex items-center gap-1.5">
           <div className="w-2.5 h-1.5 rounded-sm" style={{ background: "#F43F5E" }} />
           <span className="text-xs" style={{ color: "var(--text-muted)" }}>지출</span>
         </div>
-        <span className="text-xs" style={{ color: "var(--text-muted)" }}>숫자는 월 순증감(만원)</span>
+        <span className="text-xs" style={{ color: "var(--text-muted)" }}>숫자는 월 지출(만원)</span>
       </div>
     </div>
   );
@@ -1323,8 +1278,7 @@ function YearlyBarChart({
 function PieChart({ transactions }: { transactions: Transaction[] }) {
   const slices = useMemo(() => {
     const map: Record<string, number> = {};
-    transactions.filter((t) => t.type === "expense")
-      .forEach((t) => { map[t.category] = (map[t.category] ?? 0) + t.amount; });
+    transactions.forEach((t) => { map[t.category] = (map[t.category] ?? 0) + t.amount; });
     const total = Object.values(map).reduce((s, v) => s + v, 0);
     return Object.entries(map)
       .sort((a, b) => b[1] - a[1])
@@ -1425,9 +1379,8 @@ function ReceiptViewerModal({
             </p>
           </div>
           <div className="flex items-center gap-3 shrink-0 pl-3">
-            <p className="text-sm font-black"
-              style={{ color: tx.type === "income" ? "#10B981" : "#F43F5E" }}>
-              {tx.type === "income" ? "+" : "-"}{tx.amount.toLocaleString()}원
+            <p className="text-sm font-black" style={{ color: "#F43F5E" }}>
+              -{tx.amount.toLocaleString()}원
             </p>
             <button
               onClick={onClose}
@@ -1544,13 +1497,13 @@ function TransactionDetailModal({
           style={{ borderBottom: "1px solid var(--border)" }}
         >
           <span className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>
-            {tx.type === "income" ? "수입" : "지출"} 금액
+            지출 금액
           </span>
           <span
             className="text-xl font-black"
-            style={{ color: tx.type === "income" ? "#10B981" : "#F43F5E" }}
+            style={{ color: "#F43F5E" }}
           >
-            {tx.type === "income" ? "+" : "-"}{tx.amount.toLocaleString()}원
+            -{tx.amount.toLocaleString()}원
           </span>
         </div>
 
