@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { LoaderCircle, RefreshCw } from "lucide-react";
 import { MediaCommunitySkin, MediaOutlet, MediaPlayer } from "@vidstack/react";
 import {
@@ -32,6 +32,7 @@ export default function CloudflareStreamPlayer({
   posterTime?: string;
 }) {
   const { customerCode } = getCloudflareStreamPublicConfig();
+  const wrapRef = useRef<HTMLDivElement>(null);
 
   const fallbackHls = useMemo(() => {
     if (!customerCode) return null;
@@ -40,6 +41,37 @@ export default function CloudflareStreamPlayer({
 
   const [payload, setPayload] = useState<VideoStatusPayload | null>(null);
   const [error, setError] = useState("");
+
+  // Vidstack gesture 레이어가 wheel/touch 이벤트를 소비하므로
+  // 래퍼에서 직접 포워딩해 페이지 스크롤을 복원
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+
+    const onWheel = (e: WheelEvent) => {
+      window.scrollBy({ top: e.deltaY, left: e.deltaX, behavior: "instant" });
+    };
+
+    let touchStartY = 0;
+    const onTouchStart = (e: TouchEvent) => {
+      touchStartY = e.touches[0].clientY;
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      const delta = touchStartY - e.touches[0].clientY;
+      touchStartY = e.touches[0].clientY;
+      window.scrollBy({ top: delta, behavior: "instant" });
+    };
+
+    el.addEventListener("wheel", onWheel, { passive: true });
+    el.addEventListener("touchstart", onTouchStart, { passive: true });
+    el.addEventListener("touchmove", onTouchMove, { passive: true });
+
+    return () => {
+      el.removeEventListener("wheel", onWheel);
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchmove", onTouchMove);
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -125,7 +157,7 @@ export default function CloudflareStreamPlayer({
   }
 
   return (
-    <div className="blog-stream-video-player-wrap">
+    <div className="blog-stream-video-player-wrap" ref={wrapRef}>
       <MediaPlayer
         title={title || "Cloudflare Stream video"}
         src={hlsUrl}
