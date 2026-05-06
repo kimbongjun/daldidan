@@ -1,4 +1,3 @@
-import Image from "next/image";
 import Link from "next/link";
 import { Suspense } from "react";
 import { MessageCircle } from "lucide-react";
@@ -13,39 +12,9 @@ import { formatBlogDateTime, getBlogActivityTimestamp } from "@/lib/blog-shared"
 import type { BlogViewType } from "@/components/blog/BlogViewToggle";
 import AiSummarySubtitle from "@/components/AiSummarySubtitle";
 import ThumbnailBatchButton from "@/components/blog/ThumbnailBatchButton";
+import BlogThumbnailImage from "@/components/blog/BlogThumbnailImage";
 
 const NEW_COMMENT_THRESHOLD_DAYS = 7;
-const AUTO_THUMB_WINDOW_MS = 5 * 60 * 1000; // 발행 후 5분 이내 = 생성 중으로 간주
-
-function ThumbnailPlaceholder({ title, publishedAt }: { title: string; publishedAt: string }) {
-  const isGenerating = Date.now() - new Date(publishedAt).getTime() < AUTO_THUMB_WINDOW_MS;
-  return (
-    <div
-      className="w-full h-full flex flex-col items-center justify-center gap-2"
-      style={{
-        background: isGenerating
-          ? "linear-gradient(135deg, rgba(99,102,241,0.12), rgba(234,88,12,0.08))"
-          : "linear-gradient(135deg, rgba(234,88,12,0.08), rgba(234,88,12,0.02))",
-      }}
-    >
-      {isGenerating ? (
-        <>
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="rgba(99,102,241,0.6)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 2a10 10 0 1 0 10 10" /><path d="M12 6v6l4 2" />
-          </svg>
-          <span style={{ fontSize: "0.65rem", color: "rgba(99,102,241,0.7)", fontWeight: 700 }}>썸네일 생성 중...</span>
-        </>
-      ) : (
-        <>
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="rgba(234,88,12,0.35)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" />
-          </svg>
-          <span style={{ fontSize: "0.65rem", color: "rgba(234,88,12,0.4)", fontWeight: 600 }} className="px-2 text-center line-clamp-2">{title.slice(0, 20)}</span>
-        </>
-      )}
-    </div>
-  );
-}
 
 function isNewComment(latestCommentAt: string | null): boolean {
   if (!latestCommentAt) return false;
@@ -155,11 +124,13 @@ export default async function BlogPage({
                 return (
                   <Link key={post.id} href={`/blog/${encodeURIComponent(post.slug)}`} className="pressable bento-card overflow-hidden hover:opacity-90 transition-opacity">
                     <div className="relative aspect-[16/10]" style={{ background: "var(--border)" }}>
-                      {post.thumbnailUrl ? (
-                        <Image src={post.thumbnailUrl} alt={post.title} fill sizes="(max-width:768px) 100vw, (max-width:1280px) 50vw, 33vw" className="object-cover" unoptimized />
-                      ) : (
-                        <ThumbnailPlaceholder title={post.title} publishedAt={post.publishedAt} />
-                      )}
+                      <BlogThumbnailImage
+                        src={post.thumbnailUrl}
+                        alt={post.title}
+                        sizes="(max-width:768px) 100vw, (max-width:1280px) 50vw, 33vw"
+                        slug={post.slug}
+                        publishedAt={post.publishedAt}
+                      />
                       {post.category && catStyle && (
                         <span
                           className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-lg text-xs font-bold"

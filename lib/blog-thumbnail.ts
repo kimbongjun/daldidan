@@ -325,17 +325,29 @@ export async function generateAutoThumbnail(
   const prompt = buildPollinationsPrompt(title, keywords.join(", "), category);
 
   // 1. Magnific AI 생성 (고품질, MAGNIFIC_API_KEY 필요)
-  const magnific = await tryMagnificAI(prompt);
-  if (magnific.url) return magnific.url;
+  try {
+    const magnific = await tryMagnificAI(prompt);
+    if (magnific.url) return magnific.url;
+  } catch (err) {
+    console.warn("[thumbnail] Magnific AI failed:", err);
+  }
 
-  // 2. Unsplash: Magnific 한도 초과 또는 미설정 시 기존 정책 적용
-  const unsplashUrl = await tryUnsplashSearch(keywords.join(" "), category);
-  if (unsplashUrl) return unsplashUrl;
+  // 2. Unsplash 폴백
+  try {
+    const unsplashUrl = await tryUnsplashSearch(keywords.join(" "), category);
+    if (unsplashUrl) return unsplashUrl;
+  } catch (err) {
+    console.warn("[thumbnail] Unsplash search failed:", err);
+  }
 
   // 3. Pollinations AI (생성형 폴백)
-  const pollinationsUrl = await tryPollinationsAI(prompt);
-  if (pollinationsUrl) return pollinationsUrl;
+  try {
+    const pollinationsUrl = await tryPollinationsAI(prompt);
+    if (pollinationsUrl) return pollinationsUrl;
+  } catch (err) {
+    console.warn("[thumbnail] Pollinations AI failed:", err);
+  }
 
-  // 4. 마지막 폴백
+  // 4. 마지막 폴백 (항상 유효한 URL 반환 보장)
   return makePicsumUrl(slug);
 }

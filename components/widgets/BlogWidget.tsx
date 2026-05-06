@@ -13,6 +13,36 @@ import type { AuthUser } from "@supabase/supabase-js";
 const ACCENT = "#F7A35C";
 const NEW_COMMENT_THRESHOLD_DAYS = 7;
 
+function WidgetThumbnail({ src, alt, slug }: { src: string | null; alt: string; slug: string }) {
+  const [errored, setErrored] = useState(false);
+  const fallbackSrc = `https://picsum.photos/seed/${slug.replace(/[^a-z0-9]/gi, "").slice(0, 24) || "blog"}/96/96`;
+
+  if (!src || errored) {
+    return (
+      <Image
+        src={fallbackSrc}
+        alt={alt}
+        fill
+        sizes="96px"
+        className="object-cover"
+        unoptimized
+      />
+    );
+  }
+
+  return (
+    <Image
+      src={src}
+      alt={alt}
+      fill
+      sizes="96px"
+      className="object-cover"
+      unoptimized
+      onError={() => setErrored(true)}
+    />
+  );
+}
+
 function isNewComment(latestCommentAt: string | null): boolean {
   if (!latestCommentAt) return false;
   const diff = Date.now() - new Date(latestCommentAt).getTime();
@@ -167,13 +197,7 @@ export default function BlogWidget({ initialPosts }: BlogWidgetProps) {
               style={{ background: "rgba(255,255,255,0.04)" }}
             >
               <div className="relative w-24 shrink-0 rounded-xl overflow-hidden" style={{ background: "var(--border)", aspectRatio: "1 / 1" }}>
-                {post.thumbnailUrl ? (
-                  <Image src={post.thumbnailUrl} alt={post.title} fill sizes="96px" className="object-cover" unoptimized />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center" style={{ color: ACCENT, background: "rgba(247,163,92,0.12)" }}>
-                    <BookOpenText size={18} />
-                  </div>
-                )}
+                <WidgetThumbnail src={post.thumbnailUrl} alt={post.title} slug={post.slug} />
               </div>
               <div className="min-w-0 flex-1 flex flex-col justify-between py-1">
                 <p className="text-sm font-semibold clamp-2" style={{ color: "var(--text-primary)" }}>{post.title}</p>

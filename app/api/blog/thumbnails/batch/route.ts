@@ -16,7 +16,7 @@ export async function GET() {
     .from("blog_posts")
     .select("id", { count: "exact", head: true })
     .eq("is_published", true)
-    .is("thumbnail_url", null);
+    .or("thumbnail_url.is.null,thumbnail_url.eq.");
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
     .from("blog_posts")
     .select("id, slug, title, description, content_html, category")
     .eq("is_published", true)
-    .is("thumbnail_url", null)
+    .or("thumbnail_url.is.null,thumbnail_url.eq.")
     .limit(batchSize);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
     .from("blog_posts")
     .select("id", { count: "exact", head: true })
     .eq("is_published", true)
-    .is("thumbnail_url", null);
+    .or("thumbnail_url.is.null,thumbnail_url.eq.");
 
   return NextResponse.json({ processed, failed, remaining: count ?? 0 });
 }
