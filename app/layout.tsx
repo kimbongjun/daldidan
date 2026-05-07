@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 import "./globals.css";
 import ThemeProvider from "@/components/ThemeProvider";
+import QueryProvider from "@/providers/QueryProvider";
 
 export const dynamic = "force-dynamic";
 
@@ -86,9 +87,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             }
           `}
         </Script>
-        <ThemeProvider>
-          {children}
-        </ThemeProvider>
+        <QueryProvider>
+          <ThemeProvider>
+            {children}
+          </ThemeProvider>
+        </QueryProvider>
       </body>
     </html>
   );

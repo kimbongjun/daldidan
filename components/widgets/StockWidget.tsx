@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import {
   Activity,
@@ -18,6 +19,7 @@ import {
 } from "@/lib/stocks/types";
 import { sanitizeSymbol, sanitizeIndexSymbol, formatPrice } from "@/lib/stocks/utils";
 import { getKrxMarketWindow } from "@/lib/stocks/cache-policy";
+import { queryKeys } from "@/lib/queryKeys";
 
 const ACCENT = "#F05C6E";
 const RISE = "var(--stock-rise)";
@@ -30,23 +32,20 @@ const DEFAULT_WATCHLIST: WatchlistItem[] = [
 ];
 const MAX_ROWS = 5;
 
-type LoadPhase = "idle" | "loading" | "done" | "error";
-
 function changeColor(value: number): string {
   if (value > 0) return RISE;
   if (value < 0) return FALL;
   return "var(--text-muted)";
 }
 
-function StatusPill({ phase, marketStatus }: { phase: LoadPhase; marketStatus: { open: boolean; label: string } }) {
-  const isLoading = phase === "loading";
+function StatusPill({ isLoading, isError, marketStatus }: { isLoading: boolean; isError: boolean; marketStatus: { open: boolean; label: string } }) {
   const color =
     isLoading ? "#F59E0B" :
-    phase === "done" && marketStatus.open ? "#10B981" :
-    phase === "error" ? ACCENT : "var(--text-muted)";
+    !isError && marketStatus.open ? "#10B981" :
+    isError ? ACCENT : "var(--text-muted)";
   const label =
     isLoading ? "시세 수신 중..." :
-    phase === "done" ? `KRX ${marketStatus.label}` :
+    !isError ? `KRX ${marketStatus.label}` :
     "오류";
 
   return (
@@ -115,20 +114,44 @@ function WatchRow({ quote }: { quote: StockQuote }) {
   );
 }
 
+function parseAndSetWatchlist(raw: string): WatchlistItem[] | null {
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return null;
+    const next = parsed.map((item): WatchlistItem | null => {
+      if (typeof item === "string") {
+        const sym = sanitizeSymbol(item);
+        return sym ? { symbol: sym, assetType: "stock" } : null;
+      }
+      if (typeof item === "object" && item !== null && "symbol" in item) {
+        const raw2 = item as Record<string, unknown>;
+        const sym = sanitizeSymbol(String(raw2.symbol ?? "")) ?? sanitizeIndexSymbol(String(raw2.symbol ?? "")) ?? null;
+        if (!sym) return null;
+        const at = raw2.assetType;
+        const validAt: AssetType = at === "etf" || at === "index" ? at : "stock";
+        return { symbol: sym, assetType: validAt };
+      }
+      return null;
+    }).filter((x): x is WatchlistItem => x !== null);
+    return next.length > 0 ? next.slice(0, 10) : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function StockWidget() {
-  const [watchlist, setWatchlist] = useState<WatchlistItem[]>(DEFAULT_WATCHLIST);
-  const [data, setData] = useState<StockOverviewResponse | null>(null);
-  const [loadPhase, setLoadPhase] = useState<LoadPhase>("idle");
-  const [marketStatus, setMarketStatus] = useState(() => {
-    const { open, label } = getKrxMarketWindow();
-    return { open, label };
-  });
-  const [refreshNonce, setRefreshNonce] = useState(0);
-  const refreshTimerRef = useRef<number | null>(null);
+  const queryClient = useQueryClient();
+  const [marketStatus, setMarketStatus] = useState(() => getKrxMarketWindow());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setMarketStatus(getKrxMarketWindow()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   // 관심종목 로드 (Supabase 우선, localStorage fallback)
-  useEffect(() => {
-    async function loadWatchlist() {
+  const { data: watchlist = DEFAULT_WATCHLIST } = useQuery({
+    queryKey: queryKeys.watchlist.all,
+    queryFn: async (): Promise<WatchlistItem[]> => {
       try {
         const res = await fetch("/api/me");
         if (res.ok) {
@@ -150,105 +173,50 @@ export default function StockWidget() {
                       return { symbol: sym, assetType: validAt };
                     })
                     .filter((x): x is WatchlistItem => x !== null);
-                  if (next.length > 0) { setWatchlist(next.slice(0, 10)); return; }
+                  if (next.length > 0) return next.slice(0, 10);
                 }
               }
-            } catch {}
-            // localStorage fallback with user-scoped key
+            } catch { /* fallthrough to localStorage */ }
             const saved = localStorage.getItem(`${STORAGE_KEY}-${uid}`) ?? localStorage.getItem(STORAGE_KEY);
-            if (saved) parseAndSetWatchlist(saved);
-            return;
+            if (saved) {
+              const parsed = parseAndSetWatchlist(saved);
+              if (parsed) return parsed;
+            }
+            return DEFAULT_WATCHLIST;
           }
         }
-      } catch {}
-      // 비로그인
+      } catch { /* fallthrough */ }
       const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) parseAndSetWatchlist(saved);
-    }
-
-    function parseAndSetWatchlist(raw: string) {
-      try {
-        const parsed = JSON.parse(raw) as unknown;
-        if (!Array.isArray(parsed)) return;
-        const next = parsed.map((item): WatchlistItem | null => {
-          if (typeof item === "string") {
-            const sym = sanitizeSymbol(item);
-            return sym ? { symbol: sym, assetType: "stock" } : null;
-          }
-          if (typeof item === "object" && item !== null && "symbol" in item) {
-            const raw2 = item as Record<string, unknown>;
-            const sym = sanitizeSymbol(String(raw2.symbol ?? "")) ?? sanitizeIndexSymbol(String(raw2.symbol ?? "")) ?? null;
-            if (!sym) return null;
-            const at = raw2.assetType;
-            const validAt: AssetType = at === "etf" || at === "index" ? at : "stock";
-            return { symbol: sym, assetType: validAt };
-          }
-          return null;
-        }).filter((x): x is WatchlistItem => x !== null);
-        if (next.length > 0) setWatchlist(next.slice(0, 10));
-      } catch {}
-    }
-
-    void loadWatchlist();
-  }, []);
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      const { open, label } = getKrxMarketWindow();
-      setMarketStatus({ open, label });
-    }, 30_000);
-    return () => window.clearInterval(timer);
-  }, []);
-
-  const fetchQuotes = useCallback(async (signal?: AbortSignal, force = false) => {
-    const windowInfo = getKrxMarketWindow();
-    setMarketStatus({ open: windowInfo.open, label: windowInfo.label });
-    setLoadPhase("loading");
-
-    const params = new URLSearchParams({
-      items: watchlist.map(({ symbol, assetType }) => `${symbol}:${assetType}`).join(","),
-      noSparkline: "true",
-    });
-    if (force) {
-      params.set("force", "true");
-      params.set("ts", String(Date.now()));
-    }
-    const cacheMode: RequestCache = force || windowInfo.open ? "no-store" : "force-cache";
-
-    try {
-      const res = await fetch(`/api/stocks?${params.toString()}`, {
-        cache: cacheMode,
-        signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(20_000)]) : AbortSignal.timeout(20_000),
-      });
-      if (signal?.aborted) return;
-      const d = await res.json() as StockOverviewResponse;
-      if (!signal?.aborted) {
-        setData(d);
-        setLoadPhase("done");
+      if (saved) {
+        const parsed = parseAndSetWatchlist(saved);
+        if (parsed) return parsed;
       }
-    } catch {
-      if (!signal?.aborted) setLoadPhase("error");
-    }
-  }, [watchlist]);
+      return DEFAULT_WATCHLIST;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
 
-  useEffect(() => {
-    const controller = new AbortController();
+  const watchlistKey = watchlist.map(({ symbol, assetType }) => `${symbol}:${assetType}`).join(",");
 
-    const run = async (force = false) => {
-      await fetchQuotes(controller.signal, force);
-      if (controller.signal.aborted) return;
-      const { nextRefreshInMs } = getKrxMarketWindow();
-      if (refreshTimerRef.current) window.clearTimeout(refreshTimerRef.current);
-      refreshTimerRef.current = window.setTimeout(() => void run(false), nextRefreshInMs);
-    };
-
-    void run(refreshNonce > 0);
-
-    return () => {
-      controller.abort();
-      if (refreshTimerRef.current) window.clearTimeout(refreshTimerRef.current);
-    };
-  }, [fetchQuotes, refreshNonce]);
+  const { data, isFetching, isError } = useQuery({
+    queryKey: queryKeys.stocks.quotes(watchlistKey),
+    queryFn: async ({ signal }): Promise<StockOverviewResponse> => {
+      const params = new URLSearchParams({
+        items: watchlistKey,
+        noSparkline: "true",
+        ts: String(Date.now()),
+      });
+      const res = await fetch(`/api/stocks?${params.toString()}`, {
+        cache: "no-store",
+        signal: AbortSignal.any([signal, AbortSignal.timeout(20_000)]),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json() as Promise<StockOverviewResponse>;
+    },
+    staleTime: 30_000,
+    refetchInterval: () => getKrxMarketWindow().nextRefreshInMs,
+    enabled: watchlistKey.length > 0,
+  });
 
   const quotes = useMemo(() => {
     const map = new Map((data?.quotes ?? []).map((q) => [q.symbol, q]));
@@ -256,13 +224,11 @@ export default function StockWidget() {
   }, [data?.quotes, watchlist]);
 
   const indexBySymbol = useMemo(() => {
-    const map = new Map((data?.marketIndices ?? []).map((q) => [q.symbol, q]));
-    return map;
+    return new Map((data?.marketIndices ?? []).map((q) => [q.symbol, q]));
   }, [data?.marketIndices]);
 
   const visibleQuotes = quotes.slice(0, MAX_ROWS);
   const remaining = Math.max(0, quotes.length - MAX_ROWS);
-  const isLoading = loadPhase === "loading";
 
   return (
     <div className="bento-card gradient-violet h-full flex flex-col p-5 gap-3">
@@ -272,18 +238,18 @@ export default function StockWidget() {
           <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: ACCENT }}>증권</p>
           <h2 className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>국내 증시</h2>
           <div className="mt-0.5">
-            <StatusPill phase={loadPhase} marketStatus={marketStatus} />
+            <StatusPill isLoading={isFetching} isError={isError} marketStatus={marketStatus} />
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <button
             type="button"
-            onClick={() => { setLoadPhase("idle"); setRefreshNonce((v) => v + 1); }}
+            onClick={() => void queryClient.invalidateQueries({ queryKey: queryKeys.stocks.quotes(watchlistKey) })}
             aria-label="새로고침"
             className="flex h-8 w-8 items-center justify-center rounded-lg"
             style={{ background: `${ACCENT}18`, color: ACCENT }}
           >
-            <RefreshCw size={13} className={isLoading ? "animate-spin" : ""} />
+            <RefreshCw size={13} className={isFetching ? "animate-spin" : ""} />
           </button>
           <Link
             href="/stock"
@@ -304,7 +270,7 @@ export default function StockWidget() {
 
       {/* 관심종목 목록 */}
       <div className="flex flex-col gap-2 flex-1">
-        {isLoading && quotes.length === 0 ? (
+        {isFetching && quotes.length === 0 ? (
           Array.from({ length: 3 }).map((_, i) => (
             <div key={i} className="h-[54px] rounded-xl skeleton-shimmer" style={{ border: "1px solid var(--border)" }} />
           ))

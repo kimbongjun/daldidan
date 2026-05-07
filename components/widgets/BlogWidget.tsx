@@ -3,11 +3,13 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, BookOpenText, Calendar, Lock, MessageCircle, PenLine, User } from "lucide-react";
 import type { BlogPostSummary } from "@/lib/blog-shared";
 import { formatBlogDateTime, getBlogActivityTimestamp } from "@/lib/blog-shared";
-import { fetchWithTimeout, isAbortError } from "@/lib/fetch-with-timeout";
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 import { createClient } from "@/lib/supabase/client";
+import { queryKeys } from "@/lib/queryKeys";
 import type { AuthUser } from "@supabase/supabase-js";
 
 const ACCENT = "#F7A35C";
@@ -55,10 +57,7 @@ type BlogWidgetProps = {
 
 export default function BlogWidget({ initialPosts }: BlogWidgetProps) {
   const [user, setUser] = useState<AuthUser | null | undefined>(undefined);
-  const [posts, setPosts] = useState<BlogPostSummary[]>(initialPosts ?? []);
-  const [loading, setLoading] = useState(true);
 
-  // 로그인 상태 감지
   useEffect(() => {
     const supabase = createClient();
     supabase.auth.getUser().then(({ data }) => setUser(data.user ?? null));
@@ -68,36 +67,17 @@ export default function BlogWidget({ initialPosts }: BlogWidgetProps) {
     return () => subscription.unsubscribe();
   }, []);
 
-  // 로그인 시에만 포스트 로드
-  useEffect(() => {
-    if (user === undefined) return; // 초기화 중
-    if (!user) {
-      setLoading(false);
-      return;
-    }
-
-    if (initialPosts !== undefined) {
-      setLoading(false);
-      return;
-    }
-
-    let active = true;
-    const controller = new AbortController();
-
-    fetchWithTimeout("/api/blog/posts?limit=3", { signal: controller.signal }, 7000)
-      .then((r) => r.json())
-      .then((data) => {
-        if (!active) return;
-        setPosts(Array.isArray(data) ? data : []);
-      })
-      .catch((error) => {
-        if (!active || isAbortError(error)) return;
-        setPosts([]);
-      })
-      .finally(() => { if (!active) return; setLoading(false); });
-
-    return () => { active = false; controller.abort(); };
-  }, [user, initialPosts]);
+  const { data: posts = initialPosts ?? [], isLoading: loading } = useQuery({
+    queryKey: queryKeys.blog.posts(3),
+    queryFn: async ({ signal }) => {
+      const res = await fetchWithTimeout("/api/blog/posts?limit=3", { signal }, 7000);
+      const data = await res.json() as unknown;
+      return Array.isArray(data) ? (data as BlogPostSummary[]) : [];
+    },
+    enabled: !!user && initialPosts === undefined,
+    initialData: initialPosts,
+    staleTime: 5 * 60 * 1000,
+  });
 
   // ── 비로그인 상태 ──────────────────────────────────
   if (user === null) {

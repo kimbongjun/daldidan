@@ -14,6 +14,8 @@ import { signOut } from "@/lib/supabase/actions/auth";
 import type { AuthUser as SupabaseUser } from "@supabase/supabase-js";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/queryKeys";
 
 // ── 디바이스 유틸 ──────────────────────────────────────────────
 function isIOS(): boolean {
@@ -82,7 +84,6 @@ export default function Header() {
   // now를 null로 초기화해 SSR hydration 불일치 방지
   const [now, setNow] = useState<Date | null>(null);
   const [user, setUser] = useState<SupabaseUser | null>(null);
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [notificationMenuOpen, setNotificationMenuOpen] = useState(false);
 
@@ -95,11 +96,11 @@ export default function Header() {
 
   // 인사말 편집
   const [customGreeting, setCustomGreeting] = useState<string>("");
-  const [logoUrl, setLogoUrl] = useState<string>("");
-  const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [editingGreeting, setEditingGreeting] = useState(false);
   const [greetingInput, setGreetingInput] = useState("");
   const [greetingSaveError, setGreetingSaveError] = useState(false);
+
+  const queryClient = useQueryClient();
 
   const dropdownRef = useRef<HTMLDivElement>(null);
   const notificationRef = useRef<HTMLDivElement>(null);
@@ -123,57 +124,50 @@ export default function Header() {
     return () => clearInterval(id);
   }, []);
 
-  // 저장된 커스텀 인사말 + 로고 로드 (site_settings API)
-  useEffect(() => {
-    fetchWithTimeout("/api/site-settings", {}, 6000)
-      .then((r) => r.json())
-      .then((d: Record<string, string>) => {
-        if (d.custom_greeting) setCustomGreeting(d.custom_greeting);
-        if (d.logo_url) setLogoUrl(d.logo_url);
-      })
-      .catch(() => null)
-      .finally(() => setSettingsLoaded(true));
-  }, []);
+  // 사이트 설정 (BudgetPage 등과 캐시 공유)
+  const { data: siteSettingsData, isSuccess: settingsLoaded } = useQuery({
+    queryKey: queryKeys.siteSettings.all,
+    queryFn: () =>
+      fetchWithTimeout("/api/site-settings", {}, 6000)
+        .then((r) => r.json() as Promise<Record<string, string>>),
+    staleTime: 5 * 60 * 1000,
+  });
 
-  // 유저 세션 감지
+  const logoUrl = siteSettingsData?.logo_url ?? "";
+
+  useEffect(() => {
+    if (!siteSettingsData) return;
+    if (siteSettingsData.custom_greeting) setCustomGreeting(siteSettingsData.custom_greeting);
+  }, [siteSettingsData]);
+
+  // 유저 세션 감지 (Supabase 실시간 auth — useEffect 유지)
   useEffect(() => {
     const supabase = createClient();
     supabase.auth.getUser().then(({ data }) => setUser(data.user ?? null));
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
       setUser(session?.user ?? null);
+      if (!session?.user) {
+        queryClient.removeQueries({ queryKey: queryKeys.user.profile });
+      }
     });
     return () => subscription.unsubscribe();
-  }, []);
+  }, [queryClient]);
 
-  useEffect(() => {
-    if (!user) {
-      setUserProfile(null);
-      return;
-    }
-
-    let active = true;
-
-    fetchWithTimeout("/api/me", { cache: "no-store" }, 6000)
-      .then(async (response) => {
-        if (!response.ok) throw new Error("failed");
-        return response.json() as Promise<UserProfile>;
-      })
-      .then((profile) => {
-        if (active) setUserProfile(profile);
-      })
-      .catch(() => {
-        if (!active) return;
-        setUserProfile({
-          avatarUrl: null,
-          displayName: null,
-          email: user.email ?? null,
-        });
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [user]);
+  // 유저 프로필 (user 상태에 연동)
+  const { data: userProfile = null } = useQuery({
+    queryKey: queryKeys.user.profile,
+    queryFn: async () => {
+      const response = await fetchWithTimeout("/api/me", { cache: "no-store" }, 6000);
+      if (!response.ok) throw new Error("failed");
+      return response.json() as Promise<UserProfile>;
+    },
+    enabled: !!user,
+    staleTime: 5 * 60 * 1000,
+    placeholderData: user
+      ? { avatarUrl: null, displayName: null, email: user.email ?? null }
+      : undefined,
+    retry: false,
+  });
 
   // 드롭다운 외부 클릭 닫기
   useEffect(() => {
@@ -425,6 +419,7 @@ export default function Header() {
     const trimmed = greetingInput.trim();
     if (!trimmed) return;
     setGreetingSaveError(false);
+    const prev = customGreeting;
     setCustomGreeting(trimmed);
     setEditingGreeting(false);
     try {
@@ -434,8 +429,9 @@ export default function Header() {
         body: JSON.stringify({ custom_greeting: trimmed }),
       });
       if (!res.ok) throw new Error();
+      void queryClient.invalidateQueries({ queryKey: queryKeys.siteSettings.all });
     } catch {
-      setCustomGreeting(customGreeting);
+      setCustomGreeting(prev);
       setGreetingSaveError(true);
       setTimeout(() => setGreetingSaveError(false), 3000);
     }
@@ -449,6 +445,7 @@ export default function Header() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ custom_greeting: "" }),
     }).catch(() => null);
+    void queryClient.invalidateQueries({ queryKey: queryKeys.siteSettings.all });
   };
 
   return (

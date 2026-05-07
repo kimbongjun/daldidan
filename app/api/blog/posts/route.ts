@@ -89,20 +89,22 @@ export async function POST(request: NextRequest) {
     // 썸네일 없으면 자동 생성 후 DB 업데이트
     let finalThumbnail = resolvedThumbnail;
     if (!resolvedThumbnail) {
-      const autoThumb = await generateAutoThumbnail(title, contentHtml, slug, category, {
+      const result = await generateAutoThumbnail(title, contentHtml, slug, category, {
         summary: description,
         keywords: aiMetadata.keywords,
       });
-      if (autoThumb) {
-        const adminClient = createAdminClient();
-        await adminClient
-          .from("blog_posts")
-          .update({ thumbnail_url: autoThumb })
-          .eq("slug", slug);
-        finalThumbnail = autoThumb;
-        revalidatePath("/blog");
-        revalidatePath(`/blog/${slug}`);
-      }
+      const adminClient = createAdminClient();
+      await adminClient
+        .from("blog_posts")
+        .update({
+          thumbnail_url: result.url,
+          thumbnail_prompt: result.prompt,
+          thumbnail_source: result.source,
+        })
+        .eq("slug", slug);
+      finalThumbnail = result.url;
+      revalidatePath("/blog");
+      revalidatePath(`/blog/${slug}`);
     }
 
     await sendBlogPublishNotification({
@@ -197,15 +199,18 @@ export async function PATCH(request: NextRequest) {
     const capturedSlug = slug;
     const capturedDescription = description;
     after(async () => {
-      const autoThumb = await generateAutoThumbnail(title, contentHtml, capturedSlug, category, {
+      const result = await generateAutoThumbnail(title, contentHtml, capturedSlug, category, {
         summary: capturedDescription,
         keywords: aiMetadata.keywords,
       });
-      if (!autoThumb) return;
       const adminClient = createAdminClient();
       await adminClient
         .from("blog_posts")
-        .update({ thumbnail_url: autoThumb })
+        .update({
+          thumbnail_url: result.url,
+          thumbnail_prompt: result.prompt,
+          thumbnail_source: result.source,
+        })
         .eq("id", capturedId);
       revalidatePath("/blog");
       revalidatePath(`/blog/${capturedSlug}`);

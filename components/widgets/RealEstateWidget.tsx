@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, ArrowUp, ArrowDown, Minus, TrendingUp, Home, Wallet, CalendarCheck, AlertTriangle } from "lucide-react";
 import type { SubscriptionItem } from "@/app/api/realestate/subscriptions/route";
 import type { PolicyRate } from "@/app/api/realestate/rates/route";
 import type { TransactionItem, MarketIndex } from "@/app/api/realestate/transactions/route";
 import type { IllegalResupplyItem } from "@/app/api/realestate/illegal-resupply/route";
 import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
+import { queryKeys } from "@/lib/queryKeys";
 
 const ACCENT = "#5CABF2";
 
@@ -142,20 +144,19 @@ function SkeletonRow() {
 // ── 청약 탭 ──────────────────────────────────────────────────────────────────
 
 function SubscriptionTab() {
-  const [items, setItems] = useState<DisplaySubscriptionItem[]>([]);
-  const [isMock, setIsMock] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [activeRegion, setActiveRegion] = useState<SubscriptionRegionCategory>("전체");
 
-  useEffect(() => {
-    const controller = new AbortController();
-    fetchWithTimeout("/api/realestate/subscriptions", { signal: controller.signal }, 12000)
-      .then((r) => r.json() as Promise<{ subscriptions: (SubscriptionItem & { dday: number })[]; isMock?: boolean }>)
-      .then((d) => { setItems(d.subscriptions); setIsMock(d.isMock ?? false); })
-      .catch(() => null)
-      .finally(() => setLoading(false));
-    return () => controller.abort();
-  }, []);
+  const { data, isLoading: loading } = useQuery({
+    queryKey: queryKeys.realEstate.subscriptions,
+    queryFn: async ({ signal }) => {
+      const res = await fetchWithTimeout("/api/realestate/subscriptions", { signal }, 12000);
+      return res.json() as Promise<{ subscriptions: DisplaySubscriptionItem[]; isMock?: boolean }>;
+    },
+    staleTime: 10 * 60 * 1000,
+  });
+
+  const items = data?.subscriptions ?? [];
+  const isMock = data?.isMock ?? false;
 
   if (loading) return <div className="flex flex-col gap-2">{[1, 2, 3].map((i) => <SkeletonRow key={i} />)}</div>;
 
@@ -265,19 +266,17 @@ function SubscriptionTab() {
 // ── 시세 탭 ──────────────────────────────────────────────────────────────────
 
 function TransactionTab() {
-  const [transactions, setTransactions] = useState<TransactionItem[]>([]);
-  const [marketIndex, setMarketIndex] = useState<MarketIndex[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data, isLoading: loading } = useQuery({
+    queryKey: queryKeys.realEstate.transactions,
+    queryFn: async ({ signal }) => {
+      const res = await fetchWithTimeout("/api/realestate/transactions", { signal }, 12000);
+      return res.json() as Promise<{ transactions: TransactionItem[]; marketIndex: MarketIndex[] }>;
+    },
+    staleTime: 10 * 60 * 1000,
+  });
 
-  useEffect(() => {
-    const controller = new AbortController();
-    fetchWithTimeout("/api/realestate/transactions", { signal: controller.signal }, 12000)
-      .then((r) => r.json() as Promise<{ transactions: TransactionItem[]; marketIndex: MarketIndex[] }>)
-      .then((d) => { setTransactions(d.transactions); setMarketIndex(d.marketIndex); })
-      .catch(() => null)
-      .finally(() => setLoading(false));
-    return () => controller.abort();
-  }, []);
+  const transactions = data?.transactions ?? [];
+  const marketIndex = data?.marketIndex ?? [];
 
   if (loading) return <div className="flex flex-col gap-2">{[1, 2, 3].map((i) => <SkeletonRow key={i} />)}</div>;
 
@@ -338,18 +337,16 @@ function TransactionTab() {
 // ── 금리 탭 ──────────────────────────────────────────────────────────────────
 
 function RateTab() {
-  const [rates, setRates] = useState<PolicyRate[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data, isLoading: loading } = useQuery({
+    queryKey: queryKeys.realEstate.rates,
+    queryFn: async ({ signal }) => {
+      const res = await fetchWithTimeout("/api/realestate/rates", { signal }, 12000);
+      return res.json() as Promise<{ rates: PolicyRate[] }>;
+    },
+    staleTime: 10 * 60 * 1000,
+  });
 
-  useEffect(() => {
-    const controller = new AbortController();
-    fetchWithTimeout("/api/realestate/rates", { signal: controller.signal }, 12000)
-      .then((r) => r.json() as Promise<{ rates: PolicyRate[] }>)
-      .then((d) => setRates(d.rates))
-      .catch(() => null)
-      .finally(() => setLoading(false));
-    return () => controller.abort();
-  }, []);
+  const rates = data?.rates ?? [];
 
   if (loading) return <div className="flex flex-col gap-2">{[1, 2, 3].map((i) => <SkeletonRow key={i} />)}</div>;
 
@@ -393,20 +390,19 @@ function RateTab() {
 // ── 재공급 탭 ─────────────────────────────────────────────────────────────────
 
 function IllegalResupplyTab() {
-  const [items, setItems] = useState<IllegalResupplyItem[]>([]);
-  const [isMock, setIsMock] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [activeRegion, setActiveRegion] = useState<SubscriptionRegionCategory>("전체");
 
-  useEffect(() => {
-    const controller = new AbortController();
-    fetchWithTimeout("/api/realestate/illegal-resupply", { signal: controller.signal }, 12000)
-      .then((r) => r.json() as Promise<{ items: IllegalResupplyItem[]; isMock?: boolean }>)
-      .then((d) => { setItems(d.items); setIsMock(d.isMock ?? false); })
-      .catch(() => null)
-      .finally(() => setLoading(false));
-    return () => controller.abort();
-  }, []);
+  const { data, isLoading: loading } = useQuery({
+    queryKey: queryKeys.realEstate.illegalResupply,
+    queryFn: async ({ signal }) => {
+      const res = await fetchWithTimeout("/api/realestate/illegal-resupply", { signal }, 12000);
+      return res.json() as Promise<{ items: IllegalResupplyItem[]; isMock?: boolean }>;
+    },
+    staleTime: 10 * 60 * 1000,
+  });
+
+  const items = data?.items ?? [];
+  const isMock = data?.isMock ?? false;
 
   if (loading) return <div className="flex flex-col gap-2">{[1, 2, 3].map((i) => <SkeletonRow key={i} />)}</div>;
 

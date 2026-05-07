@@ -13,6 +13,8 @@ import {
   Upload,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/queryKeys";
 
 const ACCENT = "#EA580C";
 
@@ -27,8 +29,17 @@ const inputStyle: React.CSSProperties = {
   width: "100%",
 };
 
+interface MyPageProfile {
+  display_name: string;
+  avatar_url: string | null;
+  birth_year: number | null;
+  gender: string | null;
+  birth_hour: number | null;
+}
+
 export default function MyPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const avatarFileRef = useRef<HTMLInputElement>(null);
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -36,112 +47,106 @@ export default function MyPage() {
   const [gender, setGender] = useState("");
   const [birthHour, setBirthHour] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [avatarUploading, setAvatarUploading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
   const [avatarUploadError, setAvatarUploadError] = useState("");
 
+  // auth 상태 확인 후 프로필 쿼리 활성화
+  const [authChecked, setAuthChecked] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
+
   useEffect(() => {
     const supabase = createClient();
-    supabase.auth.getUser().then(async ({ data }) => {
+    supabase.auth.getUser().then(({ data }) => {
       if (!data.user) {
         router.replace("/login?next=/mypage");
         return;
       }
-
       setEmail(data.user.email ?? "");
-      const profileRes = await fetch("/api/mypage");
-      if (profileRes.ok) {
-        const profile = await profileRes.json() as {
-          display_name: string;
-          avatar_url: string | null;
-          birth_year: number | null;
-          gender: string | null;
-          birth_hour: number | null;
-        };
-
-        setDisplayName(profile.display_name);
-        setAvatarUrl(profile.avatar_url ?? "");
-        if (profile.birth_year) setBirthYear(String(profile.birth_year));
-        if (profile.gender) setGender(profile.gender);
-        if (profile.birth_hour != null) setBirthHour(String(profile.birth_hour));
-      }
-      setLoading(false);
+      setUserId(data.user.id);
+      setAuthChecked(true);
     });
   }, [router]);
 
-  const persistProfile = async (body: Record<string, unknown>) => {
-    const res = await fetch("/api/mypage", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    const data = await res.json() as { error?: string };
-    if (!res.ok) {
-      throw new Error(data.error ?? "저장에 실패했습니다.");
-    }
-  };
+  const { data: profileData, isLoading } = useQuery({
+    queryKey: queryKeys.mypage.profile,
+    queryFn: async () => {
+      const res = await fetch("/api/mypage");
+      if (!res.ok) throw new Error("프로필을 불러오지 못했습니다.");
+      return res.json() as Promise<MyPageProfile>;
+    },
+    enabled: authChecked && !!userId,
+    staleTime: 5 * 60 * 1000,
+  });
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    setError("");
-    setSuccess(false);
-    try {
-      await persistProfile({
-        display_name: displayName,
-        avatar_url: avatarUrl.trim() || null,
-        birth_year: birthYear ? Number(birthYear) : null,
-        gender: gender || null,
-        birth_hour: birthHour !== "" ? Number(birthHour) : null,
-      });
+  // 프로필 데이터 로드 시 폼 필드 초기화 (v5: onSuccess 대신 useEffect)
+  useEffect(() => {
+    if (!profileData) return;
+    setDisplayName(profileData.display_name);
+    setAvatarUrl(profileData.avatar_url ?? "");
+    if (profileData.birth_year) setBirthYear(String(profileData.birth_year));
+    if (profileData.gender) setGender(profileData.gender);
+    if (profileData.birth_hour != null) setBirthHour(String(profileData.birth_hour));
+  }, [profileData]);
+
+  const updateMutation = useMutation({
+    mutationFn: (body: Record<string, unknown>) =>
+      fetch("/api/mypage", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      }).then(async (res) => {
+        const data = await res.json() as { error?: string };
+        if (!res.ok) throw new Error(data.error ?? "저장에 실패했습니다.");
+        return data;
+      }),
+    onSuccess: () => {
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "저장에 실패했습니다.");
-    } finally {
-      setSaving(false);
-    }
-  };
+      void queryClient.invalidateQueries({ queryKey: queryKeys.mypage.profile });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.user.profile });
+    },
+    onError: (err: Error) => setError(err.message),
+  });
 
-  const uploadAvatar = async (file: File) => {
-    setAvatarUploading(true);
-    setAvatarUploadError("");
+  const handleSave = (e: React.FormEvent) => {
+    e.preventDefault();
     setError("");
     setSuccess(false);
+    updateMutation.mutate({
+      display_name: displayName,
+      avatar_url: avatarUrl.trim() || null,
+      birth_year: birthYear ? Number(birthYear) : null,
+      gender: gender || null,
+      birth_hour: birthHour !== "" ? Number(birthHour) : null,
+    });
+  };
 
-    try {
+  const avatarMutation = useMutation({
+    mutationFn: async (file: File) => {
       const formData = new FormData();
       formData.append("file", file);
-
-      const uploadRes = await fetch("/api/mypage/avatar", {
-        method: "POST",
-        body: formData,
-      });
-
-      const ct = uploadRes.headers.get("content-type") ?? "";
+      const res = await fetch("/api/mypage/avatar", { method: "POST", body: formData });
+      const ct = res.headers.get("content-type") ?? "";
       if (!ct.includes("application/json")) {
-        throw new Error(`업로드 서버 오류가 발생했습니다. (HTTP ${uploadRes.status})`);
+        throw new Error(`업로드 서버 오류가 발생했습니다. (HTTP ${res.status})`);
       }
-
-      const uploadData = await uploadRes.json() as { error?: string; url?: string };
-      if (!uploadRes.ok || !uploadData.url) {
-        throw new Error(uploadData.error ?? "아바타 업로드에 실패했습니다.");
-      }
-
-      setAvatarUrl(uploadData.url);
+      const data = await res.json() as { error?: string; url?: string };
+      if (!res.ok || !data.url) throw new Error(data.error ?? "아바타 업로드에 실패했습니다.");
+      return data.url;
+    },
+    onSuccess: (url) => {
+      setAvatarUrl(url);
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
-    } catch (err) {
-      setAvatarUploadError(err instanceof Error ? err.message : "아바타 업로드에 실패했습니다.");
-    } finally {
-      setAvatarUploading(false);
-    }
-  };
+    },
+    onError: (err: Error) => setAvatarUploadError(err.message),
+  });
 
-  if (loading) {
+  const saving = updateMutation.isPending;
+  const avatarUploading = avatarMutation.isPending;
+
+  if (!authChecked || isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <LoaderCircle size={24} className="animate-spin" style={{ color: ACCENT }} />
@@ -215,14 +220,14 @@ export default function MyPage() {
             )}
             <div className="min-w-0">
               <p className="font-bold truncate" style={{ color: "var(--text-primary)" }}>{displayName || "닉네임 없음"}</p>
-              <p className="text-sm truncate" style={{ color: "var(--text-muted)" }}>{email}</p>             
+              <p className="text-sm truncate" style={{ color: "var(--text-muted)" }}>{email}</p>
             </div>
           </div>
 
           <div className="rounded-2xl p-4 flex flex-col gap-3" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid var(--border)" }}>
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>아바타 이미지 업로드</p>                
+                <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>아바타 이미지 업로드</p>
               </div>
               <button
                 type="button"
@@ -243,7 +248,7 @@ export default function MyPage() {
               className="hidden"
               onChange={(e) => {
                 const file = e.target.files?.[0];
-                if (file) void uploadAvatar(file);
+                if (file) avatarMutation.mutate(file);
                 e.currentTarget.value = "";
               }}
             />

@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Bell,
   CalendarDays,
@@ -17,6 +18,7 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { fetchWithTimeout, isAbortError } from "@/lib/fetch-with-timeout";
+import { queryKeys } from "@/lib/queryKeys";
 import type { AuthUser as User } from "@supabase/supabase-js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -693,9 +695,6 @@ function EventDetailModal({
 // ─── CalendarWidget ───────────────────────────────────────────────────────────
 export default function CalendarWidget() {
   const [user, setUser] = useState<User | null | undefined>(undefined);
-  const [events, setEvents] = useState<CalendarEvent[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [fetchError, setFetchError] = useState("");
   const [viewYear, setViewYear] = useState(() => new Date().getFullYear());
   const [viewMonth, setViewMonth] = useState(() => new Date().getMonth() + 1);
   const [showForm, setShowForm] = useState(false);
@@ -712,48 +711,28 @@ export default function CalendarWidget() {
     return () => subscription.unsubscribe();
   }, []);
 
-  const fetchEvents = useCallback(async (year: number, month: number, signal?: AbortSignal) => {
-    if (!user?.id) {
-      setEvents([]);
-      setFetchError("");
-      return;
-    }
-    setLoading(true);
-    setFetchError("");
-    try {
-      const res = await fetchWithTimeout(`/api/calendar?year=${year}&month=${month}`, {
+  const {
+    data: events = [],
+    isLoading: loading,
+    error: fetchErrorRaw,
+    refetch,
+  } = useQuery({
+    queryKey: queryKeys.calendar.byMonth(viewYear, viewMonth),
+    queryFn: async ({ signal }) => {
+      const res = await fetchWithTimeout(`/api/calendar?year=${viewYear}&month=${viewMonth}`, {
         signal,
         cache: "no-store",
       }, 7000);
-      if (res.status === 401) {
-        setEvents([]);
-        return;
-      }
+      if (res.status === 401) return [] as CalendarEvent[];
       const payload = await res.json().catch(() => ({})) as CalendarEvent[] & { error?: string };
-      if (!res.ok) {
-        throw new Error(payload.error ?? "일정을 불러오지 못했습니다.");
-      }
-      if (signal?.aborted) return;
-      setEvents(Array.isArray(payload) ? payload : []);
-    } catch (err) {
-      if (signal?.aborted || isAbortError(err)) return;
-      setFetchError(err instanceof Error ? err.message : "일정을 불러오지 못했습니다.");
-    } finally {
-      if (!signal?.aborted) setLoading(false);
-    }
-  }, [user?.id]);
+      if (!res.ok) throw new Error(payload.error ?? "일정을 불러오지 못했습니다.");
+      return Array.isArray(payload) ? (payload as CalendarEvent[]) : [];
+    },
+    enabled: !!user?.id,
+    staleTime: 2 * 60 * 1000,
+  });
 
-  useEffect(() => {
-    if (!user?.id) {
-      setEvents([]);
-      setLoading(false);
-      setFetchError("");
-      return;
-    }
-    const controller = new AbortController();
-    void fetchEvents(viewYear, viewMonth, controller.signal);
-    return () => controller.abort();
-  }, [fetchEvents, viewYear, viewMonth, user?.id]);
+  const fetchError = fetchErrorRaw instanceof Error ? fetchErrorRaw.message : "";
 
   // 날짜별 이벤트 맵
   const eventsByDate = useMemo(() => {
@@ -850,7 +829,7 @@ export default function CalendarWidget() {
           </div>
           <div className="flex items-center gap-1">
             <button
-              onClick={() => { void fetchEvents(viewYear, viewMonth); }}
+              onClick={() => void refetch()}
               disabled={loading}
               className="p-1.5 rounded-lg"
               style={{ color: "var(--text-muted)" }}
@@ -1057,7 +1036,7 @@ export default function CalendarWidget() {
         <EventFormModal
           defaultDate={formDate}
           onClose={() => setShowForm(false)}
-          onSaved={() => void fetchEvents(viewYear, viewMonth)}
+          onSaved={() => void refetch()}
         />
       )}
       {detailDate && eventsByDate[detailDate] && (
@@ -1065,8 +1044,8 @@ export default function CalendarWidget() {
           events={eventsByDate[detailDate]}
           date={detailDate}
           onClose={() => setDetailDate(null)}
-          onError={setFetchError}
-          onDeleted={() => { void fetchEvents(viewYear, viewMonth); setDetailDate(null); }}
+          onError={(msg) => { void msg; }}
+          onDeleted={() => { void refetch(); setDetailDate(null); }}
           onEdit={(ev) => setEditingEvent(ev)}
         />
       )}
@@ -1074,9 +1053,12 @@ export default function CalendarWidget() {
         <EventEditModal
           event={editingEvent}
           onClose={() => setEditingEvent(null)}
-          onSaved={() => { void fetchEvents(viewYear, viewMonth); setEditingEvent(null); }}
+          onSaved={() => { void refetch(); setEditingEvent(null); }}
         />
       )}
     </>
   );
 }
+
+// suppress unused import warning
+void isAbortError;

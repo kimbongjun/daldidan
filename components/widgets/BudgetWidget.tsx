@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, LogIn, ReceiptText, TrendingDown, Wallet } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { queryKeys } from "@/lib/queryKeys";
 import type { AuthUser as User } from "@supabase/supabase-js";
 
 interface Transaction {
@@ -72,8 +74,6 @@ function BudgetSkeleton() {
 
 export default function BudgetWidget() {
   const [user, setUser] = useState<User | null | undefined>(undefined);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const supabase = createClient();
@@ -84,42 +84,20 @@ export default function BudgetWidget() {
     return () => subscription.unsubscribe();
   }, []);
 
-  useEffect(() => {
-    if (user === undefined) return;
-    if (!user) {
-      setLoading(false);
-      return;
-    }
+  const now = new Date();
+  const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
-    let active = true;
-    setLoading(true);
-    const controller = new AbortController();
-
-    const now = new Date();
-    const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-    fetch(`/api/transactions?month=${month}`, { signal: controller.signal })
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
-      })
-      .then((data) => {
-        if (!active) return;
-        setTransactions(Array.isArray(data) ? data : []);
-      })
-      .catch((error: unknown) => {
-        if (!active || (error instanceof Error && error.name === "AbortError")) return;
-        setTransactions([]);
-      })
-      .finally(() => {
-        if (!active) return;
-        setLoading(false);
-      });
-
-    return () => {
-      active = false;
-      controller.abort();
-    };
-  }, [user]);
+  const { data: transactions = [], isLoading } = useQuery({
+    queryKey: queryKeys.budget.byMonth(month),
+    queryFn: async ({ signal }) => {
+      const res = await fetch(`/api/transactions?month=${month}`, { signal });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json() as unknown;
+      return Array.isArray(data) ? (data as Transaction[]) : [];
+    },
+    enabled: !!user,
+    staleTime: 5 * 60 * 1000,
+  });
 
   const expenseTransactions = useMemo(
     () => transactions.filter((t) => t.type === "expense"),
@@ -142,8 +120,7 @@ export default function BudgetWidget() {
     };
   }, [expenseTransactions]);
 
-  // 인증 확인 중 또는 데이터 로딩 중
-  if (user === undefined || (user !== null && loading)) {
+  if (user === undefined || (user !== null && isLoading)) {
     return <BudgetSkeleton />;
   }
 

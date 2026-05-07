@@ -1,11 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Shuffle, RefreshCw, LoaderCircle, QrCode } from "lucide-react";
 import type { LottoLatestResponse } from "@/app/api/lotto/latest/route";
 import type { LottoGenerateResponse } from "@/app/api/lotto/generate/route";
 import dynamic from "next/dynamic";
 import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
+import { queryKeys } from "@/lib/queryKeys";
+import { useState } from "react";
+
 const LottoQrScannerModal = dynamic(
   () => import("@/components/widgets/LottoQrScannerModal"),
   { ssr: false },
@@ -70,51 +73,39 @@ function SkeletonRow() {
 }
 
 export default function LottoWidget() {
-  const [latest, setLatest] = useState<LottoLatestResponse | null>(null);
-  const [generated, setGenerated] = useState<LottoGenerateResponse | null>(null);
-  const [latestLoading, setLatestLoading] = useState(true);
-  const [genLoading, setGenLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [qrOpen, setQrOpen] = useState(false);
 
-  const loadLatest = async () => {
-    setLatestLoading(true);
-    setError(null);
-
-    try {
-      const res = await fetchWithTimeout(`/api/lotto/latest?ts=${Date.now()}`, { cache: "no-store" }, 7000);
+  const {
+    data: latest,
+    isLoading: latestLoading,
+    isError: latestError,
+    refetch: refetchLatest,
+  } = useQuery({
+    queryKey: queryKeys.lotto.latest,
+    queryFn: async () => {
+      const res = await fetchWithTimeout(`/api/lotto/latest`, {}, 7000);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json() as LottoLatestResponse;
-      setLatest(data);
-    } catch {
-      setError("당첨 번호를 불러오지 못했습니다.");
-    } finally {
-      setLatestLoading(false);
-    }
-  };
+      return res.json() as Promise<LottoLatestResponse>;
+    },
+    staleTime: 60 * 60 * 1000,
+  });
 
-  useEffect(() => {
-    void loadLatest();
-  }, []);
-
-  const handleGenerate = async () => {
-    setGenLoading(true);
-    setError(null);
-    try {
+  const generateMutation = useMutation({
+    mutationFn: async (): Promise<LottoGenerateResponse> => {
       const res = await fetchWithTimeout("/api/lotto/generate", {}, 7000);
-      if (!res.ok) throw new Error();
-      const data = await res.json() as LottoGenerateResponse;
-      setGenerated(data);
-    } catch {
-      setError("번호 생성에 실패했습니다.");
-    } finally {
-      setGenLoading(false);
-    }
-  };
+      if (!res.ok) throw new Error("번호 생성에 실패했습니다.");
+      return res.json() as Promise<LottoGenerateResponse>;
+    },
+  });
 
   const latestNumbers = latest
     ? [latest.drwtNo1, latest.drwtNo2, latest.drwtNo3, latest.drwtNo4, latest.drwtNo5, latest.drwtNo6]
     : [];
+
+  const errorMessage =
+    latestError ? "당첨 번호를 불러오지 못했습니다."
+    : generateMutation.isError ? "번호 생성에 실패했습니다."
+    : null;
 
   return (
     <div className="bento-card h-full flex flex-col p-5 gap-4">
@@ -155,7 +146,7 @@ export default function LottoWidget() {
             )}
             <button
               type="button"
-              onClick={() => void loadLatest()}
+              onClick={() => void refetchLatest()}
               disabled={latestLoading}
               className="rounded-lg px-2 py-1 text-[11px] font-semibold transition-opacity hover:opacity-80 disabled:opacity-50"
               style={{ color: ACCENT, background: `${ACCENT}18`, border: `1px solid ${ACCENT}33` }}
@@ -167,8 +158,8 @@ export default function LottoWidget() {
 
         {latestLoading ? (
           <SkeletonRow />
-        ) : error && !latest ? (
-          <p className="text-xs text-center py-2" style={{ color: "#F43F5E" }}>{error}</p>
+        ) : errorMessage && !latest ? (
+          <p className="text-xs text-center py-2" style={{ color: "#F43F5E" }}>{errorMessage}</p>
         ) : (
           <div className="flex items-center justify-center gap-1.5 flex-wrap">
             {latestNumbers.map((n) => (
@@ -205,32 +196,32 @@ export default function LottoWidget() {
         <div className="flex items-center justify-between">
           <p className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>AI 추천 번호</p>
           <button
-            onClick={handleGenerate}
-            disabled={genLoading}
+            onClick={() => generateMutation.mutate()}
+            disabled={generateMutation.isPending}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-opacity hover:opacity-75 disabled:opacity-40"
             style={{ background: `${ACCENT}22`, color: ACCENT, border: `1px solid ${ACCENT}44` }}
           >
-            {genLoading
+            {generateMutation.isPending
               ? <><LoaderCircle size={11} className="animate-spin" /> 생성 중…</>
               : <><Shuffle size={11} /> 번호 뽑기</>
             }
           </button>
         </div>
 
-        {generated ? (
+        {generateMutation.data ? (
           <div
             className="rounded-xl p-4 flex flex-col gap-3"
             style={{ background: `${ACCENT}10`, border: `1px solid ${ACCENT}33` }}
           >
             <div className="flex items-center justify-center gap-1.5 flex-wrap">
-              {generated.numbers.map((n) => (
+              {generateMutation.data.numbers.map((n) => (
                 <LottoBall key={n} n={n} />
               ))}
-              <BonusBall n={generated.bonus} />
+              <BonusBall n={generateMutation.data.bonus} />
             </div>
             <button
-              onClick={handleGenerate}
-              disabled={genLoading}
+              onClick={() => generateMutation.mutate()}
+              disabled={generateMutation.isPending}
               className="flex items-center justify-center gap-1.5 text-xs py-1.5 rounded-lg transition-opacity hover:opacity-75"
               style={{ color: "var(--text-muted)", background: "rgba(255,255,255,0.04)" }}
             >
@@ -247,12 +238,12 @@ export default function LottoWidget() {
               최근 당첨 이력을 분석해<br />행운의 번호를 추천해 드려요
             </p>
             <button
-              onClick={handleGenerate}
-              disabled={genLoading}
+              onClick={() => generateMutation.mutate()}
+              disabled={generateMutation.isPending}
               className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-50 transition-opacity hover:opacity-85"
               style={{ background: `linear-gradient(135deg, ${ACCENT}, #D97706)` }}
             >
-              {genLoading
+              {generateMutation.isPending
                 ? <><LoaderCircle size={14} className="animate-spin" /> 생성 중…</>
                 : <><Shuffle size={14} /> 번호 생성하기</>
               }

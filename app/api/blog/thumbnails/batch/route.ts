@@ -51,7 +51,24 @@ export async function POST(request: NextRequest) {
         const fromContent =
           extractFirstVideoThumbnailFromHtml(post.content_html ?? "") ??
           extractFirstImageFromHtml(post.content_html ?? "");
-        const thumbUrl = fromContent ?? await generateAutoThumbnail(
+
+        if (fromContent) {
+          // 본문에서 추출한 이미지: thumbnail_url만 설정
+          await adminClient
+            .from("blog_posts")
+            .update({
+              thumbnail_url: fromContent,
+              thumbnail_source: "content_image",
+            })
+            .eq("id", post.id);
+          revalidatePath("/blog");
+          revalidatePath(`/blog/${post.slug}`);
+          processed.push(post.slug);
+          return;
+        }
+
+        // 본문에 이미지 없음 → 자동 생성
+        const result = await generateAutoThumbnail(
           post.title,
           post.content_html ?? "",
           post.slug,
@@ -59,17 +76,18 @@ export async function POST(request: NextRequest) {
           { summary: post.description ?? null },
         );
 
-        if (thumbUrl) {
-          await adminClient
-            .from("blog_posts")
-            .update({ thumbnail_url: thumbUrl })
-            .eq("id", post.id);
-          revalidatePath("/blog");
-          revalidatePath(`/blog/${post.slug}`);
-          processed.push(post.slug);
-        } else {
-          failed++;
-        }
+        await adminClient
+          .from("blog_posts")
+          .update({
+            thumbnail_url: result.url,
+            thumbnail_prompt: result.prompt,
+            thumbnail_source: result.source,
+          })
+          .eq("id", post.id);
+
+        revalidatePath("/blog");
+        revalidatePath(`/blog/${post.slug}`);
+        processed.push(post.slug);
       } catch {
         failed++;
       }

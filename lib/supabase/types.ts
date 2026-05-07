@@ -49,6 +49,8 @@ export type Database = {
           title: string;
           description: string;
           thumbnail_url: string | null;
+          thumbnail_prompt: string | null;
+          thumbnail_source: string | null;
           content_html: string;
           content_json: Json | null;
           is_published: boolean;
@@ -56,6 +58,7 @@ export type Database = {
           created_at: string;
           updated_at: string;
           view_count: number;
+          category: string | null;
         };
         Insert: {
           id?: string;
@@ -65,12 +68,15 @@ export type Database = {
           title: string;
           description?: string;
           thumbnail_url?: string | null;
+          thumbnail_prompt?: string | null;
+          thumbnail_source?: string | null;
           content_html?: string;
           content_json?: Json | null;
           is_published?: boolean;
           published_at?: string | null;
           created_at?: string;
           updated_at?: string;
+          category?: string | null;
         };
         Update: {
           id?: string;
@@ -80,6 +86,8 @@ export type Database = {
           title?: string;
           description?: string;
           thumbnail_url?: string | null;
+          thumbnail_prompt?: string | null;
+          thumbnail_source?: string | null;
           content_html?: string;
           content_json?: Json | null;
           is_published?: boolean;
@@ -87,6 +95,7 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
           view_count?: number;
+          category?: string | null;
         };
       };
       transactions: {

@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { MapPin, Star, ExternalLink } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import type { TravelActivity } from "@/app/api/travel/activities/route";
-import { fetchWithTimeout, isAbortError } from "@/lib/fetch-with-timeout";
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
+import { queryKeys } from "@/lib/queryKeys";
 
 const KLOOK_COLOR = "#FF5722";
 const KKDAY_COLOR = "#00B6BD";
@@ -27,32 +28,15 @@ function PlatformBadge({ platform }: { platform: "klook" | "kkday" }) {
 }
 
 export default function TravelWidget() {
-  const [activities, setActivities] = useState<TravelActivity[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
-
-  useEffect(() => {
-    let active = true;
-    const controller = new AbortController();
-
-    fetchWithTimeout("/api/travel/activities", { signal: controller.signal }, 7000)
-      .then((r) => r.json())
-      .then((data: TravelActivity[]) => {
-        if (!active) return;
-        setActivities(Array.isArray(data) ? data : []);
-        setLoading(false);
-      })
-      .catch((error) => {
-        if (!active || isAbortError(error)) return;
-        setError(true);
-        setLoading(false);
-      });
-
-    return () => {
-      active = false;
-      controller.abort();
-    };
-  }, []);
+  const { data: activities = [], isLoading, isError } = useQuery({
+    queryKey: queryKeys.travel.activities,
+    queryFn: async () => {
+      const r = await fetchWithTimeout("/api/travel/activities", {}, 7000);
+      const data = await r.json() as TravelActivity[];
+      return Array.isArray(data) ? data : [];
+    },
+    staleTime: 30 * 60 * 1000,
+  });
 
   return (
     <div className="bento-card h-full flex flex-col p-5 gap-4">
@@ -65,7 +49,7 @@ export default function TravelWidget() {
       </div>
 
       <div className="flex flex-col gap-3 flex-1 overflow-auto scrollbar-hide">
-        {loading ? (
+        {isLoading ? (
           <div className="flex flex-col gap-3">
             {[0, 1, 2].map((i) => (
               <div key={i} className="rounded-xl p-3 flex items-center gap-3" style={{ background: "rgba(255,255,255,0.04)" }}>
@@ -79,7 +63,7 @@ export default function TravelWidget() {
               </div>
             ))}
           </div>
-        ) : error ? (
+        ) : isError ? (
           <div className="flex-1 flex items-center justify-center">
             <p className="text-xs text-center" style={{ color: "var(--text-muted)" }}>
               데이터를 불러오지 못했습니다.

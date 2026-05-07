@@ -1,6 +1,6 @@
 "use client";
 
-import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import PageHeader from "@/components/PageHeader";
 import Pagination from "@/components/Pagination";
 import { sendNativeNotification } from "@/lib/notifications";
@@ -13,6 +13,8 @@ import {
 import OcrScanModal from "@/components/OcrScanModal";
 import { preprocessReceiptImage } from "@/lib/image-preprocess";
 import AiSummarySubtitle from "@/components/AiSummarySubtitle";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/queryKeys";
 
 const ACCENT = "#6366F1";
 const TRANSACTIONS_PER_PAGE = 10;
@@ -112,10 +114,7 @@ function currentMonthStr() {
 }
 
 export default function BudgetPage() {
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [chartTransactions, setChartTransactions] = useState<Transaction[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<Omit<Transaction, "id" | "userId" | "authorName">>(EMPTY_FORM());
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
@@ -131,11 +130,66 @@ export default function BudgetPage() {
     return `${y}년 ${m}월`;
   }, [selectedMonth]);
 
-  // 구성원 (사이트 설정에서 로드)
-  const [members, setMembers] = useState<string[]>(["공동", "봉준", "달희"]);
+  // 월별 거래 내역
+  const { data: transactions = [], isLoading } = useQuery({
+    queryKey: queryKeys.budget.byMonth(selectedMonth),
+    queryFn: async () => {
+      const res = await fetch(`/api/transactions?month=${selectedMonth}`);
+      if (!res.ok) return [] as Transaction[];
+      const data = await res.json() as TransactionApiResponse[];
+      return Array.isArray(data) ? data.map(normalizeTransaction) : [];
+    },
+    staleTime: 5 * 60 * 1000,
+  });
 
-  // 카테고리 예산 한도
-  const [budgetLimits, setBudgetLimits] = useState<Record<string, number>>({});
+  // 차트용 전체 거래 내역
+  const { data: chartTransactions = [] } = useQuery({
+    queryKey: queryKeys.budget.allTransactions,
+    queryFn: async () => {
+      const res = await fetch("/api/transactions?limit=1000");
+      if (!res.ok) return [] as Transaction[];
+      const data = await res.json() as TransactionApiResponse[];
+      return Array.isArray(data) ? data.map(normalizeTransaction) : [];
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // 현재 사용자 ID
+  const { data: currentUserData } = useQuery({
+    queryKey: queryKeys.user.profile,
+    queryFn: () =>
+      fetch("/api/me").then(async (res) => {
+        if (!res.ok) return null;
+        return res.json() as Promise<{ id: string }>;
+      }),
+    staleTime: 10 * 60 * 1000,
+  });
+  const currentUserId = currentUserData?.id ?? null;
+
+  // 사이트 설정 (Header와 동일한 캐시 공유 — 중복 요청 제거)
+  const { data: settingsData } = useQuery({
+    queryKey: queryKeys.siteSettings.all,
+    queryFn: () =>
+      fetch("/api/site-settings").then((r) => r.json() as Promise<Record<string, string>>),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // 설정에서 members, budgetLimits 파생
+  const members = useMemo<string[]>(() => {
+    if (!settingsData?.budget_members) return ["공동", "봉준", "달희"];
+    try {
+      const m = JSON.parse(settingsData.budget_members) as unknown;
+      return Array.isArray(m) && m.length > 0 ? (m as string[]) : ["공동", "봉준", "달희"];
+    } catch { return ["공동", "봉준", "달희"]; }
+  }, [settingsData]);
+
+  const budgetLimits = useMemo<Record<string, number>>(() => {
+    if (!settingsData?.budget_limits) return {};
+    try {
+      const l = JSON.parse(settingsData.budget_limits) as unknown;
+      return typeof l === "object" && l !== null ? (l as Record<string, number>) : {};
+    } catch { return {}; }
+  }, [settingsData]);
 
   // OCR 상태
   const [ocrLoading, setOcrLoading] = useState(false);
@@ -144,71 +198,10 @@ export default function BudgetPage() {
   const [ocrModalImage, setOcrModalImage] = useState<string | null>(null);
   const [ocrDone, setOcrDone] = useState(false);
 
-  const loadTransactions = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/transactions?month=${selectedMonth}`);
-      if (res.ok) {
-        const data = await res.json() as TransactionApiResponse[];
-        setTransactions(Array.isArray(data) ? data.map(normalizeTransaction) : []);
-      } else {
-        setTransactions([]);
-      }
-    } catch {
-      setTransactions([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [selectedMonth]);
-
-  const loadChartTransactions = useCallback(async () => {
-    try {
-      const res = await fetch("/api/transactions?limit=1000");
-      if (!res.ok) {
-        setChartTransactions([]);
-        return;
-      }
-      const data = await res.json() as TransactionApiResponse[];
-      setChartTransactions(Array.isArray(data) ? data.map(normalizeTransaction) : []);
-    } catch {
-      setChartTransactions([]);
-    }
-  }, []);
-
-  const loadCurrentUser = useCallback(async () => {
-    try {
-      const res = await fetch("/api/me");
-      if (!res.ok) return;
-      const data = await res.json() as { id: string };
-      setCurrentUserId(data.id);
-    } catch {}
-  }, []);
-
-  const loadSettings = useCallback(async () => {
-    try {
-      const res = await fetch("/api/site-settings");
-      if (!res.ok) return;
-      const s = await res.json() as Record<string, string>;
-      try {
-        const m = JSON.parse(s.budget_members ?? "[]") as unknown;
-        if (Array.isArray(m) && m.length > 0) setMembers(m as string[]);
-      } catch {}
-      try {
-        const l = JSON.parse(s.budget_limits ?? "{}") as unknown;
-        if (typeof l === "object" && l !== null) setBudgetLimits(l as Record<string, number>);
-      } catch {}
-    } catch {}
-  }, []);
-
   // 영수증 이미지 뷰어
   const [viewingReceiptTx, setViewingReceiptTx] = useState<Transaction | null>(null);
   // 내역 상세 뷰어
   const [viewingDetailTx, setViewingDetailTx] = useState<Transaction | null>(null);
-
-  useEffect(() => { void loadCurrentUser(); }, [loadCurrentUser]);
-  useEffect(() => { void loadSettings(); }, [loadSettings]);
-  useEffect(() => { loadTransactions(); }, [loadTransactions]);
-  useEffect(() => { void loadChartTransactions(); }, [loadChartTransactions]);
 
   const navigateMonth = (dir: -1 | 1) => {
     const [y, m] = selectedMonth.split("-").map(Number);
@@ -273,57 +266,73 @@ export default function BudgetPage() {
     setOcrError("");
   };
 
-  const handleSave = async () => {
-    if (form.amount <= 0 || ocrLoading) return;
-    setSaveStatus("saving");
-    setSaveError("");
-    try {
-      if (editingId) {
-        const res = await fetch(`/api/transactions/${editingId}`, {
+  const saveMutation = useMutation({
+    mutationFn: async (payload: { currentEditingId: string | null; formData: Omit<Transaction, "id" | "userId" | "authorName"> }) => {
+      const { currentEditingId, formData } = payload;
+      if (currentEditingId) {
+        const res = await fetch(`/api/transactions/${currentEditingId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...form, type: "expense" }),
+          body: JSON.stringify({ ...formData, type: "expense" }),
         });
         if (!res.ok) {
           const d = await res.json() as { error?: string };
           throw new Error(d.error ?? "수정에 실패했습니다.");
         }
-        const updated = normalizeTransaction(await res.json() as TransactionApiResponse);
-        setTransactions((prev) => prev.map((t) => (t.id === editingId ? updated : t)));
-        setChartTransactions((prev) => prev.map((t) => (t.id === editingId ? updated : t)));
+        return { data: await res.json() as TransactionApiResponse, isNew: false };
       } else {
         const res = await fetch("/api/transactions", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...form, type: "expense" }),
+          body: JSON.stringify({ ...formData, type: "expense" }),
         });
         if (!res.ok) {
           const d = await res.json() as { error?: string };
           throw new Error(d.error ?? "저장에 실패했습니다.");
         }
-        const created = normalizeTransaction(await res.json() as TransactionApiResponse);
-        setTransactions((prev) => [created, ...prev]);
-        setChartTransactions((prev) => [created, ...prev]);
-        setCurrentPage(1);
+        return { data: await res.json() as TransactionApiResponse, isNew: true };
+      }
+    },
+    onSuccess: ({ data, isNew }) => {
+      const saved = normalizeTransaction(data);
+      if (isNew) {
         sendNativeNotification(
           "가계부 내역이 추가되었어요",
-          `${created.note || created.category} · ${created.amount.toLocaleString()}원`,
+          `${saved.note || saved.category} · ${saved.amount.toLocaleString()}원`,
         );
+        setCurrentPage(1);
       }
       setSaveStatus("success");
       resetForm();
       setTimeout(() => setSaveStatus("idle"), 2000);
-    } catch (err) {
-      setSaveError(err instanceof Error ? err.message : "저장에 실패했습니다.");
+      void queryClient.invalidateQueries({ queryKey: queryKeys.budget.byMonth(selectedMonth) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.budget.allTransactions });
+    },
+    onError: (err: Error) => {
+      setSaveError(err.message);
       setSaveStatus("error");
-    }
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) =>
+      fetch(`/api/transactions/${id}`, { method: "DELETE" }).then(() => id),
+    onSuccess: (id) => {
+      if (editingId === id) resetForm();
+      void queryClient.invalidateQueries({ queryKey: queryKeys.budget.byMonth(selectedMonth) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.budget.allTransactions });
+    },
+  });
+
+  const handleSave = () => {
+    if (form.amount <= 0 || ocrLoading) return;
+    setSaveStatus("saving");
+    setSaveError("");
+    saveMutation.mutate({ currentEditingId: editingId, formData: form });
   };
 
-  const handleDelete = async (id: string) => {
-    await fetch(`/api/transactions/${id}`, { method: "DELETE" });
-    setTransactions((prev) => prev.filter((t) => t.id !== id));
-    setChartTransactions((prev) => prev.filter((t) => t.id !== id));
-    if (editingId === id) resetForm();
+  const handleDelete = (id: string) => {
+    deleteMutation.mutate(id);
   };
 
   const startEdit = (tx: Transaction) => {
@@ -605,7 +614,7 @@ export default function BudgetPage() {
                 {displayMonth} 지출 내역 <span className="font-normal text-xs" style={{ color: "var(--text-muted)" }}>({transactions.length}건)</span>
               </p>
 
-              {loading ? (
+              {isLoading ? (
                 <div className="flex items-center justify-center py-10">
                   <LoaderCircle size={20} className="animate-spin" style={{ color: ACCENT }} />
                 </div>
@@ -699,7 +708,12 @@ export default function BudgetPage() {
             <BudgetLimitsPanel
               transactions={transactions}
               budgetLimits={budgetLimits}
-              onLimitsChange={setBudgetLimits}
+              onLimitsChange={(newLimits) => {
+                queryClient.setQueryData<Record<string, string>>(
+                  queryKeys.siteSettings.all,
+                  (old) => old ? { ...old, budget_limits: JSON.stringify(newLimits) } : old,
+                );
+              }}
             />
 
             {/* 카테고리 비율 */}
