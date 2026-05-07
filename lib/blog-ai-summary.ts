@@ -2,7 +2,7 @@ import { createGroqClient } from "@/lib/groq";
 import { extractDescriptionFromHtml } from "@/lib/blog-shared";
 
 const DEFAULT_BLOG_SUMMARY_MODEL = "gemma2-9b-it";
-const MAX_SUMMARY_LENGTH = 70;
+const MAX_SUMMARY_LENGTH = 50;
 const MAX_KEYWORDS = 5;
 const HANJA_REGEX = /[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF]/g;
 const KOREAN_TRAILING_PARTICLE_REGEX = /(에서|으로|에게|까지|처럼|보다|마저|조차|부터|한테|하고|과의|과를|과가|으로는|으로도|이랑|랑|은|는|이|가|을|를|과|와|도|만|의|에|로|께|랑)$/u;
@@ -152,18 +152,18 @@ function containsForbiddenTone(text: string) {
 }
 
 function buildHumorousSummary(title: string, keywords: string[]) {
-  const topic = normalizeText(title).replace(/[.!?]+$/g, "").slice(0, 36) || "이 글";
+  const topic = normalizeText(title).replace(/[.!?]+$/g, "").slice(0, 24) || "이 글";
   const picks = keywords.filter(Boolean).slice(0, 2);
 
   if (picks.length >= 2) {
-    return sanitizeBlogAiSummary(`${picks[0]}와 ${picks[1]} 사이를 오가며 ${topic}의 맛을 유쾌하게 풀어낸 글입니다.`, "");
+    return sanitizeBlogAiSummary(`${picks[0]}와 ${picks[1]}을 담아낸 ${topic}의 기록.`, "");
   }
 
   if (picks.length === 1) {
-    return sanitizeBlogAiSummary(`${picks[0]}를 중심으로 ${topic}의 흐름을 재치 있게 엮어낸 글입니다.`, "");
+    return sanitizeBlogAiSummary(`${picks[0]}에 관한 ${topic}의 소소한 한 페이지.`, "");
   }
 
-  return sanitizeBlogAiSummary(`${topic}의 흐름과 분위기를 한 번 더 웃음기 있게 풀어낸 글입니다.`, "");
+  return sanitizeBlogAiSummary(`오늘도 담담하게 기록해 둔 ${topic}의 이야기.`, "");
 }
 
 function extractKoreanNouns(value: string) {
@@ -271,12 +271,21 @@ async function requestBlogAiMetadata(
       {
         role: "system",
         content: [
-          "당신은 한국어 블로그 편집자이자 재치 있는 카피라이터입니다.",
-          "글을 읽고 핵심 내용을 새롭게 해석해 유쾌하고 해학적인 한 줄 요약을 만드세요.",
-          "본문 문장을 그대로 복사하지 말고, 의미를 다시 엮어 자연스럽게 표현하세요.",
-          "비꼼, 독설, 냉소, 비속어, 과한 부정은 금지합니다.",
+          "당신은 한국어 블로그 편집자입니다.",
+          "글의 내용과 분량을 분석해 아래 세 유형 중 가장 적합한 것을 선택해 요약하세요.",
+          "",
+          "[시사점형] 정보·인사이트·분석이 풍부한 글 → 핵심 발견이나 시사점을 담은 한 문장",
+          "예: '이번 달 가계부를 보니 커피값이 식비를 앞질렀다.'",
+          "",
+          "[교훈형] 경험담·반성·배운 점이 담긴 글 → 경험에서 얻은 교훈을 한 문장으로",
+          "예: '시행착오 끝에 얻은 결론, 계획은 단순할수록 오래 간다.'",
+          "",
+          "[인사말형] 내용이 짧거나 일기처럼 가벼운 글 → 소소한 기록임을 담담하게 표현",
+          "예: '오늘 하루도 소소하게 기록해 둔 찰나의 이야기.'",
+          "",
+          "규칙: 본문 문장 복사 금지. 비꼼·독설·냉소·비속어 금지.",
           "반드시 아래 형식만 반환하세요.",
-          "SUMMARY: 45~70자 한 문장",
+          "SUMMARY: 40~55자 한 문장",
           "KEYWORDS: 썸네일 검색용 핵심 키워드 3~5개, 쉼표로 구분",
         ].join(" "),
       },
@@ -288,10 +297,9 @@ async function requestBlogAiMetadata(
           "글에서 추린 핵심 단락:",
           digest,
           "",
-          "요약 조건:",
-          "- 글의 주제와 흐름이 함께 드러날 것",
-          "- 독자가 미소 지을 만큼 가볍고 유머러스할 것",
+          "위 내용을 분석해 글의 유형(시사점형/교훈형/인사말형)을 판단하고 해당 유형에 맞는 자연스러운 한 줄 요약을 작성하세요.",
           "- 본문 표현을 그대로 옮기지 말 것",
+          "- 글자수는 40~55자로 맞출 것",
           "- 키워드는 이미지 검색에 바로 쓸 수 있게 명사 중심으로 만들 것",
         ].join("\n"),
       },
