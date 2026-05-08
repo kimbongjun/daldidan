@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
   Bell,
@@ -309,6 +310,9 @@ function EventEditModal({
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => { setMounted(true); }, []);
 
   function set<K extends keyof NewEvent>(key: K, value: NewEvent[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -352,10 +356,10 @@ function EventEditModal({
     }
   }
 
-  return (
+  if (!mounted) return null;
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)" }}
+      style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
@@ -385,7 +389,8 @@ function EventEditModal({
           </button>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -402,6 +407,9 @@ function EventFormModal({
   const [form, setForm] = useState<NewEvent>({ ...DEFAULT_NEW_EVENT, start_date: defaultDate });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => { setMounted(true); }, []);
 
   function set<K extends keyof NewEvent>(key: K, value: NewEvent[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -446,10 +454,10 @@ function EventFormModal({
     }
   }
 
-  return (
+  if (!mounted) return null;
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)" }}
+      style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
@@ -514,7 +522,8 @@ function EventFormModal({
           </button>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -536,6 +545,9 @@ function EventDetailModal({
 }) {
   const [deleting, setDeleting] = useState<string | null>(null);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => { setMounted(true); }, []);
 
   async function handleDelete(id: string) {
     setDeleting(id);
@@ -556,10 +568,10 @@ function EventDetailModal({
   const [y, m, d] = date.split("-").map(Number);
   const dateLabel = `${y}년 ${m}월 ${d}일`;
 
-  return (
+  if (!mounted) return null;
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)" }}
+      style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
@@ -688,7 +700,8 @@ function EventDetailModal({
           })}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
