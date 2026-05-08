@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, LogIn, ReceiptText, TrendingDown, Wallet } from "lucide-react";
+import { ArrowRight, LogIn, Plus, ReceiptText, TrendingDown, Wallet } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { queryKeys } from "@/lib/queryKeys";
 import type { AuthUser as User } from "@supabase/supabase-js";
+import BudgetAddModal from "@/components/BudgetAddModal";
 
 interface Transaction {
   id: string;
@@ -74,6 +75,7 @@ function BudgetSkeleton() {
 
 export default function BudgetWidget() {
   const [user, setUser] = useState<User | null | undefined>(undefined);
+  const [showAddModal, setShowAddModal] = useState(false);
 
   useEffect(() => {
     const supabase = createClient();
@@ -150,20 +152,32 @@ export default function BudgetWidget() {
   }
 
   return (
-    <div className="bento-card h-full flex flex-col p-5 gap-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: ACCENT }}>가계부</p>
-          <h2 className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>분석 요약</h2>
+    <>
+      {showAddModal && <BudgetAddModal onClose={() => setShowAddModal(false)} />}
+      <div className="bento-card h-full flex flex-col p-5 gap-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: ACCENT }}>가계부</p>
+            <h2 className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>분석 요약</h2>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-opacity hover:opacity-70"
+              style={{ background: "#6366F122", color: "#6366F1" }}
+              aria-label="지출 추가"
+            >
+              <Plus size={12} /> 추가
+            </button>
+            <Link
+              href="/budget"
+              className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg transition-opacity hover:opacity-70"
+              style={{ background: "#3DD9C022", color: ACCENT }}
+            >
+              상세보기 <ArrowRight size={11} />
+            </Link>
+          </div>
         </div>
-        <Link
-          href="/budget"
-          className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg transition-opacity hover:opacity-70"
-          style={{ background: "#3DD9C022", color: ACCENT }}
-        >
-          상세보기 <ArrowRight size={11} />
-        </Link>
-      </div>
 
       {/* 지출 요약 */}
       <div className="grid grid-cols-3 gap-2">
@@ -246,6 +260,7 @@ export default function BudgetWidget() {
           </Link>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }
