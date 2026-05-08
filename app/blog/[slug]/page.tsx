@@ -10,6 +10,7 @@ import BlogShareBar from "@/components/blog/BlogShareBar";
 import BlogViewCounter from "@/components/blog/BlogViewCounter";
 import { canEditBlogPost, getBlogPostBySlug } from "@/lib/blog";
 import { formatBlogDateTime, getBlogActivityTimestamp } from "@/lib/blog-shared";
+import BlogGoToTopButton from "@/components/blog/BlogGoToTopButton";
 
 const ACCENT = "#EA580C";
 
@@ -156,6 +157,7 @@ export default async function BlogDetailPage({ params }: { params: Promise<{ slu
           </aside>
         </article>
       </div>
+      <BlogGoToTopButton />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { type CSSProperties, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   CheckCircle2, ImagePlus, LoaderCircle, Pencil, X, XCircle,
 } from "lucide-react";
@@ -91,6 +92,9 @@ export default function BudgetAddModal({ onClose }: BudgetAddModalProps) {
   const [ocrSuggestedCategory, setOcrSuggestedCategory] = useState("");
   const [ocrModalImage, setOcrModalImage] = useState<string | null>(null);
   const [ocrDone, setOcrDone] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => { setMounted(true); }, []);
 
   const { data: settingsData } = useQuery({
     queryKey: queryKeys.siteSettings.all,
@@ -223,7 +227,9 @@ export default function BudgetAddModal({ onClose }: BudgetAddModalProps) {
     setOcrDone(false);
   };
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <>
       {ocrModalImage && (
         <OcrScanModal
@@ -235,7 +241,7 @@ export default function BudgetAddModal({ onClose }: BudgetAddModalProps) {
 
       {/* 오버레이 */}
       <div
-        className="fixed inset-0 z-40 flex items-center justify-center p-4"
+        className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
         style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(8px)" }}
         onClick={onClose}
       >
@@ -374,7 +380,8 @@ export default function BudgetAddModal({ onClose }: BudgetAddModalProps) {
           </button>
         </div>
       </div>
-    </>
+    </>,
+    document.body
   );
 }
 
