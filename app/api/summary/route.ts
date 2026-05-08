@@ -5,7 +5,7 @@ export type SummaryTarget = "blog" | "budget";
 
 const PROMPTS: Record<SummaryTarget, (items: string[]) => string> = {
   blog: (titles) =>
-    `다음은 최근 블로그 글 제목 목록입니다:\n${titles.map((t, i) => `${i + 1}. ${t}`).join("\n")}\n\n이 글들을 보고 블로그 전체 분위기를 유머러스하게 20자 이내로 한 줄 요약해주세요. 문장 부호 제외하고 텍스트만 반환하세요.`,
+    `다음은 최근 블로그 글 제목 목록입니다:\n${titles.map((t, i) => `${i + 1}. ${t}`).join("\n")}\n\n이 글들이 어떤 주제들을 다루고 있는지 따뜻하고 자연스럽게 30자 이내로 한 줄로 요약해주세요. 비속어, 한자, 냉소, 과장된 부정 표현은 사용하지 말고 한글과 숫자와 공백만 사용하세요. 문장 부호 제외하고 텍스트만 반환하세요.`,
   budget: (entries) =>
     `다음은 최근 가계부 내역 목록입니다:\n${entries.map((t, i) => `${i + 1}. ${t}`).join("\n")}\n\n이 소비 패턴을 보고 가계부 전체 분위기를 다정하고 산뜻하게 20자 이내로 한 줄 요약해주세요. 비속어, 한자, 냉소, 자조, 과장된 부정 표현은 사용하지 말고 한글과 숫자와 공백만 사용하세요. 문장 부호 제외하고 텍스트만 반환하세요.`,
 };
@@ -27,6 +27,12 @@ const SAFE_BUDGET_FALLBACKS = [
   "알뜰한 흐름이 보여요",
   "차분하게 쌓이는 소비 기록",
 ];
+const SAFE_BLOG_FALLBACKS = [
+  "다양한 주제를 담은 기록들",
+  "일상과 생각을 나눈 글들",
+  "삶의 이야기를 담은 블로그",
+  "소소하지만 따뜻한 기록들",
+];
 
 function isSummaryTarget(value: unknown): value is SummaryTarget {
   return value === "blog" || value === "budget";
@@ -40,13 +46,17 @@ function containsForbiddenWord(text: string, forbiddenWords: string[]) {
   return forbiddenWords.some((word) => text.includes(word));
 }
 
-function sanitizeBudgetSummary(summary: string, items: string[]) {
-  const normalized = summary
+function normalizeSummaryText(summary: string): string {
+  return summary
     .replace(/^"|"$/g, "")
     .replace(HANJA_REGEX, "")
     .replace(/[^0-9A-Za-z가-힣\s]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function sanitizeBudgetSummary(summary: string, items: string[]) {
+  const normalized = normalizeSummaryText(summary);
 
   const hasForbiddenTone =
     !normalized ||
@@ -61,10 +71,25 @@ function sanitizeBudgetSummary(summary: string, items: string[]) {
   return limitTextLength(normalized, 20);
 }
 
-function sanitizeSummary(target: SummaryTarget, summary: string, items: string[]) {
-  if (target === "budget") {
-    return sanitizeBudgetSummary(summary, items);
+function sanitizeBlogSummary(summary: string, items: string[]) {
+  const normalized = normalizeSummaryText(summary);
+
+  const hasForbiddenTone =
+    !normalized ||
+    containsForbiddenWord(normalized, BUDGET_PROFANITY) ||
+    containsForbiddenWord(normalized, BUDGET_NEGATIVE);
+
+  if (hasForbiddenTone) {
+    const fallbackIndex = items.join("|").length % SAFE_BLOG_FALLBACKS.length;
+    return SAFE_BLOG_FALLBACKS[fallbackIndex];
   }
+
+  return limitTextLength(normalized, 30);
+}
+
+function sanitizeSummary(target: SummaryTarget, summary: string, items: string[]) {
+  if (target === "budget") return sanitizeBudgetSummary(summary, items);
+  if (target === "blog") return sanitizeBlogSummary(summary, items);
   return limitTextLength(summary.replace(/^"|"$/g, "").trim(), 20);
 }
 
@@ -110,11 +135,11 @@ export async function POST(request: NextRequest) {
     const completion = await groq.chat.completions.create({
       model,
       messages: [
-        { role: "system", content: "당신은 짧고 재치 있는 한국어 카피라이터입니다. 요청한 텍스트만 반환하고 부연 설명은 하지 마세요. 공격적이거나 불쾌한 표현은 쓰지 마세요." },
+        { role: "system", content: "당신은 친근하고 따뜻한 한국어 요약 전문가입니다. 요청한 텍스트만 반환하고 부연 설명은 하지 마세요. 공격적이거나 불쾌한 표현은 쓰지 마세요." },
         { role: "user", content: PROMPTS[target](items.slice(0, 10)) },
       ],
       temperature: 0.9,
-      max_tokens: 60,
+      max_tokens: 80,
     });
 
     const summary = sanitizeSummary(target, completion.choices[0]?.message?.content ?? "", items);
