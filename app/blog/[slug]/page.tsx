@@ -76,17 +76,6 @@ export default async function BlogDetailPage({ params }: { params: Promise<{ slu
           subtitle={`${formatBlogDateTime(getBlogActivityTimestamp(post))} · ${post.authorName}`}
           description={post.description}
           accentColor={ACCENT}
-          actions={
-            editable ? (
-              <Link
-                href={`/blog/${encodeURIComponent(post.slug)}/edit`}
-                className="px-4 py-2 rounded-xl text-sm font-semibold transition-opacity hover:opacity-80"
-                style={{ background: "rgba(234,88,12,0.12)", color: ACCENT }}
-              >
-                글 편집
-              </Link>
-            ) : undefined
-          }
         />
 
         <article className="grid lg:grid-cols-[minmax(0,1fr)_280px] gap-6">
@@ -136,6 +125,15 @@ export default async function BlogDetailPage({ params }: { params: Promise<{ slu
             </div>
 
             <div className="bento-card p-5 flex flex-col gap-3">
+              {editable ? (
+                <Link
+                  href={`/blog/${encodeURIComponent(post.slug)}/edit`}
+                  className="w-full py-3 rounded-xl text-center font-semibold hover:opacity-80 transition-opacity"
+                  style={{ background: "rgba(234,88,12,0.12)", color: ACCENT }}
+                >
+                  글 편집
+                </Link>
+              ) : null}
               {editable ? <BlogNotifyButton slug={post.slug} /> : null}
               <Link
                 href="/blog"
