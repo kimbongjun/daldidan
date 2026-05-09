@@ -9,7 +9,6 @@ export async function GET() {
   const { data, error } = await supabase
     .from("travel_locations")
     .select("id, user_id, country, city, lat, lng, travel_date, photo_url, note, continent, created_at")
-    .eq("user_id", user.id)
     .order("travel_date", { ascending: false });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

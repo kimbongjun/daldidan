@@ -82,8 +82,8 @@ export default function TravelWidget() {
       {/* 통계 */}
       <div style={{ display: "flex", gap: "0.5rem" }}>
         {[
-          { label: "여행지", value: loading ? "—" : String(places.length) },
-          { label: "국가", value: loading ? "—" : String(countryCount) },
+          { label: "전체 여행지", value: loading ? "—" : String(places.length) },
+          { label: "전체 국가", value: loading ? "—" : String(countryCount) },
         ].map(({ label, value }) => (
           <div
             key={label}
@@ -138,7 +138,7 @@ export default function TravelWidget() {
             }}
           >
             <Plus size={20} style={{ color: "var(--accent-emerald, #10b981)" }} />
-            첫 여행을 기록해보세요
+            첫 여행지를 공유해보세요
           </Link>
         ) : (
           recent.map((place) => (

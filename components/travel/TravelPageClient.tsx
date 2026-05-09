@@ -9,6 +9,7 @@ import { useTravelStore } from "@/store/useTravelStore";
 import TravelSidebar from "@/components/travel/TravelSidebar";
 import TravelDetailModal from "@/components/travel/TravelDetailModal";
 import TravelFormModal from "@/components/travel/TravelFormModal";
+import { createClient } from "@/lib/supabase/client";
 
 const TravelWorldMap = dynamic(() => import("@/components/travel/TravelWorldMap"), {
   ssr: false,
@@ -47,6 +48,15 @@ export default function TravelPageClient() {
   const { places, setPlaces, isAddModalOpen, isDetailModalOpen, selectedPlace, editingPlace, openAddModal, closeAddModal, openDetailModal, closeDetailModal, filter, setFilter } = useTravelStore();
   const [loading, setLoading] = useState(true);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    void (async () => {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) setCurrentUserId(user.id);
+    })();
+  }, []);
 
   useEffect(() => {
     void (async () => {
@@ -242,6 +252,7 @@ export default function TravelPageClient() {
       {isDetailModalOpen && selectedPlace && (
         <TravelDetailModal
           place={selectedPlace}
+          currentUserId={currentUserId}
           onClose={handleCloseDetail}
           onEdit={handleEdit}
           onDelete={handleDelete}

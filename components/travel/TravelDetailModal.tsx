@@ -8,12 +8,14 @@ import { CONTINENT_LABELS, type TravelContinent } from "@/lib/travel-shared";
 
 interface TravelDetailModalProps {
   place: TravelPlace;
+  currentUserId?: string;
   onClose: () => void;
   onEdit: (place: TravelPlace) => void;
   onDelete: (id: string) => void;
 }
 
-export default function TravelDetailModal({ place, onClose, onEdit, onDelete }: TravelDetailModalProps) {
+export default function TravelDetailModal({ place, currentUserId, onClose, onEdit, onDelete }: TravelDetailModalProps) {
+  const isOwner = !!currentUserId && currentUserId === place.user_id;
   function handleDelete() {
     if (confirm(`"${place.city}" 여행 기록을 삭제할까요?`)) {
       onDelete(place.id);
@@ -162,59 +164,61 @@ export default function TravelDetailModal({ place, onClose, onEdit, onDelete }: 
           )}
         </div>
 
-        {/* 액션 버튼 */}
-        <div
-          style={{
-            padding: "0.875rem 1.25rem",
-            borderTop: "1px solid var(--border)",
-            display: "flex",
-            gap: "0.5rem",
-            flexShrink: 0,
-          }}
-        >
-          <button
-            onClick={handleDelete}
+        {/* 액션 버튼: 작성자만 표시 */}
+        {isOwner && (
+          <div
             style={{
-              flex: 1,
-              padding: "0.6rem",
-              borderRadius: 10,
-              border: "1px solid var(--border)",
-              background: "transparent",
-              color: "#ef4444",
-              cursor: "pointer",
-              fontWeight: 600,
-              fontSize: "0.85rem",
+              padding: "0.875rem 1.25rem",
+              borderTop: "1px solid var(--border)",
               display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "0.4rem",
+              gap: "0.5rem",
+              flexShrink: 0,
             }}
           >
-            <Trash2 size={15} />
-            삭제
-          </button>
-          <button
-            onClick={() => onEdit(place)}
-            style={{
-              flex: 2,
-              padding: "0.6rem",
-              borderRadius: 10,
-              border: "none",
-              background: "var(--accent-emerald, #10b981)",
-              color: "#fff",
-              cursor: "pointer",
-              fontWeight: 700,
-              fontSize: "0.85rem",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "0.4rem",
-            }}
-          >
-            <Edit2 size={15} />
-            수정
-          </button>
-        </div>
+            <button
+              onClick={handleDelete}
+              style={{
+                flex: 1,
+                padding: "0.6rem",
+                borderRadius: 10,
+                border: "1px solid var(--border)",
+                background: "transparent",
+                color: "#ef4444",
+                cursor: "pointer",
+                fontWeight: 600,
+                fontSize: "0.85rem",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "0.4rem",
+              }}
+            >
+              <Trash2 size={15} />
+              삭제
+            </button>
+            <button
+              onClick={() => onEdit(place)}
+              style={{
+                flex: 2,
+                padding: "0.6rem",
+                borderRadius: 10,
+                border: "none",
+                background: "var(--accent-emerald, #10b981)",
+                color: "#fff",
+                cursor: "pointer",
+                fontWeight: 700,
+                fontSize: "0.85rem",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "0.4rem",
+              }}
+            >
+              <Edit2 size={15} />
+              수정
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
