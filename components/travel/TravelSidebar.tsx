@@ -14,6 +14,8 @@ interface TravelSidebarProps {
   selectedContinents: TravelContinent[];
   onYearToggle: (year: number) => void;
   onContinentToggle: (continent: TravelContinent) => void;
+  onYearReset: () => void;
+  onContinentReset: () => void;
   onPlaceClick: (place: TravelPlace) => void;
   onAddClick: () => void;
   highlightedId?: string | null;
@@ -26,6 +28,8 @@ export default function TravelSidebar({
   selectedContinents,
   onYearToggle,
   onContinentToggle,
+  onYearReset,
+  onContinentReset,
   onPlaceClick,
   onAddClick,
   highlightedId,
@@ -132,6 +136,23 @@ export default function TravelSidebar({
                   연도
                 </p>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem" }}>
+                  <button
+                    onClick={onYearReset}
+                    style={{
+                      padding: "2px 10px",
+                      borderRadius: 999,
+                      fontSize: "0.75rem",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      border: "1px solid",
+                      borderColor: selectedYears.length === 0 ? "var(--accent-emerald, #10b981)" : "var(--border)",
+                      background: selectedYears.length === 0 ? "var(--accent-emerald, #10b981)" : "transparent",
+                      color: selectedYears.length === 0 ? "#fff" : "var(--text-secondary)",
+                      transition: "all 0.15s",
+                    }}
+                  >
+                    전체
+                  </button>
                   {allYears.map((y) => (
                     <button
                       key={y}
@@ -161,6 +182,23 @@ export default function TravelSidebar({
                 대륙
               </p>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem" }}>
+                <button
+                  onClick={onContinentReset}
+                  style={{
+                    padding: "2px 10px",
+                    borderRadius: 999,
+                    fontSize: "0.75rem",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    border: "1px solid",
+                    borderColor: selectedContinents.length === 0 ? "var(--accent-emerald, #10b981)" : "var(--border)",
+                    background: selectedContinents.length === 0 ? "var(--accent-emerald, #10b981)" : "transparent",
+                    color: selectedContinents.length === 0 ? "#fff" : "var(--text-secondary)",
+                    transition: "all 0.15s",
+                  }}
+                >
+                  전체
+                </button>
                 {CONTINENTS.map((c) => (
                   <button
                     key={c}

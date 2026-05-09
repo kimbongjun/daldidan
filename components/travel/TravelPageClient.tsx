@@ -73,12 +73,14 @@ export default function TravelPageClient() {
   }, [setPlaces]);
 
   const filteredPlaces = useMemo(() => {
-    return places.filter((p) => {
-      const year = new Date(p.travel_date).getFullYear();
-      if (filter.years.length > 0 && !filter.years.includes(year)) return false;
-      if (filter.continents.length > 0 && !filter.continents.includes(p.continent as TravelContinent)) return false;
-      return true;
-    });
+    return places
+      .filter((p) => {
+        const year = new Date(p.travel_date).getFullYear();
+        if (filter.years.length > 0 && !filter.years.includes(year)) return false;
+        if (filter.continents.length > 0 && !filter.continents.includes(p.continent as TravelContinent)) return false;
+        return true;
+      })
+      .sort((a, b) => new Date(b.travel_date).getTime() - new Date(a.travel_date).getTime());
   }, [places, filter]);
 
   const handlePinClick = useCallback((place: TravelPlace) => {
@@ -131,6 +133,9 @@ export default function TravelPageClient() {
       : [...filter.continents, continent];
     setFilter({ continents: next });
   }
+
+  function resetYearFilter() { setFilter({ years: [] }); }
+  function resetContinentFilter() { setFilter({ continents: [] }); }
 
   return (
     <div
@@ -229,6 +234,8 @@ export default function TravelPageClient() {
                 selectedContinents={filter.continents}
                 onYearToggle={toggleYear}
                 onContinentToggle={toggleContinent}
+                onYearReset={resetYearFilter}
+                onContinentReset={resetContinentFilter}
                 onPlaceClick={handlePlaceClick}
                 onAddClick={() => openAddModal()}
                 highlightedId={highlightedId}
