@@ -17,6 +17,7 @@ import Header from "@/components/Header";
 import BudgetWidget from "@/components/widgets/BudgetWidget";
 import BlogWidget from "@/components/widgets/BlogWidget";
 import RealEstateWidget from "@/components/widgets/RealEstateWidget";
+import TravelWidget from "@/components/widgets/TravelWidget";
 import FortuneWidget from "@/components/widgets/FortuneWidget";
 import LottoWidget from "@/components/widgets/LottoWidget";
 import ErrorBoundary from "@/components/ErrorBoundary";
@@ -49,6 +50,7 @@ const WIDGET_META: Record<
   calendar: { label: "캘린더", minHeight: 0, mobileCols: 1, tabletCols: 1, desktopCols: 1 },
   stock: { label: "증시", minHeight: 0, mobileCols: 1, tabletCols: 2, desktopCols: 2 },
   realestate: { label: "부동산", minHeight: 0, mobileCols: 1, tabletCols: 1, desktopCols: 1 },
+  travel: { label: "여행지도", minHeight: 0, mobileCols: 1, tabletCols: 1, desktopCols: 1 },
 };
 
 function CalendarWidgetSkeleton() {
@@ -205,6 +207,8 @@ function BentoGrid({ initialBlogPosts }: { initialBlogPosts: BlogPostSummary[] }
         );
       case "realestate":
         return <ErrorBoundary><RealEstateWidget /></ErrorBoundary>;
+      case "travel":
+        return <ErrorBoundary><TravelWidget /></ErrorBoundary>;
     }
   }
 

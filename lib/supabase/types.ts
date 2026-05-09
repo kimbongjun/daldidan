@@ -158,6 +158,47 @@ export type Database = {
           updated_at?: string;
         };
       };
+      travel_locations: {
+        Row: {
+          id: string;
+          user_id: string;
+          country: string;
+          city: string;
+          lat: number;
+          lng: number;
+          travel_date: string;
+          photo_url: string | null;
+          note: string | null;
+          continent: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          country: string;
+          city: string;
+          lat: number;
+          lng: number;
+          travel_date: string;
+          photo_url?: string | null;
+          note?: string | null;
+          continent?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          country?: string;
+          city?: string;
+          lat?: number;
+          lng?: number;
+          travel_date?: string;
+          photo_url?: string | null;
+          note?: string | null;
+          continent?: string | null;
+          updated_at?: string;
+        };
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;

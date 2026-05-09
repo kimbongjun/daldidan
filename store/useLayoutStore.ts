@@ -8,7 +8,8 @@ export type WidgetId =
   | "budget"
   | "calendar"
   | "stock"
-  | "realestate";
+  | "realestate"
+  | "travel";
 
 const DEFAULT_WIDGET_ORDER: WidgetId[] = [
   "fortune",
@@ -18,6 +19,7 @@ const DEFAULT_WIDGET_ORDER: WidgetId[] = [
   "calendar",
   "stock",
   "realestate",
+  "travel",
 ];
 
 export const MOBILE_WIDGET_ORDER: WidgetId[] = [
@@ -28,6 +30,7 @@ export const MOBILE_WIDGET_ORDER: WidgetId[] = [
   "stock",
   "fortune",
   "realestate",
+  "travel",
 ];
 
 const WIDGET_IDS = new Set<WidgetId>(DEFAULT_WIDGET_ORDER);

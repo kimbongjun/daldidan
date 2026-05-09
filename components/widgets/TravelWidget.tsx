@@ -1,131 +1,221 @@
 "use client";
 
-import { MapPin, Star, ExternalLink } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
-import type { TravelActivity } from "@/app/api/travel/activities/route";
-import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
-import { queryKeys } from "@/lib/queryKeys";
-
-const KLOOK_COLOR = "#FF5722";
-const KKDAY_COLOR = "#00B6BD";
-const EMERALD = "#10B981";
-
-function PlatformBadge({ platform }: { platform: "klook" | "kkday" }) {
-  const isKlook = platform === "klook";
-  return (
-    <span
-      className="tag shrink-0 font-bold"
-      style={{
-        background: isKlook ? `${KLOOK_COLOR}22` : `${KKDAY_COLOR}22`,
-        color: isKlook ? KLOOK_COLOR : KKDAY_COLOR,
-        fontSize: "0.65rem",
-        letterSpacing: "0.03em",
-      }}
-    >
-      {isKlook ? "Klook" : "KKday"}
-    </span>
-  );
-}
+import { useEffect, useState } from "react";
+import { MapPin, Globe, Plus, ArrowRight } from "lucide-react";
+import Link from "next/link";
+import type { TravelPlace } from "@/lib/travel-shared";
+import { useTravelStore } from "@/store/useTravelStore";
 
 export default function TravelWidget() {
-  const { data: activities = [], isLoading, isError } = useQuery({
-    queryKey: queryKeys.travel.activities,
-    queryFn: async () => {
-      const r = await fetchWithTimeout("/api/travel/activities", {}, 7000);
-      const data = await r.json() as TravelActivity[];
-      return Array.isArray(data) ? data : [];
-    },
-    staleTime: 30 * 60 * 1000,
-  });
+  const { places, setPlaces } = useTravelStore();
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await fetch("/api/travel");
+        if (res.ok) {
+          const data = await res.json() as TravelPlace[];
+          setPlaces(data);
+        }
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [setPlaces]);
+
+  const recent = places.slice(0, 3);
+  const countryCount = new Set(places.map((p) => p.country)).size;
 
   return (
-    <div className="bento-card h-full flex flex-col p-5 gap-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: EMERALD }}>여행</p>
-          <h2 className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>추천 액티비티</h2>
+    <div
+      className="bento-card"
+      style={{
+        background: "var(--bg-card)",
+        border: "1px solid var(--border)",
+        borderRadius: 16,
+        padding: "1.1rem",
+        display: "flex",
+        flexDirection: "column",
+        gap: "0.75rem",
+        height: "100%",
+        minHeight: 200,
+        boxSizing: "border-box",
+      }}
+    >
+      {/* 헤더 */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <div
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 8,
+              background: "rgba(16,185,129,0.15)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Globe size={17} style={{ color: "var(--accent-emerald, #10b981)" }} />
+          </div>
+          <span style={{ fontWeight: 700, fontSize: "0.9rem", color: "var(--text-primary)" }}>
+            여행 지도
+          </span>
         </div>
-        <span className="tag" style={{ background: `${EMERALD}22`, color: EMERALD }}>봄 시즌</span>
+        <Link
+          href="/travel"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "0.25rem",
+            fontSize: "0.75rem",
+            color: "var(--accent-emerald, #10b981)",
+            textDecoration: "none",
+            fontWeight: 600,
+          }}
+        >
+          전체보기 <ArrowRight size={13} />
+        </Link>
       </div>
 
-      <div className="flex flex-col gap-3 flex-1 overflow-auto scrollbar-hide">
-        {isLoading ? (
-          <div className="flex flex-col gap-3">
-            {[0, 1, 2].map((i) => (
-              <div key={i} className="rounded-xl p-3 flex items-center gap-3" style={{ background: "rgba(255,255,255,0.04)" }}>
-                <div className="w-10 h-10 rounded-lg skeleton-shimmer shrink-0" />
-                <div className="flex flex-col gap-1.5 flex-1 min-w-0">
-                  <div className="h-3.5 w-3/4 rounded skeleton-shimmer" />
-                  <div className="h-3 w-1/2 rounded skeleton-shimmer" />
-                  <div className="h-2.5 w-2/5 rounded skeleton-shimmer" />
-                </div>
-                <div className="h-4 w-14 rounded skeleton-shimmer shrink-0" />
-              </div>
-            ))}
-          </div>
-        ) : isError ? (
-          <div className="flex-1 flex items-center justify-center">
-            <p className="text-xs text-center" style={{ color: "var(--text-muted)" }}>
-              데이터를 불러오지 못했습니다.
+      {/* 통계 */}
+      <div style={{ display: "flex", gap: "0.5rem" }}>
+        {[
+          { label: "여행지", value: loading ? "—" : String(places.length) },
+          { label: "국가", value: loading ? "—" : String(countryCount) },
+        ].map(({ label, value }) => (
+          <div
+            key={label}
+            style={{
+              flex: 1,
+              background: "rgba(16,185,129,0.08)",
+              borderRadius: 10,
+              padding: "0.5rem 0.75rem",
+              textAlign: "center",
+            }}
+          >
+            <p style={{ margin: 0, fontSize: "1.3rem", fontWeight: 800, color: "var(--accent-emerald, #10b981)" }}>
+              {value}
+            </p>
+            <p style={{ margin: 0, fontSize: "0.7rem", color: "var(--text-secondary)", marginTop: 1 }}>
+              {label}
             </p>
           </div>
+        ))}
+      </div>
+
+      {/* 최근 여행지 */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+        {loading ? (
+          [1, 2, 3].map((i) => (
+            <div
+              key={i}
+              style={{
+                height: 36,
+                borderRadius: 8,
+                background: "var(--bg-base)",
+                animation: "pulse 1.5s ease-in-out infinite",
+              }}
+            />
+          ))
+        ) : recent.length === 0 ? (
+          <Link
+            href="/travel"
+            style={{
+              flex: 1,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "0.35rem",
+              borderRadius: 10,
+              border: "2px dashed var(--border)",
+              textDecoration: "none",
+              color: "var(--text-secondary)",
+              fontSize: "0.8rem",
+              padding: "1rem",
+            }}
+          >
+            <Plus size={20} style={{ color: "var(--accent-emerald, #10b981)" }} />
+            첫 여행을 기록해보세요
+          </Link>
         ) : (
-          activities.map((a) => (
-            <a
-              key={a.id}
-              href={a.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded-xl p-3 flex items-center gap-3 hover:opacity-80 transition-opacity"
-              style={{ background: "rgba(255,255,255,0.04)", textDecoration: "none" }}
+          recent.map((place) => (
+            <Link
+              key={place.id}
+              href="/travel"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+                padding: "0.4rem 0.5rem",
+                borderRadius: 8,
+                textDecoration: "none",
+                background: "var(--bg-base)",
+                border: "1px solid var(--border)",
+              }}
             >
-              {/* 플랫폼 아이콘 */}
-              <div
-                className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0 text-lg"
-                style={{ background: `${EMERALD}22` }}
-              >
-                {a.category === "테마파크" ? "🎡" : a.category === "크루즈" ? "🚢" : a.category === "문화투어" ? "🏯" : "🗺️"}
+              {place.photo_url ? (
+                <img
+                  src={place.photo_url}
+                  alt={place.city}
+                  style={{ width: 28, height: 28, borderRadius: 6, objectFit: "cover", flexShrink: 0 }}
+                />
+              ) : (
+                <div
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: 6,
+                    background: "rgba(16,185,129,0.15)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  <MapPin size={13} style={{ color: "var(--accent-emerald, #10b981)" }} />
+                </div>
+              )}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: "0.8rem",
+                    fontWeight: 600,
+                    color: "var(--text-primary)",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {place.city}
+                </p>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: "0.68rem",
+                    color: "var(--text-secondary)",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {place.country} · {place.travel_date.slice(0, 7)}
+                </p>
               </div>
-
-              {/* 본문 */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <p className="text-sm font-semibold truncate" style={{ color: "var(--text-primary)" }}>{a.name}</p>
-                  {a.tag && (
-                    <span className="tag shrink-0" style={{ background: `${EMERALD}22`, color: EMERALD }}>
-                      {a.tag}
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                  <MapPin size={10} style={{ color: "var(--text-muted)", flexShrink: 0 }} />
-                  <p className="text-xs truncate" style={{ color: "var(--text-muted)" }}>{a.location} · {a.category}</p>
-                  <PlatformBadge platform={a.platform} />
-                </div>
-              </div>
-
-              {/* 오른쪽: 평점 + 가격 + 링크 */}
-              <div className="text-right shrink-0 max-w-[90px] flex flex-col items-end gap-0.5">
-                <div className="flex items-center gap-0.5">
-                  <Star size={10} fill={EMERALD} style={{ color: EMERALD }} />
-                  <span className="text-xs font-bold" style={{ color: EMERALD }}>{a.rating}</span>
-                  <span className="text-xs" style={{ color: "var(--text-muted)" }}>({(a.reviewCount / 1000).toFixed(1)}k)</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  {a.discountPct && (
-                    <span className="text-xs font-bold" style={{ color: "#F43F5E" }}>-{a.discountPct}%</span>
-                  )}
-                  <p className="text-xs font-semibold leading-tight" style={{ color: "var(--text-primary)" }}>{a.price}</p>
-                </div>
-                {a.originalPrice && (
-                  <p className="text-xs leading-tight line-through" style={{ color: "var(--text-muted)" }}>{a.originalPrice}</p>
-                )}
-                <ExternalLink size={10} style={{ color: "var(--text-muted)" }} />
-              </div>
-            </a>
+            </Link>
           ))
         )}
       </div>
+
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.4; }
+        }
+      `}</style>
     </div>
   );
 }
