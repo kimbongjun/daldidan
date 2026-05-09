@@ -10,7 +10,7 @@ import TravelSidebar from "@/components/travel/TravelSidebar";
 import TravelDetailModal from "@/components/travel/TravelDetailModal";
 import TravelFormModal from "@/components/travel/TravelFormModal";
 
-const TravelGlobe = dynamic(() => import("@/components/travel/TravelGlobe"), {
+const TravelWorldMap = dynamic(() => import("@/components/travel/TravelWorldMap"), {
   ssr: false,
   loading: () => (
     <div
@@ -20,8 +20,8 @@ const TravelGlobe = dynamic(() => import("@/components/travel/TravelGlobe"), {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: "#080c18",
-        borderRadius: 16,
+        background: "#0d1b2a",
+        borderRadius: 0,
       }}
     >
       <div style={{ textAlign: "center", color: "#4fc3f7" }}>
@@ -36,7 +36,7 @@ const TravelGlobe = dynamic(() => import("@/components/travel/TravelGlobe"), {
             margin: "0 auto 0.75rem",
           }}
         />
-        <p style={{ margin: 0, fontSize: "0.85rem", opacity: 0.7 }}>지구본 로딩 중...</p>
+        <p style={{ margin: 0, fontSize: "0.85rem", opacity: 0.7 }}>지도 로딩 중...</p>
       </div>
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </div>
@@ -227,12 +227,13 @@ export default function TravelPageClient() {
           </div>
         </div>
 
-        {/* 지구본 영역 */}
+        {/* 지도 영역 */}
         <div className="travel-globe-wrap">
-          <TravelGlobe
+          <TravelWorldMap
             places={filteredPlaces}
             onPinClick={handlePinClick}
             highlightedId={highlightedId}
+            selectedContinents={filter.continents}
           />
         </div>
       </div>
@@ -271,6 +272,8 @@ export default function TravelPageClient() {
           flex: 1;
           min-width: 0;
           height: calc(100vh - 73px);
+          background: #0d1b2a;
+          border-radius: 0;
         }
         .hide-xs { display: inline; }
         @keyframes pulse {

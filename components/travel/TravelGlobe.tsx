@@ -21,7 +21,7 @@ interface ArcParticle {
 }
 
 const GLOBE_RADIUS = 2;
-const STAR_COUNT = 1500;
+const STAR_COUNT = 2000;
 
 function latLngToVec3(lat: number, lng: number, r: number): THREE.Vector3 {
   const phi = (90 - lat) * (Math.PI / 180);
@@ -39,7 +39,7 @@ function createStars(): THREE.Points {
   for (let i = 0; i < STAR_COUNT; i++) {
     const theta = 2 * Math.PI * Math.random();
     const phi = Math.acos(2 * Math.random() - 1);
-    const r = 40 + Math.random() * 60;
+    const r = 50 + Math.random() * 80;
     verts.push(
       r * Math.sin(phi) * Math.cos(theta),
       r * Math.sin(phi) * Math.sin(theta),
@@ -47,33 +47,48 @@ function createStars(): THREE.Points {
     );
   }
   geo.setAttribute("position", new THREE.Float32BufferAttribute(verts, 3));
-  const mat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.12, sizeAttenuation: true });
+  const mat = new THREE.PointsMaterial({
+    color: 0xffffff,
+    size: 0.12,
+    sizeAttenuation: true,
+    transparent: true,
+    opacity: 0.9,
+  });
   return new THREE.Points(geo, mat);
 }
 
-function createGridLines(r: number): THREE.LineSegments {
-  const points: number[] = [];
-  const segments = 64;
-
-  for (let lat = -60; lat <= 60; lat += 30) {
-    for (let i = 0; i <= segments; i++) {
-      const lng = (i / segments) * 360 - 180;
-      const v = latLngToVec3(lat, lng, r + 0.003);
-      points.push(v.x, v.y, v.z);
-    }
-  }
-  for (let lng = -180; lng < 180; lng += 30) {
-    for (let i = 0; i <= segments; i++) {
-      const lat = (i / segments) * 180 - 90;
-      const v = latLngToVec3(lat, lng, r + 0.003);
-      points.push(v.x, v.y, v.z);
-    }
-  }
-
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute("position", new THREE.Float32BufferAttribute(points, 3));
-  const mat = new THREE.LineBasicMaterial({ color: 0x2a4a6a, transparent: true, opacity: 0.15 });
-  return new THREE.LineSegments(geo, mat);
+// Fresnel-based atmosphere glow
+function createAtmosphere(r: number): THREE.Mesh {
+  const geo = new THREE.SphereGeometry(r * 1.065, 64, 64);
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {},
+    vertexShader: `
+      varying vec3 vNormal;
+      varying vec3 vViewDir;
+      void main() {
+        vNormal = normalize(normalMatrix * normal);
+        vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
+        vViewDir = normalize(-mvPos.xyz);
+        gl_Position = projectionMatrix * mvPos;
+      }
+    `,
+    fragmentShader: `
+      varying vec3 vNormal;
+      varying vec3 vViewDir;
+      void main() {
+        float rim = 1.0 - max(0.0, dot(vNormal, vViewDir));
+        float intensity = pow(rim, 4.0) * 1.6;
+        intensity = clamp(intensity, 0.0, 1.0);
+        vec3 color = mix(vec3(0.2, 0.5, 1.0), vec3(0.4, 0.7, 1.0), rim);
+        gl_FragColor = vec4(color, intensity * 0.88);
+      }
+    `,
+    side: THREE.FrontSide,
+    blending: THREE.AdditiveBlending,
+    transparent: true,
+    depthWrite: false,
+  });
+  return new THREE.Mesh(geo, mat);
 }
 
 function createCountryLines(r: number): THREE.Group {
@@ -82,9 +97,9 @@ function createCountryLines(r: number): THREE.Group {
   const countries = feature(topo, topo.objects.countries);
 
   const lineMat = new THREE.LineBasicMaterial({
-    color: 0x4a9eca,
+    color: 0xffffff,
     transparent: true,
-    opacity: 0.55,
+    opacity: 0.78,
   });
 
   countries.features.forEach((f) => {
@@ -93,7 +108,7 @@ function createCountryLines(r: number): THREE.Group {
 
     const processRing = (ring: number[][]) => {
       if (ring.length < 2) return;
-      const pts = ring.map(([lng, lat]) => latLngToVec3(lat, lng, r + 0.006));
+      const pts = ring.map(([lng, lat]) => latLngToVec3(lat, lng, r + 0.012));
       const geo = new THREE.BufferGeometry().setFromPoints(pts);
       group.add(new THREE.Line(geo, lineMat));
     };
@@ -140,6 +155,7 @@ export default function TravelGlobe({ places, onPinClick, highlightedId }: Trave
     autoRotateTimer: ReturnType<typeof setTimeout> | null;
   } | null>(null);
 
+  const cloudMeshRef = useRef<THREE.Mesh | null>(null);
   const particlesRef = useRef<ArcParticle[]>([]);
   const connectionGroupRef = useRef<THREE.Group | null>(null);
 
@@ -194,7 +210,6 @@ export default function TravelGlobe({ places, onPinClick, highlightedId }: Trave
       const start = latLngToVec3(p1.lat, p1.lng, GLOBE_RADIUS);
       const end = latLngToVec3(p2.lat, p2.lng, GLOBE_RADIUS);
 
-      // Arc control point: midpoint lifted above globe surface
       const mid = start.clone().add(end).multiplyScalar(0.5);
       const dist = start.distanceTo(end);
       const lift = Math.max(0.35, dist * 0.45);
@@ -202,7 +217,6 @@ export default function TravelGlobe({ places, onPinClick, highlightedId }: Trave
 
       const curve = new THREE.QuadraticBezierCurve3(start, mid, end);
 
-      // Tube along the arc
       const tubeGeo = new THREE.TubeGeometry(curve, 28, 0.006, 5, false);
       const tubeMat = new THREE.MeshBasicMaterial({
         color: 0x38bdf8,
@@ -213,7 +227,6 @@ export default function TravelGlobe({ places, onPinClick, highlightedId }: Trave
       });
       connectionGroup.add(new THREE.Mesh(tubeGeo, tubeMat));
 
-      // Glowing pulse particle
       const particleGeo = new THREE.SphereGeometry(0.03, 8, 8);
       const particleMat = new THREE.MeshBasicMaterial({
         color: 0x7dd3fc,
@@ -229,7 +242,6 @@ export default function TravelGlobe({ places, onPinClick, highlightedId }: Trave
       particlesRef.current.push({
         curve,
         mesh: particleMesh,
-        // stagger starting positions so particles don't all bunch up
         t: i / Math.max(1, currentPlaces.length - 1),
         speed: 0.0014 + Math.random() * 0.0008,
       });
@@ -246,54 +258,79 @@ export default function TravelGlobe({ places, onPinClick, highlightedId }: Trave
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(w, h);
-    renderer.setClearColor(0x080c18, 1);
+    renderer.setClearColor(0x050914, 1);
     container.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
-
     const camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 200);
     camera.position.set(0, 0, 5.5);
 
-    const ambientLight = new THREE.AmbientLight(0x334466, 0.8);
+    // Warm sun + cool rim + subtle ambient
+    const ambientLight = new THREE.AmbientLight(0x404060, 1.0);
     scene.add(ambientLight);
-
-    const sunLight = new THREE.DirectionalLight(0xffffff, 2.0);
+    const sunLight = new THREE.DirectionalLight(0xfff5e0, 2.8);
     sunLight.position.set(5, 3, 5);
     scene.add(sunLight);
-
-    const rimLight = new THREE.DirectionalLight(0x4488ff, 0.4);
+    const rimLight = new THREE.DirectionalLight(0x4488ff, 0.5);
     rimLight.position.set(-5, -2, -3);
     scene.add(rimLight);
 
-    const stars = createStars();
-    scene.add(stars);
+    scene.add(createStars());
 
     const globe = new THREE.Group();
     scene.add(globe);
 
+    const loader = new THREE.TextureLoader();
+
+    // Earth surface — starts as ocean blue, textures apply asynchronously
     const globeGeo = new THREE.SphereGeometry(GLOBE_RADIUS, 64, 64);
     const globeMat = new THREE.MeshPhongMaterial({
-      color: 0x0d2137,
-      specular: 0x2266aa,
-      shininess: 60,
-      emissive: 0x051020,
+      color: 0x2a6090,
+      specular: 0x334455,
+      shininess: 25,
     });
     const globeMesh = new THREE.Mesh(globeGeo, globeMat);
     globe.add(globeMesh);
 
-    const atmosGeo = new THREE.SphereGeometry(GLOBE_RADIUS + 0.06, 32, 32);
-    const atmosMat = new THREE.MeshPhongMaterial({
-      color: 0x4fc3f7,
-      transparent: true,
-      opacity: 0.08,
-      side: THREE.FrontSide,
+    loader.load("/textures/earth/earth_day.jpg", (tex) => {
+      tex.colorSpace = THREE.SRGBColorSpace;
+      globeMat.map = tex;
+      globeMat.color.set(0xffffff);
+      globeMat.needsUpdate = true;
     });
-    globe.add(new THREE.Mesh(atmosGeo, atmosMat));
+    loader.load("/textures/earth/earth_bump.jpg", (tex) => {
+      globeMat.bumpMap = tex;
+      globeMat.bumpScale = 0.08;
+      globeMat.needsUpdate = true;
+    });
+    loader.load("/textures/earth/earth_specular.jpg", (tex) => {
+      globeMat.specularMap = tex;
+      globeMat.specular.set(0x888888);
+      globeMat.needsUpdate = true;
+    });
 
-    globe.add(createGridLines(GLOBE_RADIUS));
+    // Cloud layer — rotates independently of the globe surface
+    const cloudGeo = new THREE.SphereGeometry(GLOBE_RADIUS + 0.028, 64, 64);
+    const cloudMat = new THREE.MeshPhongMaterial({
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+    });
+    const cloudMesh = new THREE.Mesh(cloudGeo, cloudMat);
+    globe.add(cloudMesh);
+    cloudMeshRef.current = cloudMesh;
+
+    loader.load("/textures/earth/earth_clouds.png", (tex) => {
+      cloudMat.map = tex;
+      cloudMat.alphaMap = tex;
+      cloudMat.opacity = 0.42;
+      cloudMat.needsUpdate = true;
+    });
+
+    // Atmosphere + country borders
+    globe.add(createAtmosphere(GLOBE_RADIUS));
     globe.add(createCountryLines(GLOBE_RADIUS));
 
-    // Connection arcs + pulse particles (added before pins so pins render on top)
     const connectionGroup = new THREE.Group();
     connectionGroupRef.current = connectionGroup;
     globe.add(connectionGroup);
@@ -326,17 +363,17 @@ export default function TravelGlobe({ places, onPinClick, highlightedId }: Trave
       if (state.autoRotate && !state.isDragging) {
         globe.rotation.y += 0.0015;
       }
-
-      // Advance pulse particles along their arc curves
+      // Clouds drift slightly faster than the surface
+      if (cloudMeshRef.current) {
+        cloudMeshRef.current.rotation.y += 0.0003;
+      }
       const now = performance.now() * 0.001;
       for (const p of particlesRef.current) {
         p.t = (p.t + p.speed) % 1;
         p.mesh.position.copy(p.curve.getPoint(p.t));
-        // Breathing scale pulse
         const s = 0.65 + 0.55 * Math.abs(Math.sin(now * 2.5 + p.t * Math.PI * 3));
         p.mesh.scale.setScalar(s);
       }
-
       renderer.render(scene, camera);
     }
     animate();
@@ -479,6 +516,7 @@ export default function TravelGlobe({ places, onPinClick, highlightedId }: Trave
       if (container.contains(el)) container.removeChild(el);
       sceneRef.current = null;
       connectionGroupRef.current = null;
+      cloudMeshRef.current = null;
       particlesRef.current = [];
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
