@@ -48,7 +48,7 @@ export default function TravelSidebar({
         display: "flex",
         flexDirection: "column",
         gap: "0.75rem",
-        overflowY: "auto",
+        overflow: "hidden",
       }}
     >
       {/* 헤더 */}
@@ -226,7 +226,7 @@ export default function TravelSidebar({
       </div>
 
       {/* 장소 목록 */}
-      <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.4rem" }}>
         {filteredPlaces.length === 0 ? (
           <div
             style={{

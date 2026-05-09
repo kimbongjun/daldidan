@@ -219,7 +219,7 @@ export default function TravelPageClient() {
       >
         {/* 사이드바 (데스크톱: 좌측 고정, 모바일: 하단) */}
         <div className="travel-sidebar-wrap">
-          <div style={{ height: "100%", overflowY: "auto", padding: "1rem" }}>
+          <div style={{ height: "100%", overflow: "hidden", display: "flex", flexDirection: "column", padding: "1rem", boxSizing: "border-box" }}>
             {loading ? (
               <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
                 {[1, 2, 3].map((i) => (

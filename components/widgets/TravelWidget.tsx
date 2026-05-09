@@ -24,7 +24,7 @@ export default function TravelWidget() {
     })();
   }, [setPlaces]);
 
-  const recent = places.slice(0, 3);
+  const allPlaces = places;
   const countryCount = new Set(places.map((p) => p.country)).size;
 
   return (
@@ -105,8 +105,8 @@ export default function TravelWidget() {
         ))}
       </div>
 
-      {/* 최근 여행지 */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+      {/* 여행지 목록 */}
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.35rem" }}>
         {loading ? (
           [1, 2, 3].map((i) => (
             <div
@@ -119,7 +119,7 @@ export default function TravelWidget() {
               }}
             />
           ))
-        ) : recent.length === 0 ? (
+        ) : allPlaces.length === 0 ? (
           <Link
             href="/travel"
             style={{
@@ -141,7 +141,7 @@ export default function TravelWidget() {
             첫 여행지를 공유해보세요
           </Link>
         ) : (
-          recent.map((place) => (
+          allPlaces.map((place) => (
             <Link
               key={place.id}
               href="/travel"
