@@ -15,6 +15,8 @@ const DEFAULTS: Record<string, string> = {
   pwa_splash_url: "",
   budget_members: '["공동","봉준","달희"]', // JSON 배열 — 가계부 구매자 목록
   budget_limits: "{}",                       // JSON 객체 — 카테고리별 월 예산 한도 (원)
+  met_date: "",                              // "YYYY-MM-DD" — 만난 날
+  married_date: "",                          // "YYYY-MM-DD" — 결혼한 날
 };
 
 export async function GET() {

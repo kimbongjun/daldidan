@@ -35,6 +35,8 @@ interface MyPageProfile {
   birth_year: number | null;
   gender: string | null;
   birth_hour: number | null;
+  birth_month: number | null;
+  birth_day: number | null;
 }
 
 export default function MyPage() {
@@ -46,6 +48,8 @@ export default function MyPage() {
   const [birthYear, setBirthYear] = useState("");
   const [gender, setGender] = useState("");
   const [birthHour, setBirthHour] = useState("");
+  const [birthMonth, setBirthMonth] = useState("");
+  const [birthDay, setBirthDay] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
@@ -87,6 +91,8 @@ export default function MyPage() {
     if (profileData.birth_year) setBirthYear(String(profileData.birth_year));
     if (profileData.gender) setGender(profileData.gender);
     if (profileData.birth_hour != null) setBirthHour(String(profileData.birth_hour));
+    if (profileData.birth_month) setBirthMonth(String(profileData.birth_month));
+    if (profileData.birth_day) setBirthDay(String(profileData.birth_day));
   }, [profileData]);
 
   const updateMutation = useMutation({
@@ -119,6 +125,8 @@ export default function MyPage() {
       birth_year: birthYear ? Number(birthYear) : null,
       gender: gender || null,
       birth_hour: birthHour !== "" ? Number(birthHour) : null,
+      birth_month: birthMonth ? Number(birthMonth) : null,
+      birth_day: birthDay ? Number(birthDay) : null,
     });
   };
 
@@ -347,6 +355,44 @@ export default function MyPage() {
                 style={inputStyle}
               />
               <p className="text-xs" style={{ color: "var(--text-muted)" }}>24시간제 기준. 모르는 경우 비워두세요.</p>
+            </div>
+          </div>
+
+          <hr style={{ border: "none", borderTop: "1px solid var(--border)" }} />
+
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-1.5">
+              <span style={{ fontSize: "1rem" }}>🎁</span>
+              <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>생일</p>
+            </div>
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+              헤더 디데이 위젯에서 생일 카운트다운에 사용됩니다. 연도 없이 월/일만 입력하세요.
+            </p>
+            <div className="flex gap-2">
+              <div className="flex flex-col gap-1.5 flex-1">
+                <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>월 (1~12)</label>
+                <input
+                  type="number"
+                  value={birthMonth}
+                  onChange={(e) => setBirthMonth(e.target.value)}
+                  placeholder="예: 8"
+                  min={1}
+                  max={12}
+                  style={inputStyle}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5 flex-1">
+                <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>일 (1~31)</label>
+                <input
+                  type="number"
+                  value={birthDay}
+                  onChange={(e) => setBirthDay(e.target.value)}
+                  placeholder="예: 15"
+                  min={1}
+                  max={31}
+                  style={inputStyle}
+                />
+              </div>
             </div>
           </div>
 

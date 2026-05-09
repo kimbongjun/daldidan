@@ -42,4 +42,7 @@ export const queryKeys = {
   mypage: {
     profile: ["mypage", "profile"] as const,
   },
+  dday: {
+    profiles: ["dday", "profiles"] as const,
+  },
 };

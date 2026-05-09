@@ -42,6 +42,8 @@ type SiteSettings = {
   pwa_icon_url: string;
   pwa_splash_url: string;
   budget_members: string;
+  met_date: string;
+  married_date: string;
 };
 
 const DEFAULT_SETTINGS: SiteSettings = {
@@ -54,6 +56,8 @@ const DEFAULT_SETTINGS: SiteSettings = {
   pwa_icon_url: "",
   pwa_splash_url: "",
   budget_members: '["공동","봉준","달희"]',
+  met_date: "",
+  married_date: "",
 };
 
 export default function SiteSettingsPage() {
@@ -329,6 +333,38 @@ export default function SiteSettingsPage() {
             >
               <Plus size={12} /> 추가
             </button>
+          </div>
+        </div>
+
+        <hr style={{ border: "none", borderTop: "1px solid var(--border)" }} />
+
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-1.5">
+            <span style={{ fontSize: "1rem" }}>💑</span>
+            <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>디데이 설정</p>
+          </div>
+          <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+            헤더 디데이 위젯에 표시됩니다. 당일 포함 누적 일수 및 기념일 D-Day를 자동 계산합니다.
+          </p>
+          <div className="flex gap-3">
+            <div className="flex flex-col gap-1.5 flex-1">
+              <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>💑 만난 날</label>
+              <input
+                type="date"
+                value={settings.met_date}
+                onChange={(e) => setSettings((prev) => ({ ...prev, met_date: e.target.value }))}
+                style={inputStyle}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5 flex-1">
+              <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>💍 결혼한 날</label>
+              <input
+                type="date"
+                value={settings.married_date}
+                onChange={(e) => setSettings((prev) => ({ ...prev, married_date: e.target.value }))}
+                style={inputStyle}
+              />
+            </div>
           </div>
         </div>
 

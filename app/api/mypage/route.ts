@@ -19,14 +19,14 @@ export async function GET() {
 
   let { data: profile, error } = await supabase
     .from("profiles")
-    .select("display_name, avatar_url, birth_year, gender, birth_hour")
+    .select("display_name, avatar_url, birth_year, gender, birth_hour, birth_month, birth_day")
     .eq("id", user.id)
     .maybeSingle();
 
   if (isMissingColumnError(error, "avatar_url")) {
     const fallback = await supabase
       .from("profiles")
-      .select("display_name, birth_year, gender, birth_hour")
+      .select("display_name, birth_year, gender, birth_hour, birth_month, birth_day")
       .eq("id", user.id)
       .maybeSingle();
     profile = fallback.data ? { ...fallback.data, avatar_url: null } : fallback.data;
@@ -44,6 +44,8 @@ export async function GET() {
     birth_year: profile?.birth_year ?? null,
     gender: profile?.gender ?? null,
     birth_hour: profile?.birth_hour ?? null,
+    birth_month: profile?.birth_month ?? null,
+    birth_day: profile?.birth_day ?? null,
   });
 }
 
@@ -61,6 +63,8 @@ export async function PATCH(request: NextRequest) {
     birth_year?: number | null;
     gender?: string | null;
     birth_hour?: number | null;
+    birth_month?: number | null;
+    birth_day?: number | null;
   };
 
   const updates: Record<string, unknown> = {};
@@ -95,6 +99,20 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "올바른 태어난 시를 입력해주세요." }, { status: 400 });
     }
     updates.birth_hour = body.birth_hour;
+  }
+
+  if (body.birth_month !== undefined) {
+    if (body.birth_month !== null && (body.birth_month < 1 || body.birth_month > 12)) {
+      return NextResponse.json({ error: "올바른 생일 월을 입력해주세요." }, { status: 400 });
+    }
+    updates.birth_month = body.birth_month;
+  }
+
+  if (body.birth_day !== undefined) {
+    if (body.birth_day !== null && (body.birth_day < 1 || body.birth_day > 31)) {
+      return NextResponse.json({ error: "올바른 생일 일을 입력해주세요." }, { status: 400 });
+    }
+    updates.birth_day = body.birth_day;
   }
 
   if (body.avatar_url !== undefined) {

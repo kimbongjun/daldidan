@@ -15,6 +15,7 @@ import type { AuthUser as SupabaseUser } from "@supabase/supabase-js";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import DdayWidget from "@/components/widgets/DdayWidget";
 import { queryKeys } from "@/lib/queryKeys";
 
 // ── 디바이스 유틸 ──────────────────────────────────────────────
@@ -573,9 +574,8 @@ export default function Header() {
         </button>
       </div>
 
-      <div className="flex justify-end">
-        <div className="flex flex-col items-end gap-1.5">
-
+      <div className="flex items-center justify-between gap-2">
+        <DdayWidget />
         <div className="flex items-center gap-1.5 shrink-0">
         {/* 테마 토글 */}
         <button
@@ -898,7 +898,6 @@ export default function Header() {
             <User size={16} style={{ color: "var(--text-muted)" }} />
           </Link>
         )}
-      </div>
       </div>
       </div>
     </header>
