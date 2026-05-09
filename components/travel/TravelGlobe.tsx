@@ -2,6 +2,9 @@
 
 import { useEffect, useRef, useCallback } from "react";
 import * as THREE from "three";
+import { feature } from "topojson-client";
+import type { Topology, GeometryCollection } from "topojson-specification";
+import worldData from "world-atlas/countries-110m.json";
 import type { TravelPlace } from "@/lib/travel-shared";
 
 interface TravelGlobeProps {
@@ -62,8 +65,42 @@ function createGridLines(r: number): THREE.LineSegments {
 
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.Float32BufferAttribute(points, 3));
-  const mat = new THREE.LineBasicMaterial({ color: 0x2a4a6a, transparent: true, opacity: 0.35 });
+  const mat = new THREE.LineBasicMaterial({ color: 0x2a4a6a, transparent: true, opacity: 0.15 });
   return new THREE.LineSegments(geo, mat);
+}
+
+function createCountryLines(r: number): THREE.Group {
+  const group = new THREE.Group();
+  const topo = worldData as unknown as Topology<{ countries: GeometryCollection }>;
+  const countries = feature(topo, topo.objects.countries);
+
+  const lineMat = new THREE.LineBasicMaterial({
+    color: 0x4a9eca,
+    transparent: true,
+    opacity: 0.55,
+  });
+
+  countries.features.forEach((f) => {
+    const geom = f.geometry;
+    if (!geom) return;
+
+    const processRing = (ring: number[][]) => {
+      if (ring.length < 2) return;
+      const pts = ring.map(([lng, lat]) => latLngToVec3(lat, lng, r + 0.006));
+      const geo = new THREE.BufferGeometry().setFromPoints(pts);
+      group.add(new THREE.Line(geo, lineMat));
+    };
+
+    if (geom.type === "Polygon") {
+      (geom.coordinates as number[][][]).forEach(processRing);
+    } else if (geom.type === "MultiPolygon") {
+      (geom.coordinates as number[][][][]).forEach((poly) =>
+        poly.forEach(processRing),
+      );
+    }
+  });
+
+  return group;
 }
 
 export default function TravelGlobe({ places, onPinClick, highlightedId }: TravelGlobeProps) {
@@ -167,7 +204,7 @@ export default function TravelGlobe({ places, onPinClick, highlightedId }: Trave
 
     const globeGeo = new THREE.SphereGeometry(GLOBE_RADIUS, 64, 64);
     const globeMat = new THREE.MeshPhongMaterial({
-      color: 0x1a3a5c,
+      color: 0x0d2137,
       specular: 0x2266aa,
       shininess: 60,
       emissive: 0x051020,
@@ -185,6 +222,7 @@ export default function TravelGlobe({ places, onPinClick, highlightedId }: Trave
     globe.add(new THREE.Mesh(atmosGeo, atmosMat));
 
     globe.add(createGridLines(GLOBE_RADIUS));
+    globe.add(createCountryLines(GLOBE_RADIUS));
 
     const pinGroup = new THREE.Group();
     globe.add(pinGroup);

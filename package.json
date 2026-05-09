@@ -47,7 +47,9 @@
     "resend": "^6.11.0",
     "sharp": "^0.34.5",
     "three": "^0.184.0",
+    "topojson-client": "^3.1.0",
     "vidstack": "^0.6.15",
+    "world-atlas": "^2.0.2",
     "zustand": "^5.0.3"
   },
   "devDependencies": {
@@ -59,6 +61,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/sharp": "^0.31.1",
+    "@types/topojson-client": "^3.1.5",
     "@vitejs/plugin-react": "^6.0.1",
     "eslint": "^9",
     "eslint-config-next": "^15.5.15",
