@@ -19,7 +19,7 @@ type: project
 **레이아웃 (데스크톱):**
 ```
 weather(1fr) | stock(2fr)   | budget(1fr)   ← 460px
-shopping     | event(1fr)   | travel(1fr)   ← 420px
+shopping     | event(1fr)                  ← 420px
 ```
 
 **How to apply:** 새 위젯 추가·스타일 변경·레이아웃 조정 시 이 규칙을 기준으로 판단

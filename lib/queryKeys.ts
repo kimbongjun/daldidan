@@ -33,9 +33,6 @@ export const queryKeys = {
   siteSettings: {
     all: ["siteSettings"] as const,
   },
-  travel: {
-    activities: ["travel", "activities"] as const,
-  },
   user: {
     profile: ["user", "profile"] as const,
   },

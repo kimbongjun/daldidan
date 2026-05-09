@@ -37,30 +37,6 @@ create policy "본인 거래만 삭제"
   using (auth.uid() = user_id);
 
 
--- ── travel_wishlist ───────────────────────────────────────────
-alter table public.travel_wishlist enable row level security;
-
-create policy "본인 찜 목록만 조회"
-  on public.travel_wishlist for select
-  using (auth.uid() = user_id);
-
-create policy "본인 찜 목록만 추가"
-  on public.travel_wishlist for insert
-  with check (auth.uid() = user_id);
-
-create policy "본인 찜 목록만 삭제"
-  on public.travel_wishlist for delete
-  using (auth.uid() = user_id);
-
-
--- ── travel_destinations (공개 읽기) ───────────────────────────
-alter table public.travel_destinations enable row level security;
-
-create policy "여행지 전체 공개 조회"
-  on public.travel_destinations for select
-  using (is_active = true);
-
-
 -- ── culture_events (공개 캐시) ────────────────────────────────
 alter table public.culture_events enable row level security;
 

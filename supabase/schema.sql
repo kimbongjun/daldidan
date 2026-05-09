@@ -121,38 +121,7 @@ group by to_char(date, 'YYYY-MM'), buyer;
 
 
 -- ══════════════════════════════════════════════════════════════
--- 3. 여행 (Travel)
--- ══════════════════════════════════════════════════════════════
-create table if not exists public.travel_destinations (
-  id          uuid primary key default uuid_generate_v4(),
-  name        text not null,
-  location    text not null,
-  region      text,                   -- '제주도', '강원도' 등 광역 분류
-  category    text not null,          -- '해변', '역사', '카페거리' 등
-  country     text not null default '한국',
-  rating      numeric(3,1) check (rating between 0 and 5),
-  price_label text,                   -- '항공 89,000원~'
-  tag         text,                   -- 'HOT', '추천', '벚꽃시즌' 등
-  image_url   text,
-  season      text[],                 -- '{spring, summer, fall, winter}'
-  is_active   boolean not null default true,
-  created_at  timestamptz not null default now()
-);
-
--- 사용자 찜 목록
-create table if not exists public.travel_wishlist (
-  user_id        uuid not null references public.profiles(id) on delete cascade,
-  destination_id uuid not null references public.travel_destinations(id) on delete cascade,
-  created_at     timestamptz not null default now(),
-  primary key (user_id, destination_id)
-);
-
-create index if not exists idx_travel_season
-  on public.travel_destinations using gin(season);
-
-
--- ══════════════════════════════════════════════════════════════
--- 4. 문화 행사 캐시 (Culture Events)
+-- 3. 문화 행사 캐시 (Culture Events)
 -- 외부 API 결과를 DB에 캐시하여 quota 절약
 -- ══════════════════════════════════════════════════════════════
 create table if not exists public.culture_events (

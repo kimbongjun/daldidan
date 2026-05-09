@@ -40,11 +40,6 @@
 
 - 부동산 정보 위젯
 
-### TravelWidget
-**파일**: `components/widgets/TravelWidget.tsx` | **액센트**: `#10B981` | **그라디언트**: `.gradient-emerald`
-
-- Klook / KKday 액티비티 카드, 플랫폼 뱃지, 평점, 가격
-
 ### StockWidget
 **파일**: `components/widgets/StockWidget.tsx` | **액센트**: `#7C3AED` | **그라디언트**: `.gradient-violet`
 

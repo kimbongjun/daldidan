@@ -15,7 +15,6 @@ daldidan/
 │   │   ├── geocode/              # 역지오코딩
 │   │   ├── maps/                 # 지도 검색
 │   │   ├── festival/             # 축제 API
-│   │   ├── travel/               # 여행 API
 │   │   ├── push/                 # 푸시 알림
 │   │   ├── site-settings         # 사이트 설정
 │   │   ├── me/                   # 현재 유저
@@ -45,7 +44,6 @@ daldidan/
 │   │   ├── CalendarWidget.tsx    # 캘린더 위젯
 │   │   ├── FestivalWidget.tsx    # 축제 위젯
 │   │   ├── RealEstateWidget.tsx  # 부동산 위젯
-│   │   ├── TravelWidget.tsx      # 여행 위젯
 │   │   ├── StockWidget.tsx       # 주식 위젯
 │   │   ├── WeatherWidget.tsx     # 날씨 위젯
 │   │   ├── ShoppingWidget.tsx    # 쇼핑 위젯
