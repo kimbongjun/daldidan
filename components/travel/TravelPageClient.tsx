@@ -137,6 +137,8 @@ export default function TravelPageClient() {
   function resetYearFilter() { setFilter({ years: [] }); }
   function resetContinentFilter() { setFilter({ continents: [] }); }
 
+  const isFiltered = filter.years.length > 0 || filter.continents.length > 0;
+
   return (
     <div
       style={{
@@ -218,8 +220,8 @@ export default function TravelPageClient() {
         className="travel-layout"
       >
         {/* 사이드바 (데스크톱: 좌측 고정, 모바일: 하단) */}
-        <div className="travel-sidebar-wrap">
-          <div style={{ height: "100%", overflow: "hidden", display: "flex", flexDirection: "column", padding: "1rem", boxSizing: "border-box" }}>
+        <div className="travel-sidebar-wrap" style={{ overflowY: isFiltered ? "hidden" : "auto" }}>
+          <div style={{ height: isFiltered ? "100%" : "auto", overflow: isFiltered ? "hidden" : "visible", display: "flex", flexDirection: "column", padding: "1rem", boxSizing: "border-box" }}>
             {loading ? (
               <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
                 {[1, 2, 3].map((i) => (

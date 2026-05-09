@@ -105,8 +105,8 @@ export default function TravelWidget() {
         ))}
       </div>
 
-      {/* 여행지 목록 */}
-      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+      {/* 여행지 목록 - 3개만 노출, 초과분 스크롤 */}
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.35rem", maxHeight: 145 }}>
         {loading ? (
           [1, 2, 3].map((i) => (
             <div
