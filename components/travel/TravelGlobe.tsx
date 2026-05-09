@@ -13,6 +13,13 @@ interface TravelGlobeProps {
   highlightedId?: string | null;
 }
 
+interface ArcParticle {
+  curve: THREE.QuadraticBezierCurve3;
+  mesh: THREE.Mesh;
+  t: number;
+  speed: number;
+}
+
 const GLOBE_RADIUS = 2;
 const STAR_COUNT = 1500;
 
@@ -103,6 +110,16 @@ function createCountryLines(r: number): THREE.Group {
   return group;
 }
 
+function disposeGroup(group: THREE.Group) {
+  while (group.children.length > 0) {
+    const child = group.children[0] as THREE.Mesh;
+    child.geometry?.dispose();
+    if (Array.isArray(child.material)) child.material.forEach((m) => m.dispose());
+    else (child.material as THREE.Material)?.dispose();
+    group.remove(child);
+  }
+}
+
 export default function TravelGlobe({ places, onPinClick, highlightedId }: TravelGlobeProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<{
@@ -123,19 +140,16 @@ export default function TravelGlobe({ places, onPinClick, highlightedId }: Trave
     autoRotateTimer: ReturnType<typeof setTimeout> | null;
   } | null>(null);
 
+  const particlesRef = useRef<ArcParticle[]>([]);
+  const connectionGroupRef = useRef<THREE.Group | null>(null);
+
   const placesRef = useRef(places);
   const onPinClickRef = useRef(onPinClick);
   useEffect(() => { placesRef.current = places; }, [places]);
   useEffect(() => { onPinClickRef.current = onPinClick; }, [onPinClick]);
 
   const buildPins = useCallback((pinGroup: THREE.Group, currentPlaces: TravelPlace[], highlighted: string | null) => {
-    while (pinGroup.children.length > 0) {
-      const child = pinGroup.children[0] as THREE.Mesh;
-      child.geometry?.dispose();
-      if (Array.isArray(child.material)) child.material.forEach((m) => m.dispose());
-      else (child.material as THREE.Material)?.dispose();
-      pinGroup.remove(child);
-    }
+    disposeGroup(pinGroup);
 
     currentPlaces.forEach((place) => {
       const pos = latLngToVec3(place.lat, place.lng, GLOBE_RADIUS);
@@ -165,6 +179,61 @@ export default function TravelGlobe({ places, onPinClick, highlightedId }: Trave
       pinGroup.add(sphere);
       pinGroup.add(cone);
     });
+  }, []);
+
+  const buildConnections = useCallback((connectionGroup: THREE.Group, currentPlaces: TravelPlace[]) => {
+    disposeGroup(connectionGroup);
+    particlesRef.current = [];
+
+    if (currentPlaces.length < 2) return;
+
+    for (let i = 0; i < currentPlaces.length - 1; i++) {
+      const p1 = currentPlaces[i];
+      const p2 = currentPlaces[i + 1];
+
+      const start = latLngToVec3(p1.lat, p1.lng, GLOBE_RADIUS);
+      const end = latLngToVec3(p2.lat, p2.lng, GLOBE_RADIUS);
+
+      // Arc control point: midpoint lifted above globe surface
+      const mid = start.clone().add(end).multiplyScalar(0.5);
+      const dist = start.distanceTo(end);
+      const lift = Math.max(0.35, dist * 0.45);
+      mid.normalize().multiplyScalar(GLOBE_RADIUS + lift);
+
+      const curve = new THREE.QuadraticBezierCurve3(start, mid, end);
+
+      // Tube along the arc
+      const tubeGeo = new THREE.TubeGeometry(curve, 28, 0.006, 5, false);
+      const tubeMat = new THREE.MeshBasicMaterial({
+        color: 0x38bdf8,
+        transparent: true,
+        opacity: 0.22,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      });
+      connectionGroup.add(new THREE.Mesh(tubeGeo, tubeMat));
+
+      // Glowing pulse particle
+      const particleGeo = new THREE.SphereGeometry(0.03, 8, 8);
+      const particleMat = new THREE.MeshBasicMaterial({
+        color: 0x7dd3fc,
+        transparent: true,
+        opacity: 1.0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      });
+      const particleMesh = new THREE.Mesh(particleGeo, particleMat);
+      particleMesh.position.copy(curve.getPoint(0));
+      connectionGroup.add(particleMesh);
+
+      particlesRef.current.push({
+        curve,
+        mesh: particleMesh,
+        // stagger starting positions so particles don't all bunch up
+        t: i / Math.max(1, currentPlaces.length - 1),
+        speed: 0.0014 + Math.random() * 0.0008,
+      });
+    }
   }, []);
 
   useEffect(() => {
@@ -224,6 +293,12 @@ export default function TravelGlobe({ places, onPinClick, highlightedId }: Trave
     globe.add(createGridLines(GLOBE_RADIUS));
     globe.add(createCountryLines(GLOBE_RADIUS));
 
+    // Connection arcs + pulse particles (added before pins so pins render on top)
+    const connectionGroup = new THREE.Group();
+    connectionGroupRef.current = connectionGroup;
+    globe.add(connectionGroup);
+    buildConnections(connectionGroup, places);
+
     const pinGroup = new THREE.Group();
     globe.add(pinGroup);
     buildPins(pinGroup, places, highlightedId ?? null);
@@ -251,6 +326,17 @@ export default function TravelGlobe({ places, onPinClick, highlightedId }: Trave
       if (state.autoRotate && !state.isDragging) {
         globe.rotation.y += 0.0015;
       }
+
+      // Advance pulse particles along their arc curves
+      const now = performance.now() * 0.001;
+      for (const p of particlesRef.current) {
+        p.t = (p.t + p.speed) % 1;
+        p.mesh.position.copy(p.curve.getPoint(p.t));
+        // Breathing scale pulse
+        const s = 0.65 + 0.55 * Math.abs(Math.sin(now * 2.5 + p.t * Math.PI * 3));
+        p.mesh.scale.setScalar(s);
+      }
+
       renderer.render(scene, camera);
     }
     animate();
@@ -392,6 +478,8 @@ export default function TravelGlobe({ places, onPinClick, highlightedId }: Trave
       renderer.dispose();
       if (container.contains(el)) container.removeChild(el);
       sceneRef.current = null;
+      connectionGroupRef.current = null;
+      particlesRef.current = [];
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -400,7 +488,10 @@ export default function TravelGlobe({ places, onPinClick, highlightedId }: Trave
     const s = sceneRef.current;
     if (!s) return;
     buildPins(s.pinGroup, places, highlightedId ?? null);
-  }, [places, highlightedId, buildPins]);
+    if (connectionGroupRef.current) {
+      buildConnections(connectionGroupRef.current, places);
+    }
+  }, [places, highlightedId, buildPins, buildConnections]);
 
   return (
     <div
