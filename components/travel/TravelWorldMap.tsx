@@ -13,6 +13,7 @@ interface TravelWorldMapProps {
   onPinClick: (place: TravelPlace) => void;
   highlightedId?: string | null;
   selectedContinents?: TravelContinent[];
+  onLoad?: () => void;
 }
 
 const CONTINENT_COLORS: Record<string, string> = {
@@ -87,6 +88,7 @@ export default function TravelWorldMap({
   onPinClick,
   highlightedId,
   selectedContinents,
+  onLoad,
 }: TravelWorldMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -94,6 +96,8 @@ export default function TravelWorldMap({
   const projectionRef = useRef<d3.GeoProjection | null>(null);
   const placesRef = useRef(places);
   const onPinClickRef = useRef(onPinClick);
+  const onLoadRef = useRef(onLoad);
+  useEffect(() => { onLoadRef.current = onLoad; }, [onLoad]);
 
   // keep refs in sync without re-running main effect
   useEffect(() => { placesRef.current = places; }, [places]);
@@ -190,6 +194,8 @@ export default function TravelWorldMap({
     // Pins group
     const pinsG = mapGroup.append("g").attr("class", "pins");
     renderPins(pinsG, placesRef.current, highlightedId ?? null, projection, onPinClickRef);
+
+    onLoadRef.current?.();
 
     // Zoom
     const zoom = d3

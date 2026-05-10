@@ -20,6 +20,7 @@ const TravelWorldMap = dynamic(
 export default function TravelPageClient() {
   const { places, setPlaces, isAddModalOpen, isDetailModalOpen, selectedPlace, editingPlace, openAddModal, closeAddModal, openDetailModal, closeDetailModal, filter, setFilter } = useTravelStore();
   const [loading, setLoading] = useState(true);
+  const [mapReady, setMapReady] = useState(false);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | undefined>(undefined);
 
@@ -175,7 +176,26 @@ export default function TravelPageClient() {
       </header>
 
       <div className="travel-layout">
-        {/* 1순위: 리스트 즉시 렌더링 */}
+        {/* 1순위: 지도 영역 — 항상 상단 표시, 로딩 중엔 오버레이 */}
+        <div className="travel-globe-wrap">
+          {!mapReady && (
+            <div className="globe-loading-overlay">
+              <div className="globe-loading-pulse" />
+              <span className="globe-loading-text">지도 불러오는 중…</span>
+            </div>
+          )}
+          {!loading && (
+            <TravelWorldMap
+              places={filteredPlaces}
+              onPinClick={handlePinClick}
+              highlightedId={highlightedId}
+              selectedContinents={filter.continents}
+              onLoad={() => setMapReady(true)}
+            />
+          )}
+        </div>
+
+        {/* 2순위: 리스트 */}
         <div className="travel-sidebar-wrap">
           <div className="travel-sidebar-inner">
             {loading ? (
@@ -200,18 +220,6 @@ export default function TravelPageClient() {
             )}
           </div>
         </div>
-
-        {/* 2순위: 데이터 로드 완료 후에만 지도 렌더링 (preloading 완료 상태) */}
-        {!loading && (
-          <div className="travel-globe-wrap">
-            <TravelWorldMap
-              places={filteredPlaces}
-              onPinClick={handlePinClick}
-              highlightedId={highlightedId}
-              selectedContinents={filter.continents}
-            />
-          </div>
-        )}
       </div>
 
       {/* 모달들 */}
@@ -265,7 +273,35 @@ export default function TravelPageClient() {
           background: #0d1b2a;
           overflow: hidden;
           position: relative;
-          border-top: 1px solid var(--border);
+          border-bottom: 1px solid var(--border);
+        }
+        /* 지도 로딩 오버레이 — D3 렌더 완료 전 네이비 빈 화면 대신 표시 */
+        .globe-loading-overlay {
+          position: absolute;
+          inset: 0;
+          background: #0d1b2a;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 0.75rem;
+          z-index: 2;
+        }
+        .globe-loading-pulse {
+          width: 40px;
+          height: 40px;
+          border-radius: 50%;
+          border: 3px solid rgba(255,255,255,0.12);
+          border-top-color: rgba(255,255,255,0.55);
+          animation: map-spin 0.9s linear infinite;
+        }
+        .globe-loading-text {
+          font-size: 0.8rem;
+          color: rgba(255,255,255,0.45);
+          letter-spacing: 0.02em;
+        }
+        @keyframes map-spin {
+          to { transform: rotate(360deg); }
         }
         .hide-xs { display: inline; }
         @keyframes pulse {
