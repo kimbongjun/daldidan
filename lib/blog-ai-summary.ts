@@ -1,7 +1,7 @@
 import { createAnthropicClient } from "@/lib/anthropic";
 import { extractDescriptionFromHtml } from "@/lib/blog-shared";
 
-const DEFAULT_BLOG_SUMMARY_MODEL = "gemma2-9b-it";
+const DEFAULT_BLOG_SUMMARY_MODEL = "claude-haiku-4-5-20251001";
 const MAX_SUMMARY_LENGTH = 60;
 const MAX_KEYWORDS = 5;
 const HANJA_REGEX = /[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF]/g;
@@ -141,10 +141,10 @@ export function isLikelyCopiedSummary(summary: string, sourceText: string) {
   if (summaryTokens.length === 0) return false;
 
   const matchedTokens = summaryTokens.filter((token) => normalizedSource.includes(token)).length;
-  if (matchedTokens / summaryTokens.length >= 0.9 && normalizedSummary.length >= 40) return true;
+  if (matchedTokens / summaryTokens.length >= 1.0 && normalizedSummary.length >= 40) return true;
 
   const commonSpan = longestCommonSubstringLength(normalizedSummary, normalizedSource);
-  return commonSpan >= Math.max(18, Math.floor(normalizedSummary.length * 0.45));
+  return commonSpan >= Math.max(24, Math.floor(normalizedSummary.length * 0.6));
 }
 
 function containsForbiddenTone(text: string) {
@@ -227,7 +227,13 @@ export function sanitizeBlogAiSummary(summary: string, fallback: string) {
     return takeFirstSentence(fallbackSentence);
   }
 
-  return singleSentence.slice(0, MAX_SUMMARY_LENGTH) || takeFirstSentence(fallbackSentence);
+  // 문장이 MAX_SUMMARY_LENGTH 이하면 그대로, 초과하면 문장 경계에서 자름
+  if (Array.from(singleSentence).length <= MAX_SUMMARY_LENGTH) {
+    return singleSentence || takeFirstSentence(fallbackSentence);
+  }
+  const chars = Array.from(singleSentence).slice(0, MAX_SUMMARY_LENGTH).join("");
+  const boundaryMatch = chars.match(/^.*[.!?]/u);
+  return (boundaryMatch ? boundaryMatch[0] : chars).trim() || takeFirstSentence(fallbackSentence);
 }
 
 function parseMetadataResponse(content: string) {
@@ -261,7 +267,7 @@ function sanitizeKeywords(keywords: string[], title: string, fallback: string) {
 
 async function requestBlogAiMetadata(
   title: string,
-  digest: string,
+  bodyText: string,
   anthropic: ReturnType<typeof createAnthropicClient>["client"],
   model: string,
   category?: string | null,
@@ -271,20 +277,21 @@ async function requestBlogAiMetadata(
   const message = await anthropic.messages.create({
     model,
     system: [
-      "너는 블로그 콘텐츠의 핵심을 꿰뚫어 한 줄의 매력적인 문장으로 요약하는 '전문 콘텐츠 에디터'야.",
+      "당신은 블로그 글을 깊이 읽고 핵심 가치를 한 문장으로 표현하는 전문 에디터입니다.",
       "",
-      "제약사항:",
-      "1. 복사 금지: 본문에 포함된 문장을 그대로 가져오지 말고, 너의 언어로 완전히 재구성해.",
-      "2. 단일 문장: 반드시 마침표로 끝나는 한 개의 문장으로 작성해.",
-      "3. 자연스러운 한국어: 번역투(~에 대한, ~을 하는 것 등)를 지양하고, 독자가 읽었을 때 매끄러운 구어체나 문어체로 작성해.",
-      "4. 정보의 우선순위: [카테고리]의 맥락 속에서 [제목]이 전달하려는 핵심 목표를 [본문]의 근거를 바탕으로 요약해.",
-      "5. 글자 수: 공백 포함 40~60자 내외로 작성.",
+      "요약 원칙:",
+      "- 글 전체의 흐름과 필자의 의도를 파악해 자신의 언어로 재구성하세요.",
+      "- 본문의 문장을 그대로 복사하거나 단어만 나열하는 방식은 절대 금지입니다.",
+      "- 마침표로 끝나는 완성된 한 문장만 작성하세요.",
+      "- 자연스러운 한국어 문어체로, 번역투(~에 대한, ~을 하는 것)는 쓰지 마세요.",
+      "- 공백 포함 40~60자 내외로 작성하세요.",
       "",
-      "예시: '제철을 맞아 당도와 식감이 뛰어난 사과를 직접 시식하고 추천하는 후기입니다.'",
+      "좋은 예: '직접 발로 뛰며 찾아낸 제주 숨은 카페 세 곳의 솔직한 방문 소감을 담았습니다.'",
+      "나쁜 예: '제주 카페 여행 숨은 카페 추천 방문 후기.' (키워드 나열)",
       "",
-      "비꼼·독설·냉소·비속어 금지. 아래 형식만 반환하세요.",
-      "SUMMARY: 한 문장 요약",
-      "KEYWORDS: 썸네일 검색용 핵심 키워드 3~5개, 쉼표로 구분",
+      "아래 형식으로만 응답하세요:",
+      "SUMMARY: (한 문장)",
+      "KEYWORDS: (명사 키워드 3~5개, 쉼표 구분)",
     ].join("\n"),
     messages: [
       {
@@ -293,18 +300,15 @@ async function requestBlogAiMetadata(
           `제목: ${title}`,
           categoryLine,
           "",
-          "글에서 추린 핵심 단락:",
-          digest,
+          "본문:",
+          bodyText,
           "",
-          "위 내용을 바탕으로 카테고리 맥락에 맞는 자연스러운 한 줄 요약을 작성하세요.",
-          "- 본문 표현을 그대로 옮기지 말 것",
-          "- 공백 포함 40~60자로 맞출 것",
-          "- 키워드는 이미지 검색에 바로 쓸 수 있게 명사 중심으로 만들 것",
+          "이 글의 핵심 주제와 필자의 의도를 파악해 자연스러운 한 문장으로 요약해주세요.",
         ].filter(Boolean).join("\n"),
       },
     ],
-    temperature: 0.8,
-    max_tokens: 180,
+    temperature: 1.0,
+    max_tokens: 200,
   });
 
   const block = message.content[0];
@@ -335,7 +339,7 @@ export async function generateBlogAiMetadata(
     const { client: anthropic, model } = createAnthropicClient({ model: configuredModel });
 
     const firstPass = parseMetadataResponse(
-      await requestBlogAiMetadata(cleanedTitle, digest || `- ${plainTextSlice}`, anthropic, model, category),
+      await requestBlogAiMetadata(cleanedTitle, plainTextSlice, anthropic, model, category),
     );
     const firstSummary = sanitizeBlogAiSummary(firstPass.summary, fallbackSummary);
 
@@ -347,7 +351,7 @@ export async function generateBlogAiMetadata(
     }
 
     const secondPass = parseMetadataResponse(
-      await requestBlogAiMetadata(`${cleanedTitle} (요약은 반드시 재서술)`, digest || `- ${plainTextSlice}`, anthropic, model, category),
+      await requestBlogAiMetadata(`${cleanedTitle} (다른 각도로 재해석해서 요약)`, plainTextSlice, anthropic, model, category),
     );
     const secondSummary = sanitizeBlogAiSummary(secondPass.summary, fallbackSummary);
 
