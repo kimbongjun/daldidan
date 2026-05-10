@@ -11,44 +11,22 @@ import TravelDetailModal from "@/components/travel/TravelDetailModal";
 import TravelFormModal from "@/components/travel/TravelFormModal";
 import { createClient } from "@/lib/supabase/client";
 
-const TravelWorldMap = dynamic(() => import("@/components/travel/TravelWorldMap"), {
-  ssr: false,
-  loading: () => (
-    <div
-      style={{
-        width: "100%",
-        height: "100%",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "#0d1b2a",
-        borderRadius: 0,
-      }}
-    >
-      <div style={{ textAlign: "center", color: "#4fc3f7" }}>
-        <div
-          style={{
-            width: 48,
-            height: 48,
-            border: "3px solid rgba(79,195,247,0.2)",
-            borderTop: "3px solid #4fc3f7",
-            borderRadius: "50%",
-            animation: "spin 1s linear infinite",
-            margin: "0 auto 0.75rem",
-          }}
-        />
-        <p style={{ margin: 0, fontSize: "0.85rem", opacity: 0.7 }}>지도 로딩 중...</p>
-      </div>
-      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
-    </div>
-  ),
-});
+// ssr:false 동적 로드 — 모듈 preload는 useEffect에서 즉시 시작
+const TravelWorldMap = dynamic(
+  () => import("@/components/travel/TravelWorldMap"),
+  { ssr: false }
+);
 
 export default function TravelPageClient() {
   const { places, setPlaces, isAddModalOpen, isDetailModalOpen, selectedPlace, editingPlace, openAddModal, closeAddModal, openDetailModal, closeDetailModal, filter, setFilter } = useTravelStore();
   const [loading, setLoading] = useState(true);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | undefined>(undefined);
+
+  // 페이지 마운트 즉시 지도 모듈 preload — 리스트 노출 중 백그라운드 다운로드
+  useEffect(() => {
+    void import("@/components/travel/TravelWorldMap");
+  }, []);
 
   useEffect(() => {
     void (async () => {
@@ -197,17 +175,7 @@ export default function TravelPageClient() {
       </header>
 
       <div className="travel-layout">
-        {/* 지도 영역 — DOM 최우선, sticky로 스크롤 중에도 고정 */}
-        <div className="travel-globe-wrap">
-          <TravelWorldMap
-            places={filteredPlaces}
-            onPinClick={handlePinClick}
-            highlightedId={highlightedId}
-            selectedContinents={filter.continents}
-          />
-        </div>
-
-        {/* 사이드바 — 지도 렌더링 이후 */}
+        {/* 1순위: 리스트 즉시 렌더링 */}
         <div className="travel-sidebar-wrap">
           <div className="travel-sidebar-inner">
             {loading ? (
@@ -232,6 +200,18 @@ export default function TravelPageClient() {
             )}
           </div>
         </div>
+
+        {/* 2순위: 데이터 로드 완료 후에만 지도 렌더링 (preloading 완료 상태) */}
+        {!loading && (
+          <div className="travel-globe-wrap">
+            <TravelWorldMap
+              places={filteredPlaces}
+              onPinClick={handlePinClick}
+              highlightedId={highlightedId}
+              selectedContinents={filter.continents}
+            />
+          </div>
+        )}
       </div>
 
       {/* 모달들 */}
@@ -253,38 +233,24 @@ export default function TravelPageClient() {
       )}
 
       <style>{`
+        /* 헤더만 sticky — 페이지 전체는 자연 스크롤 */
         .travel-page-shell {
-          height: 100dvh;
+          min-height: 100dvh;
           background: var(--bg-base);
-          display: flex;
-          flex-direction: column;
-          overflow: hidden;
         }
-        /* 스크롤 컨테이너: 레이아웃 전체가 세로 스크롤 */
-        .travel-layout {
-          flex: 1;
-          min-height: 0;
-          overflow-y: auto;
-          overflow-x: hidden;
-          display: flex;
-          flex-direction: column;
-        }
-        /* 지도: 고정 높이로 D3 clientHeight 보장 + sticky */
-        .travel-globe-wrap {
-          width: 100%;
-          height: min(62dvh, 680px);
-          flex-shrink: 0;
-          background: #0d1b2a;
-          overflow: hidden;
+        .travel-page-shell > header {
           position: sticky;
           top: 0;
-          z-index: 10;
+          z-index: 20;
         }
-        /* 사이드바: 전체 너비, 자연 스크롤 */
+        .travel-layout {
+          display: flex;
+          flex-direction: column;
+        }
+        /* 리스트 영역: 전체 너비, 자연 높이 */
         .travel-sidebar-wrap {
           width: 100%;
           background: var(--bg-base);
-          border-top: 1px solid var(--border);
         }
         .travel-sidebar-inner {
           padding: 1rem;
@@ -292,6 +258,15 @@ export default function TravelPageClient() {
         }
         .travel-sidebar-panel { height: auto; }
         .travel-record-list { padding-bottom: 1.5rem; }
+        /* 지도: 고정 높이로 D3 clientHeight 확정, sticky 없음 */
+        .travel-globe-wrap {
+          width: 100%;
+          height: min(62dvh, 680px);
+          background: #0d1b2a;
+          overflow: hidden;
+          position: relative;
+          border-top: 1px solid var(--border);
+        }
         .hide-xs { display: inline; }
         @keyframes pulse {
           0%, 100% { opacity: 1; }
@@ -301,10 +276,7 @@ export default function TravelPageClient() {
           .travel-globe-wrap {
             height: 45dvh;
             min-height: 260px;
-            position: sticky;
           }
-        }
-        @media (max-width: 480px) {
           .hide-xs { display: none; }
         }
       `}</style>
