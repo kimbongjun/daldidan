@@ -137,8 +137,6 @@ export default function TravelPageClient() {
   function resetYearFilter() { setFilter({ years: [] }); }
   function resetContinentFilter() { setFilter({ continents: [] }); }
 
-  const isFiltered = filter.years.length > 0 || filter.continents.length > 0;
-
   return (
     <div
       style={{
@@ -219,9 +217,16 @@ export default function TravelPageClient() {
         }}
         className="travel-layout"
       >
-        {/* 사이드바 (데스크톱: 좌측 고정, 모바일: 하단) */}
-        <div className="travel-sidebar-wrap" style={{ overflowY: isFiltered ? "hidden" : "auto" }}>
-          <div style={{ height: isFiltered ? "100%" : "auto", overflow: isFiltered ? "hidden" : "visible", display: "flex", flexDirection: "column", padding: "1rem", boxSizing: "border-box" }}>
+        <div className="travel-sidebar-wrap">
+          <div
+            className="travel-sidebar-inner"
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              padding: "1rem",
+              boxSizing: "border-box",
+            }}
+          >
             {loading ? (
               <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
                 {[1, 2, 3].map((i) => (
@@ -278,6 +283,7 @@ export default function TravelPageClient() {
       <style>{`
         .travel-layout {
           flex-direction: row;
+          min-height: 0;
         }
         .travel-sidebar-wrap {
           width: 300px;
@@ -287,6 +293,19 @@ export default function TravelPageClient() {
           flex-shrink: 0;
           overflow: hidden;
           height: 100%;
+        }
+        .travel-sidebar-inner {
+          height: 100%;
+          min-height: 0;
+        }
+        .travel-sidebar-panel {
+          min-height: 0;
+        }
+        .travel-record-list {
+          overflow-y: auto;
+          overscroll-behavior: contain;
+          padding-right: 0.15rem;
+          scrollbar-gutter: stable;
         }
         .travel-globe-wrap {
           flex: 1;
@@ -312,6 +331,15 @@ export default function TravelPageClient() {
             border-top: 1px solid var(--border);
             height: auto;
             max-height: 55vh;
+          }
+          .travel-sidebar-inner,
+          .travel-sidebar-panel {
+            height: auto;
+          }
+          .travel-record-list {
+            overflow: visible;
+            padding-right: 0;
+            scrollbar-gutter: auto;
           }
           .travel-globe-wrap {
             height: 45vh;

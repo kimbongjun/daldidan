@@ -36,6 +36,25 @@ create policy "본인 거래만 삭제"
   on public.transactions for delete
   using (auth.uid() = user_id);
 
+-- ── travel_locations (공유 여행 지도) ──────────────────────────
+alter table public.travel_locations enable row level security;
+
+create policy "인증 유저 전체 여행 기록 조회"
+  on public.travel_locations for select
+  using (auth.uid() IS NOT NULL);
+
+create policy "본인 여행 기록만 추가"
+  on public.travel_locations for insert
+  with check (auth.uid() = user_id);
+
+create policy "본인 여행 기록만 수정"
+  on public.travel_locations for update
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+create policy "본인 여행 기록만 삭제"
+  on public.travel_locations for delete
+  using (auth.uid() = user_id);
 
 -- ── culture_events (공개 캐시) ────────────────────────────────
 alter table public.culture_events enable row level security;

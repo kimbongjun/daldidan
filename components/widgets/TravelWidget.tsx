@@ -43,7 +43,6 @@ export default function TravelWidget() {
         boxSizing: "border-box",
       }}
     >
-      {/* 헤더 */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
           <div
@@ -79,7 +78,6 @@ export default function TravelWidget() {
         </Link>
       </div>
 
-      {/* 통계 */}
       <div style={{ display: "flex", gap: "0.5rem" }}>
         {[
           { label: "전체 여행지", value: loading ? "—" : String(places.length) },
@@ -105,7 +103,6 @@ export default function TravelWidget() {
         ))}
       </div>
 
-      {/* 여행지 목록 - 3개만 노출, 초과분 스크롤 */}
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.35rem", maxHeight: 145 }}>
         {loading ? (
           [1, 2, 3].map((i) => (

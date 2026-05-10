@@ -121,7 +121,32 @@ group by to_char(date, 'YYYY-MM'), buyer;
 
 
 -- ══════════════════════════════════════════════════════════════
--- 3. 문화 행사 캐시 (Culture Events)
+-- 3. 여행 지도 (Travel Map)
+-- ══════════════════════════════════════════════════════════════
+create table if not exists public.travel_locations (
+  id          uuid primary key default uuid_generate_v4(),
+  user_id     uuid not null references public.profiles(id) on delete cascade,
+  country     text not null,
+  city        text not null,
+  lat         double precision not null,
+  lng         double precision not null,
+  travel_date date not null,
+  photo_url   text,
+  note        text,
+  continent   text,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+
+create index if not exists idx_travel_locations_user_id
+  on public.travel_locations (user_id);
+
+create index if not exists idx_travel_locations_travel_date
+  on public.travel_locations (travel_date desc, created_at desc);
+
+
+-- ══════════════════════════════════════════════════════════════
+-- 4. 문화 행사 캐시 (Culture Events)
 -- 외부 API 결과를 DB에 캐시하여 quota 절약
 -- ══════════════════════════════════════════════════════════════
 create table if not exists public.culture_events (

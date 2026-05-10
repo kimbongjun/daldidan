@@ -205,10 +205,10 @@ function BentoGrid({ initialBlogPosts }: { initialBlogPosts: BlogPostSummary[] }
             </Suspense>
           </ErrorBoundary>
         );
-      case "realestate":
-        return <ErrorBoundary><RealEstateWidget /></ErrorBoundary>;
       case "travel":
         return <ErrorBoundary><TravelWidget /></ErrorBoundary>;
+      case "realestate":
+        return <ErrorBoundary><RealEstateWidget /></ErrorBoundary>;
     }
   }
 

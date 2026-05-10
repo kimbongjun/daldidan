@@ -1,13 +1,13 @@
 "use client";
 
 import type { LucideIcon } from "lucide-react";
-import { BookOpen, Home, Sparkles, TrendingUp, Wallet } from "lucide-react";
+import { BookOpen, Home, MapPinned, Sparkles, Wallet } from "lucide-react";
 
 const NAV_ITEMS: { id: string; label: string; Icon: LucideIcon }[] = [
   { id: "top",     label: "홈",    Icon: Home },
   { id: "blog",    label: "블로그", Icon: BookOpen },
   { id: "budget",  label: "가계부", Icon: Wallet },
-  { id: "stock",   label: "증시",  Icon: TrendingUp },
+  { id: "travel",  label: "여행",  Icon: MapPinned },
   { id: "fortune", label: "운세",  Icon: Sparkles },
 ];
 

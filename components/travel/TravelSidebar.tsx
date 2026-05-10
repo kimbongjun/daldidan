@@ -42,13 +42,14 @@ export default function TravelSidebar({
 
   return (
     <aside
+      className="travel-sidebar-panel"
       style={{
         width: "100%",
-        height: isFiltered ? "100%" : "auto",
+        height: "100%",
         display: "flex",
         flexDirection: "column",
         gap: "0.75rem",
-        overflow: isFiltered ? "hidden" : "visible",
+        overflow: "hidden",
       }}
     >
       {/* 헤더 */}
@@ -226,7 +227,16 @@ export default function TravelSidebar({
       </div>
 
       {/* 장소 목록 - 전체 기준: 내용 높이만큼 펼침 / 필터 적용: 내부 스크롤 */}
-      <div style={{ ...(isFiltered ? { flex: 1, minHeight: 0, overflowY: "auto" as const } : {}), display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+      <div
+        className="travel-record-list"
+        style={{
+          flex: 1,
+          minHeight: 0,
+          display: "flex",
+          flexDirection: "column",
+          gap: "0.4rem",
+        }}
+      >
         {filteredPlaces.length === 0 ? (
           <div
             style={{

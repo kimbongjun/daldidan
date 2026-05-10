@@ -33,6 +33,7 @@ const WIDGET_SKELETONS = [
   { id: "budget",     mobile: 1, tablet: 1, desktop: 1, height: 260 },
   { id: "calendar",   mobile: 1, tablet: 1, desktop: 1, height: 320 },
   { id: "stock",      mobile: 1, tablet: 2, desktop: 2, height: 200 },
+  { id: "travel",     mobile: 1, tablet: 1, desktop: 1, height: 220 },
   { id: "realestate", mobile: 1, tablet: 1, desktop: 1, height: 200 },
 ];
 
