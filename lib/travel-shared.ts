@@ -16,12 +16,13 @@ export interface TravelPlace {
   updated_at: string;
 }
 
-export type TravelContinent = "Asia" | "Europe" | "Americas" | "Africa" | "Oceania";
+export type TravelContinent = "Asia" | "Europe" | "NorthAmerica" | "SouthAmerica" | "Africa" | "Oceania";
 
 export const CONTINENTS: TravelContinent[] = [
   "Asia",
   "Europe",
-  "Americas",
+  "NorthAmerica",
+  "SouthAmerica",
   "Africa",
   "Oceania",
 ];
@@ -29,7 +30,8 @@ export const CONTINENTS: TravelContinent[] = [
 export const CONTINENT_LABELS: Record<TravelContinent, string> = {
   Asia: "아시아",
   Europe: "유럽",
-  Americas: "아메리카",
+  NorthAmerica: "북아메리카",
+  SouthAmerica: "남아메리카",
   Africa: "아프리카",
   Oceania: "오세아니아",
 };

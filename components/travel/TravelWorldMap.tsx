@@ -20,10 +20,12 @@ interface TravelWorldMapProps {
 const CONTINENT_COLORS: Record<string, string> = {
   Asia: "#f59e0b",
   Europe: "#60a5fa",
-  Americas: "#34d399",
+  NorthAmerica: "#34d399",
+  SouthAmerica: "#fbbf24",
   Africa: "#f87171",
   Oceania: "#a78bfa",
   Antarctica: "#94a3b8",
+  Americas: "#34d399", // 구버전 DB 데이터 호환
   default: "#6b7280",
 };
 
@@ -48,16 +50,21 @@ const ISO_TO_CONTINENT: Record<number, string> = {
   616: "Europe", 620: "Europe", 642: "Europe", 643: "Europe", 674: "Europe",
   688: "Europe", 703: "Europe", 705: "Europe", 724: "Europe", 752: "Europe",
   756: "Europe", 804: "Europe", 807: "Europe", 826: "Europe",
-  // Americas
-  28: "Americas", 32: "Americas", 44: "Americas", 52: "Americas",
-  84: "Americas", 68: "Americas", 76: "Americas", 124: "Americas",
-  152: "Americas", 170: "Americas", 188: "Americas", 192: "Americas",
-  212: "Americas", 214: "Americas", 218: "Americas", 222: "Americas",
-  308: "Americas", 320: "Americas", 328: "Americas", 332: "Americas",
-  340: "Americas", 388: "Americas", 484: "Americas", 558: "Americas",
-  591: "Americas", 600: "Americas", 604: "Americas", 630: "Americas",
-  659: "Americas", 662: "Americas", 670: "Americas", 740: "Americas",
-  780: "Americas", 840: "Americas", 858: "Americas", 862: "Americas",
+  // North America (캐나다·미국·멕시코·중미·카리브해)
+  124: "NorthAmerica", 840: "NorthAmerica", 484: "NorthAmerica",
+  84: "NorthAmerica", 188: "NorthAmerica", 192: "NorthAmerica",
+  212: "NorthAmerica", 214: "NorthAmerica", 222: "NorthAmerica",
+  308: "NorthAmerica", 320: "NorthAmerica", 332: "NorthAmerica",
+  340: "NorthAmerica", 388: "NorthAmerica", 558: "NorthAmerica",
+  591: "NorthAmerica", 630: "NorthAmerica",
+  28: "NorthAmerica", 44: "NorthAmerica", 52: "NorthAmerica",
+  659: "NorthAmerica", 662: "NorthAmerica", 670: "NorthAmerica",
+  780: "NorthAmerica",
+  // South America (남미)
+  32: "SouthAmerica", 68: "SouthAmerica", 76: "SouthAmerica",
+  152: "SouthAmerica", 170: "SouthAmerica", 218: "SouthAmerica",
+  328: "SouthAmerica", 600: "SouthAmerica", 604: "SouthAmerica",
+  740: "SouthAmerica", 858: "SouthAmerica", 862: "SouthAmerica",
   // Africa
   12: "Africa", 24: "Africa", 72: "Africa", 108: "Africa", 120: "Africa",
   132: "Africa", 140: "Africa", 148: "Africa", 174: "Africa", 178: "Africa",
