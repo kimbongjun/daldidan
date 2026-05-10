@@ -26,7 +26,6 @@ export default function TravelWidget() {
     })();
   }, [setPlaces]);
 
-  const allPlaces = places;
   const countryCount = new Set(places.map((p) => p.country)).size;
 
   return (
@@ -118,7 +117,7 @@ export default function TravelWidget() {
               }}
             />
           ))
-        ) : allPlaces.length === 0 ? (
+        ) : places.length === 0 ? (
           <div
             style={{
               flex: 1,
@@ -139,7 +138,7 @@ export default function TravelWidget() {
             첫 여행지를 공유해보세요
           </div>
         ) : (
-          allPlaces.map((place) => (
+          places.map((place) => (
             <button
               key={place.id}
               type="button"

@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { X, Edit2, Trash2, MapPin, Calendar, FileText } from "lucide-react";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
@@ -15,6 +17,9 @@ interface TravelDetailModalProps {
 }
 
 export default function TravelDetailModal({ place, currentUserId, onClose, onEdit, onDelete }: TravelDetailModalProps) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   const isOwner = !!currentUserId && currentUserId === place.user_id;
   function handleDelete() {
     if (confirm(`"${place.city}" 여행 기록을 삭제할까요?`)) {
@@ -22,7 +27,9 @@ export default function TravelDetailModal({ place, currentUserId, onClose, onEdi
     }
   }
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <div
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       style={{
@@ -220,6 +227,7 @@ export default function TravelDetailModal({ place, currentUserId, onClose, onEdi
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

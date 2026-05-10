@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { X, Upload, Loader2, Search } from "lucide-react";
 import type { TravelPlace, TravelContinent } from "@/lib/travel-shared";
 import { CONTINENTS, CONTINENT_LABELS } from "@/lib/travel-shared";
@@ -24,6 +25,9 @@ interface FormState {
 }
 
 export default function TravelFormModal({ editingPlace, onClose, onSave }: TravelFormModalProps) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   const [form, setForm] = useState<FormState>({
     country: editingPlace?.country ?? "",
     city: editingPlace?.city ?? "",
@@ -159,7 +163,9 @@ export default function TravelFormModal({ editingPlace, onClose, onSave }: Trave
     display: "block",
   };
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <div
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       style={{
@@ -443,6 +449,7 @@ export default function TravelFormModal({ editingPlace, onClose, onSave }: Trave
       </div>
 
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
-    </div>
+    </div>,
+    document.body
   );
 }
