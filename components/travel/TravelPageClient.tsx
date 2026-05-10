@@ -133,16 +133,7 @@ export default function TravelPageClient() {
   function resetContinentFilter() { setFilter({ continents: [] }); }
 
   return (
-    <div
-      className="travel-page-shell"
-      style={{
-        height: "100vh",
-        background: "var(--bg-base)",
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
-      }}
-    >
+    <div className="travel-page-shell">
       {/* 상단 헤더 */}
       <header
         style={{
@@ -206,10 +197,7 @@ export default function TravelPageClient() {
       </header>
 
       {/* 본문: 데스크톱 = 사이드바 + 지구본, 모바일 = 지구본 + 사이드바 */}
-      <div
-        style={{ flex: 1, minHeight: 0 }}
-        className="travel-layout"
-      >
+      <div className="travel-layout">
         <div className="travel-sidebar-wrap">
           <div
             className="travel-sidebar-inner"
@@ -237,7 +225,6 @@ export default function TravelPageClient() {
                 onYearReset={resetYearFilter}
                 onContinentReset={resetContinentFilter}
                 onPlaceClick={handlePinClick}
-                onAddClick={() => openAddModal()}
                 highlightedId={highlightedId}
               />
             )}
@@ -274,17 +261,25 @@ export default function TravelPageClient() {
       )}
 
       <style>{`
+        .travel-page-shell {
+          height: 100dvh;
+          background: var(--bg-base);
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+        }
         .travel-layout {
-          display: grid;
-          grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
-          align-items: stretch;
-          height: 100%;
+          flex: 1;
+          min-height: 0;
+          display: flex;
+          flex-direction: row;
         }
         .travel-sidebar-wrap {
+          width: 320px;
+          flex-shrink: 0;
           border-right: 1px solid var(--border);
           background: var(--bg-base);
           overflow-y: auto;
-          height: 100%;
         }
         .travel-sidebar-inner {
           height: auto;
@@ -296,8 +291,9 @@ export default function TravelPageClient() {
           padding-bottom: 1rem;
         }
         .travel-globe-wrap {
+          flex: 1;
           min-width: 0;
-          height: 100%;
+          min-height: 0;
           background: #0d1b2a;
           overflow: hidden;
           position: relative;
@@ -311,27 +307,24 @@ export default function TravelPageClient() {
           .travel-page-shell {
             height: auto;
             min-height: 100dvh;
-            overflow: visible;
+            overflow-y: auto;
           }
           .travel-layout {
-            display: flex;
             flex-direction: column-reverse;
-            height: auto;
           }
           .travel-sidebar-wrap {
             width: 100%;
             border-right: none;
             border-top: 1px solid var(--border);
-            height: auto;
             overflow-y: visible;
           }
           .travel-record-list {
             padding-bottom: 0;
           }
           .travel-globe-wrap {
+            flex: none;
             height: 45vh;
             min-height: 280px;
-            position: relative;
           }
           .hide-xs { display: none; }
         }

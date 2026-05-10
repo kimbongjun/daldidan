@@ -17,7 +17,6 @@ interface TravelSidebarProps {
   onYearReset: () => void;
   onContinentReset: () => void;
   onPlaceClick: (place: TravelPlace) => void;
-  onAddClick: () => void;
   highlightedId?: string | null;
 }
 
@@ -31,7 +30,6 @@ export default function TravelSidebar({
   onYearReset,
   onContinentReset,
   onPlaceClick,
-  onAddClick,
   highlightedId,
 }: TravelSidebarProps) {
   const [filterOpen, setFilterOpen] = useState(true);
@@ -50,44 +48,6 @@ export default function TravelSidebar({
         gap: "0.75rem",
       }}
     >
-      {/* 헤더 */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-          <MapPin size={18} style={{ color: "var(--accent-emerald, #10b981)" }} />
-          <span style={{ fontWeight: 700, fontSize: "0.95rem", color: "var(--text-primary)" }}>
-            여행 기록
-          </span>
-          <span
-            style={{
-              background: "var(--accent-emerald, #10b981)",
-              color: "#fff",
-              borderRadius: 999,
-              fontSize: "0.7rem",
-              fontWeight: 700,
-              padding: "1px 7px",
-            }}
-          >
-            {places.length}
-          </span>
-        </div>
-        <button
-          onClick={onAddClick}
-          style={{
-            background: "var(--accent-emerald, #10b981)",
-            color: "#fff",
-            border: "none",
-            borderRadius: 8,
-            padding: "5px 12px",
-            fontSize: "0.8rem",
-            fontWeight: 600,
-            cursor: "pointer",
-            whiteSpace: "nowrap",
-          }}
-        >
-          + 추가
-        </button>
-      </div>
-
       {/* 필터 */}
       <div
         style={{
