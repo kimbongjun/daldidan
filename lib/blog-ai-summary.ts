@@ -1,4 +1,4 @@
-import { createGroqClient } from "@/lib/groq";
+import { createAnthropicClient } from "@/lib/anthropic";
 import { extractDescriptionFromHtml } from "@/lib/blog-shared";
 
 const DEFAULT_BLOG_SUMMARY_MODEL = "gemma2-9b-it";
@@ -262,34 +262,31 @@ function sanitizeKeywords(keywords: string[], title: string, fallback: string) {
 async function requestBlogAiMetadata(
   title: string,
   digest: string,
-  groq: ReturnType<typeof createGroqClient>["client"],
+  anthropic: ReturnType<typeof createAnthropicClient>["client"],
   model: string,
   category?: string | null,
 ) {
   const categoryLine = category ? `카테고리: ${category}` : "";
 
-  const completion = await groq.chat.completions.create({
+  const message = await anthropic.messages.create({
     model,
+    system: [
+      "너는 블로그 콘텐츠의 핵심을 꿰뚫어 한 줄의 매력적인 문장으로 요약하는 '전문 콘텐츠 에디터'야.",
+      "",
+      "제약사항:",
+      "1. 복사 금지: 본문에 포함된 문장을 그대로 가져오지 말고, 너의 언어로 완전히 재구성해.",
+      "2. 단일 문장: 반드시 마침표로 끝나는 한 개의 문장으로 작성해.",
+      "3. 자연스러운 한국어: 번역투(~에 대한, ~을 하는 것 등)를 지양하고, 독자가 읽었을 때 매끄러운 구어체나 문어체로 작성해.",
+      "4. 정보의 우선순위: [카테고리]의 맥락 속에서 [제목]이 전달하려는 핵심 목표를 [본문]의 근거를 바탕으로 요약해.",
+      "5. 글자 수: 공백 포함 40~60자 내외로 작성.",
+      "",
+      "예시: '제철을 맞아 당도와 식감이 뛰어난 사과를 직접 시식하고 추천하는 후기입니다.'",
+      "",
+      "비꼼·독설·냉소·비속어 금지. 아래 형식만 반환하세요.",
+      "SUMMARY: 한 문장 요약",
+      "KEYWORDS: 썸네일 검색용 핵심 키워드 3~5개, 쉼표로 구분",
+    ].join("\n"),
     messages: [
-      {
-        role: "system",
-        content: [
-          "너는 블로그 콘텐츠의 핵심을 꿰뚫어 한 줄의 매력적인 문장으로 요약하는 '전문 콘텐츠 에디터'야.",
-          "",
-          "제약사항:",
-          "1. 복사 금지: 본문에 포함된 문장을 그대로 가져오지 말고, 너의 언어로 완전히 재구성해.",
-          "2. 단일 문장: 반드시 마침표로 끝나는 한 개의 문장으로 작성해.",
-          "3. 자연스러운 한국어: 번역투(~에 대한, ~을 하는 것 등)를 지양하고, 독자가 읽었을 때 매끄러운 구어체나 문어체로 작성해.",
-          "4. 정보의 우선순위: [카테고리]의 맥락 속에서 [제목]이 전달하려는 핵심 목표를 [본문]의 근거를 바탕으로 요약해.",
-          "5. 글자 수: 공백 포함 40~60자 내외로 작성.",
-          "",
-          "예시: '제철을 맞아 당도와 식감이 뛰어난 사과를 직접 시식하고 추천하는 후기입니다.'",
-          "",
-          "비꼼·독설·냉소·비속어 금지. 아래 형식만 반환하세요.",
-          "SUMMARY: 한 문장 요약",
-          "KEYWORDS: 썸네일 검색용 핵심 키워드 3~5개, 쉼표로 구분",
-        ].join(" "),
-      },
       {
         role: "user",
         content: [
@@ -310,7 +307,8 @@ async function requestBlogAiMetadata(
     max_tokens: 180,
   });
 
-  return completion.choices[0]?.message?.content ?? "";
+  const block = message.content[0];
+  return block?.type === "text" ? block.text : "";
 }
 
 export async function generateBlogAiMetadata(
@@ -332,13 +330,12 @@ export async function generateBlogAiMetadata(
 
   try {
     const configuredModel =
-      process.env.GROQ_BLOG_SUMMARY_MODEL?.trim()
-      || process.env.GROQ_GEMMA_MODEL?.trim()
+      process.env.ANTHROPIC_BLOG_SUMMARY_MODEL?.trim()
       || DEFAULT_BLOG_SUMMARY_MODEL;
-    const { client: groq, model } = createGroqClient({ model: configuredModel });
+    const { client: anthropic, model } = createAnthropicClient({ model: configuredModel });
 
     const firstPass = parseMetadataResponse(
-      await requestBlogAiMetadata(cleanedTitle, digest || `- ${plainTextSlice}`, groq, model, category),
+      await requestBlogAiMetadata(cleanedTitle, digest || `- ${plainTextSlice}`, anthropic, model, category),
     );
     const firstSummary = sanitizeBlogAiSummary(firstPass.summary, fallbackSummary);
 
@@ -350,7 +347,7 @@ export async function generateBlogAiMetadata(
     }
 
     const secondPass = parseMetadataResponse(
-      await requestBlogAiMetadata(`${cleanedTitle} (요약은 반드시 재서술)`, digest || `- ${plainTextSlice}`, groq, model, category),
+      await requestBlogAiMetadata(`${cleanedTitle} (요약은 반드시 재서술)`, digest || `- ${plainTextSlice}`, anthropic, model, category),
     );
     const secondSummary = sanitizeBlogAiSummary(secondPass.summary, fallbackSummary);
 

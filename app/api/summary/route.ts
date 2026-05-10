@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createGroqClient } from "@/lib/groq";
+import { createAnthropicClient } from "@/lib/anthropic";
 
 export type SummaryTarget = "blog" | "budget";
 
@@ -113,13 +113,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "items에는 비어 있지 않은 문자열이 필요합니다." }, { status: 400 });
   }
 
-  let groq;
+  let anthropic;
   let model;
   try {
-    ({ client: groq, model } = createGroqClient());
+    ({ client: anthropic, model } = createAnthropicClient());
   } catch (e) {
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "Groq 설정이 올바르지 않습니다." },
+      { error: e instanceof Error ? e.message : "Anthropic 설정이 올바르지 않습니다." },
       { status: 500 },
     );
   }
@@ -132,22 +132,24 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const completion = await groq.chat.completions.create({
+    const message = await anthropic.messages.create({
       model,
+      system: "당신은 친근하고 따뜻한 한국어 요약 전문가입니다. 요청한 텍스트만 반환하고 부연 설명은 하지 마세요. 공격적이거나 불쾌한 표현은 쓰지 마세요.",
       messages: [
-        { role: "system", content: "당신은 친근하고 따뜻한 한국어 요약 전문가입니다. 요청한 텍스트만 반환하고 부연 설명은 하지 마세요. 공격적이거나 불쾌한 표현은 쓰지 마세요." },
         { role: "user", content: PROMPTS[target](items.slice(0, 10)) },
       ],
       temperature: 0.9,
       max_tokens: 80,
     });
 
-    const summary = sanitizeSummary(target, completion.choices[0]?.message?.content ?? "", items);
+    const block = message.content[0];
+    const raw = block?.type === "text" ? block.text : "";
+    const summary = sanitizeSummary(target, raw, items);
     cache.set(cacheKey, { summary, generatedAt: Date.now() });
 
     return NextResponse.json({ summary });
   } catch (e) {
-    console.error("[summary] Groq 호출 실패:", e);
+    console.error("[summary] Claude 호출 실패:", e);
     return NextResponse.json({ error: "요약 생성에 실패했습니다." }, { status: 500 });
   }
 }
