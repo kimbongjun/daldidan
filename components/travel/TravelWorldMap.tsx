@@ -13,6 +13,7 @@ interface TravelWorldMapProps {
   onPinClick: (place: TravelPlace) => void;
   highlightedId?: string | null;
   selectedContinents?: TravelContinent[];
+  activeContinents?: TravelContinent[];   // NEW — continents with ≥1 travel record
   onLoad?: () => void;
 }
 
@@ -88,6 +89,7 @@ export default function TravelWorldMap({
   onPinClick,
   highlightedId,
   selectedContinents,
+  activeContinents,
   onLoad,
 }: TravelWorldMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -97,11 +99,13 @@ export default function TravelWorldMap({
   const placesRef = useRef(places);
   const onPinClickRef = useRef(onPinClick);
   const onLoadRef = useRef(onLoad);
+  const activeContinentsRef = useRef(activeContinents);
   useEffect(() => { onLoadRef.current = onLoad; }, [onLoad]);
 
   // keep refs in sync without re-running main effect
   useEffect(() => { placesRef.current = places; }, [places]);
   useEffect(() => { onPinClickRef.current = onPinClick; }, [onPinClick]);
+  useEffect(() => { activeContinentsRef.current = activeContinents; }, [activeContinents]);
 
   // ── Main D3 initialisation (runs once) ──────────────────────────────────
   useEffect(() => {
@@ -169,15 +173,36 @@ export default function TravelWorldMap({
       .attr("fill", (d) => {
         const isoNum = Number(d.id);
         const continent = ISO_TO_CONTINENT[isoNum] ?? "default";
-        return CONTINENT_COLORS[continent] ?? CONTINENT_COLORS.default;
+
+        // 전체 모드 (no filter): only show color if continent has records
+        if (!selectedContinents || selectedContinents.length === 0) {
+          const ac = activeContinentsRef.current;
+          if (!ac || ac.length === 0) {
+            return CONTINENT_COLORS[continent] ?? CONTINENT_COLORS.default;
+          }
+          return ac.includes(continent as TravelContinent)
+            ? (CONTINENT_COLORS[continent] ?? CONTINENT_COLORS.default)
+            : "#374151";
+        }
+
+        // 필터 모드: selected → color, unselected → gray
+        return selectedContinents.includes(continent as TravelContinent)
+          ? (CONTINENT_COLORS[continent] ?? CONTINENT_COLORS.default)
+          : "#374151";
       })
       .attr("stroke", "#1e293b")
       .attr("stroke-width", 0.4)
       .attr("opacity", (d) => {
-        if (!selectedContinents || selectedContinents.length === 0) return 1;
         const isoNum = Number(d.id);
         const continent = ISO_TO_CONTINENT[isoNum];
-        return continent && selectedContinents.includes(continent as TravelContinent) ? 1 : 0.2;
+
+        if (!selectedContinents || selectedContinents.length === 0) {
+          const ac = activeContinentsRef.current;
+          if (!ac || ac.length === 0) return 0.85;
+          return ac.includes(continent as TravelContinent) ? 0.85 : 0.45;
+        }
+
+        return continent && selectedContinents.includes(continent as TravelContinent) ? 1 : 0.25;
       });
 
     // Borders mesh
@@ -240,19 +265,43 @@ export default function TravelWorldMap({
 
     const sel = d3.select(svg);
 
-    // Update continent opacity
-    sel.select("g.countries").selectAll<SVGPathElement, d3.GeoPermissibleObjects>("path").attr("opacity", (d) => {
-      const feature = d as { id?: string | number };
-      if (!selectedContinents || selectedContinents.length === 0) return 1;
-      const isoNum = Number(feature.id);
-      const continent = ISO_TO_CONTINENT[isoNum];
-      return continent && selectedContinents.includes(continent as TravelContinent) ? 1 : 0.2;
-    });
+    // Update continent fill + opacity
+    sel.select("g.countries").selectAll<SVGPathElement, d3.GeoPermissibleObjects>("path")
+      .attr("fill", (d) => {
+        const feature = d as { id?: string | number };
+        const isoNum = Number(feature.id);
+        const continent = ISO_TO_CONTINENT[isoNum] ?? "default";
+
+        if (!selectedContinents || selectedContinents.length === 0) {
+          if (!activeContinents || activeContinents.length === 0) {
+            return CONTINENT_COLORS[continent] ?? CONTINENT_COLORS.default;
+          }
+          return activeContinents.includes(continent as TravelContinent)
+            ? (CONTINENT_COLORS[continent] ?? CONTINENT_COLORS.default)
+            : "#374151";
+        }
+
+        return selectedContinents.includes(continent as TravelContinent)
+          ? (CONTINENT_COLORS[continent] ?? CONTINENT_COLORS.default)
+          : "#374151";
+      })
+      .attr("opacity", (d) => {
+        const feature = d as { id?: string | number };
+        const isoNum = Number(feature.id);
+        const continent = ISO_TO_CONTINENT[isoNum];
+
+        if (!selectedContinents || selectedContinents.length === 0) {
+          if (!activeContinents || activeContinents.length === 0) return 0.85;
+          return activeContinents.includes(continent as TravelContinent) ? 0.85 : 0.45;
+        }
+
+        return continent && selectedContinents.includes(continent as TravelContinent) ? 1 : 0.25;
+      });
 
     // Update pins
     const pinsG = sel.select<SVGGElement>("g.pins");
     renderPins(pinsG, places, highlightedId ?? null, projection, onPinClickRef);
-  }, [places, highlightedId, selectedContinents]);
+  }, [places, highlightedId, selectedContinents, activeContinents]);
 
   return (
     <div

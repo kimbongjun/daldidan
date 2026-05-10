@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { X, Upload, Loader2, Search } from "lucide-react";
 import type { TravelPlace, TravelContinent } from "@/lib/travel-shared";
-import { CONTINENTS, CONTINENT_LABELS, KOREA_PROVINCES, PROVINCE_COORDINATES } from "@/lib/travel-shared";
+import { CONTINENTS, CONTINENT_LABELS, KOREA_PROVINCES, PROVINCE_COORDINATES, PROVINCE_MUNICIPALITIES } from "@/lib/travel-shared";
 import { searchCountries, findCountryByName, type CountryData } from "@/lib/travel-countries";
 
 interface TravelFormModalProps {
@@ -24,6 +24,7 @@ interface FormState {
   photo_url: string | null;
   is_domestic: boolean;
   province: string;
+  district: string;
   drive_link: string;
 }
 
@@ -42,6 +43,7 @@ export default function TravelFormModal({ editingPlace, onClose, onSave }: Trave
     photo_url: editingPlace?.photo_url ?? null,
     is_domestic: editingPlace?.is_domestic ?? false,
     province: editingPlace?.province ?? "",
+    district: editingPlace?.city ?? "",
     drive_link: editingPlace?.drive_link ?? "",
   });
 
@@ -251,7 +253,7 @@ export default function TravelFormModal({ editingPlace, onClose, onSave }: Trave
                 <button
                   key={String(isDomestic)}
                   type="button"
-                  onClick={() => patch({ is_domestic: isDomestic, country: "", continent: "", lat: null, lng: null, province: "" })}
+                  onClick={() => patch({ is_domestic: isDomestic, country: "", continent: "", lat: null, lng: null, province: "", district: "", city: "" })}
                   style={{
                     flex: 1, padding: "0.5rem", borderRadius: 10, fontSize: "0.85rem", fontWeight: 600, cursor: "pointer",
                     border: "1px solid",
@@ -374,13 +376,33 @@ export default function TravelFormModal({ editingPlace, onClose, onSave }: Trave
                 onChange={(e) => {
                   const prov = e.target.value;
                   const coords = PROVINCE_COORDINATES[prov];
-                  patch({ province: prov, lat: coords?.lat ?? null, lng: coords?.lng ?? null });
+                  patch({ province: prov, district: "", city: "", lat: coords?.lat ?? null, lng: coords?.lng ?? null });
                 }}
                 style={{ ...inputStyle }}
               >
                 <option value="">시도 선택</option>
                 {KOREA_PROVINCES.map((p) => (
                   <option key={p} value={p}>{p}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* 국내 전용: 시/군/구 셀렉트 (province 선택 후 표시) */}
+          {form.is_domestic && form.province && (
+            <div>
+              <label style={labelStyle}>시/군/구</label>
+              <select
+                value={form.district}
+                onChange={(e) => {
+                  const dist = e.target.value;
+                  patch({ district: dist, city: dist });
+                }}
+                style={{ ...inputStyle }}
+              >
+                <option value="">시/군/구 선택 (선택사항)</option>
+                {(PROVINCE_MUNICIPALITIES[form.province] ?? []).map((d) => (
+                  <option key={d} value={d}>{d}</option>
                 ))}
               </select>
             </div>
@@ -393,7 +415,7 @@ export default function TravelFormModal({ editingPlace, onClose, onSave }: Trave
               type="text"
               value={form.city}
               onChange={(e) => patch({ city: e.target.value })}
-              placeholder={form.is_domestic ? "예: 경복궁, 해운대 해수욕장" : "예: 도쿄, 오사카"}
+              placeholder={form.is_domestic ? "시/군/구 선택 또는 직접 입력 (예: 경복궁)" : "예: 도쿄, 오사카"}
               style={inputStyle}
             />
           </div>

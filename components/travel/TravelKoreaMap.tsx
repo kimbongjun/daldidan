@@ -2,20 +2,21 @@
 
 import { useEffect, useRef } from "react";
 import * as d3 from "d3";
-import { feature } from "topojson-client";
+import { feature, mesh } from "topojson-client";
 import type { Topology, GeometryCollection } from "topojson-specification";
 import type { Feature, Geometry } from "geojson";
 import type { TravelPlace, KoreaRegion } from "@/lib/travel-shared";
-import { PROVINCE_TO_REGION } from "@/lib/travel-shared";
+import { PROVINCE_TO_REGION, CODE_TO_PROVINCE } from "@/lib/travel-shared";
 
-interface ProvinceProperties {
+interface MunicipalityProperties {
   name: string;
   name_eng: string;
   code: string;
+  base_year: string;
 }
 
-type KoreaTopology = Topology<{
-  skorea_provinces_2018_geo: GeometryCollection<ProvinceProperties>;
+type KoreaMunicipalityTopology = Topology<{
+  skorea_municipalities_2018_geo: GeometryCollection<MunicipalityProperties>;
 }>;
 
 interface TravelKoreaMapProps {
@@ -23,6 +24,7 @@ interface TravelKoreaMapProps {
   onPinClick: (place: TravelPlace) => void;
   highlightedId?: string | null;
   selectedRegions?: KoreaRegion[];
+  activeProvinces?: string[];
   onLoad?: () => void;
 }
 
@@ -36,27 +38,91 @@ const REGION_COLORS: Record<KoreaRegion, string> = {
   "제주": "#e879f9",
 };
 
+const GRAY_FILL = "#374151";
+
+const PROVINCE_LABEL_COORDS: Array<{ name: string; short: string; lat: number; lng: number }> = [
+  { name: "서울특별시", short: "서울", lat: 37.5665, lng: 126.978 },
+  { name: "부산광역시", short: "부산", lat: 35.1796, lng: 129.0756 },
+  { name: "대구광역시", short: "대구", lat: 35.8714, lng: 128.6014 },
+  { name: "인천광역시", short: "인천", lat: 37.4563, lng: 126.4 },
+  { name: "광주광역시", short: "광주", lat: 35.1595, lng: 126.8526 },
+  { name: "대전광역시", short: "대전", lat: 36.3504, lng: 127.3845 },
+  { name: "울산광역시", short: "울산", lat: 35.5384, lng: 129.3114 },
+  { name: "세종특별자치시", short: "세종", lat: 36.48, lng: 127.289 },
+  { name: "경기도", short: "경기", lat: 37.4138, lng: 127.5183 },
+  { name: "강원특별자치도", short: "강원", lat: 37.8813, lng: 128.2 },
+  { name: "충청북도", short: "충북", lat: 36.8, lng: 127.8 },
+  { name: "충청남도", short: "충남", lat: 36.5, lng: 126.8 },
+  { name: "전북특별자치도", short: "전북", lat: 35.7175, lng: 127.1531 },
+  { name: "전라남도", short: "전남", lat: 34.8, lng: 126.9 },
+  { name: "경상북도", short: "경북", lat: 36.5, lng: 128.8 },
+  { name: "경상남도", short: "경남", lat: 35.4, lng: 128.2 },
+  { name: "제주특별자치도", short: "제주", lat: 33.4996, lng: 126.5312 },
+];
+
+function getMunicipalityFill(
+  code: string,
+  activeProvinces?: string[],
+  selectedRegions?: KoreaRegion[],
+): string {
+  const province = CODE_TO_PROVINCE[code.slice(0, 2)];
+  const region = province ? PROVINCE_TO_REGION[province] : null;
+  if (!region) return GRAY_FILL;
+
+  if (selectedRegions && selectedRegions.length > 0) {
+    return selectedRegions.includes(region) ? REGION_COLORS[region] : GRAY_FILL;
+  }
+
+  if (activeProvinces && activeProvinces.length > 0) {
+    return province && activeProvinces.includes(province) ? REGION_COLORS[region] : GRAY_FILL;
+  }
+
+  return REGION_COLORS[region];
+}
+
+function getMunicipalityOpacity(
+  code: string,
+  activeProvinces?: string[],
+  selectedRegions?: KoreaRegion[],
+): number {
+  const province = CODE_TO_PROVINCE[code.slice(0, 2)];
+  const region = province ? PROVINCE_TO_REGION[province] : null;
+
+  if (selectedRegions && selectedRegions.length > 0) {
+    return region && selectedRegions.includes(region) ? 0.95 : 0.2;
+  }
+
+  if (activeProvinces && activeProvinces.length > 0) {
+    return province && activeProvinces.includes(province) ? 0.85 : 0.45;
+  }
+
+  return 0.85;
+}
+
 export default function TravelKoreaMap({
   places,
   onPinClick,
   highlightedId,
   selectedRegions,
+  activeProvinces,
   onLoad,
 }: TravelKoreaMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const projectionRef = useRef<d3.GeoProjection | null>(null);
   const pathGenRef = useRef<d3.GeoPath | null>(null);
-  const featuresRef = useRef<Feature<Geometry, ProvinceProperties>[]>([]);
+  const featuresRef = useRef<Feature<Geometry, MunicipalityProperties>[]>([]);
   const placesRef = useRef(places);
   const onPinClickRef = useRef(onPinClick);
   const onLoadRef = useRef(onLoad);
+  const activeProvincesRef = useRef(activeProvinces);
 
   useEffect(() => { onLoadRef.current = onLoad; }, [onLoad]);
   useEffect(() => { placesRef.current = places; }, [places]);
   useEffect(() => { onPinClickRef.current = onPinClick; }, [onPinClick]);
+  useEffect(() => { activeProvincesRef.current = activeProvinces; }, [activeProvinces]);
 
-  // ── Main D3 initialisation (runs once) ───────────────────────────────────
+  // ── Main D3 initialisation (runs once) ────────────────────────────────────
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -76,8 +142,7 @@ export default function TravelKoreaMap({
 
     svgRef.current = svg.node();
 
-    const projection = d3
-      .geoMercator()
+    const projection = d3.geoMercator()
       .center([127.7, 36.0])
       .scale(Math.min(w, h) * 5.5)
       .translate([w / 2, h / 2]);
@@ -87,57 +152,86 @@ export default function TravelKoreaMap({
     pathGenRef.current = pathGen;
 
     const mapGroup = svg.append("g").attr("class", "map-group");
-    const provincesG = mapGroup.append("g").attr("class", "provinces");
+    const municipalitiesG = mapGroup.append("g").attr("class", "municipalities");
+    const municipalityBordersG = mapGroup.append("g").attr("class", "municipality-borders");
+    const provinceBordersG = mapGroup.append("g").attr("class", "province-borders");
+    const labelsG = mapGroup.append("g").attr("class", "province-labels");
     const pinsG = mapGroup.append("g").attr("class", "pins");
 
-    // TopoJSON 로드
-    fetch("/data/korea-provinces-topo.json")
+    fetch("/data/korea-municipalities-topo.json")
       .then((r) => r.json())
-      .then((topo: KoreaTopology) => {
-        const provinces = feature(topo, topo.objects.skorea_provinces_2018_geo);
-        featuresRef.current = provinces.features as Feature<Geometry, ProvinceProperties>[];
+      .then((topo: KoreaMunicipalityTopology) => {
+        const municipalities = feature(topo, topo.objects.skorea_municipalities_2018_geo);
+        featuresRef.current = municipalities.features as Feature<Geometry, MunicipalityProperties>[];
 
-        // 한반도에 맞게 projection 자동 피팅
-        projection.fitSize([w, h], provinces);
+        projection.fitSize([w, h], municipalities);
 
-        // 시도 면 렌더링
-        provincesG
-          .selectAll<SVGPathElement, Feature<Geometry, ProvinceProperties>>("path")
-          .data(provinces.features as Feature<Geometry, ProvinceProperties>[])
+        // Municipality fills
+        municipalitiesG
+          .selectAll<SVGPathElement, Feature<Geometry, MunicipalityProperties>>("path")
+          .data(municipalities.features as Feature<Geometry, MunicipalityProperties>[])
           .join("path")
           .attr("d", (d) => pathGen(d) ?? "")
-          .attr("fill", (d) => {
-            const region = PROVINCE_TO_REGION[d.properties.name];
-            return region ? REGION_COLORS[region] : "#374151";
-          })
-          .attr("stroke", "#1e293b")
-          .attr("stroke-width", 0.6)
-          .attr("opacity", (d) => getProvinceOpacity(d.properties.name, selectedRegions))
+          .attr("fill", (d) => getMunicipalityFill(d.properties.code, activeProvincesRef.current, selectedRegions))
+          .attr("opacity", (d) => getMunicipalityOpacity(d.properties.code, activeProvincesRef.current, selectedRegions))
+          .attr("stroke", "none")
+          .style("cursor", "pointer")
           .on("click", (_event, d) => {
-            // 시도 클릭 시 해당 지역 핀 첫 번째 표시
-            const matching = placesRef.current.find((p) => p.province === d.properties.name);
+            const province = CODE_TO_PROVINCE[d.properties.code.slice(0, 2)];
+            const matching = placesRef.current.find((p) => p.province === province);
             if (matching) onPinClickRef.current(matching);
-          })
-          .style("cursor", "pointer");
+          });
 
-        // 경계선 레이블 (시도명)
-        provincesG
-          .selectAll<SVGTextElement, Feature<Geometry, ProvinceProperties>>("text")
-          .data(provinces.features as Feature<Geometry, ProvinceProperties>[])
+        // Thin municipality borders
+        const muniMesh = mesh(
+          topo,
+          topo.objects.skorea_municipalities_2018_geo,
+          (a, b) => a !== b,
+        );
+        municipalityBordersG
+          .append("path")
+          .datum(muniMesh)
+          .attr("d", pathGen)
+          .attr("fill", "none")
+          .attr("stroke", "#1e293b")
+          .attr("stroke-width", 0.3);
+
+        // Thick province borders
+        const provMesh = mesh(
+          topo,
+          topo.objects.skorea_municipalities_2018_geo,
+          (a, b) => {
+            if (a === b) return true; // exterior (coastline)
+            const ap = (a as unknown as { properties: MunicipalityProperties }).properties.code.slice(0, 2);
+            const bp = (b as unknown as { properties: MunicipalityProperties }).properties.code.slice(0, 2);
+            return ap !== bp;
+          },
+        );
+        provinceBordersG
+          .append("path")
+          .datum(provMesh)
+          .attr("d", pathGen)
+          .attr("fill", "none")
+          .attr("stroke", "#1e293b")
+          .attr("stroke-width", 1.2);
+
+        // Province labels
+        labelsG
+          .selectAll("text")
+          .data(PROVINCE_LABEL_COORDS)
           .join("text")
-          .attr("class", "province-label")
           .attr("transform", (d) => {
-            const centroid = pathGen.centroid(d);
-            return centroid ? `translate(${centroid[0]},${centroid[1]})` : "";
+            const pt = projection([d.lng, d.lat]);
+            return pt ? `translate(${pt[0]},${pt[1]})` : "";
           })
           .attr("text-anchor", "middle")
           .attr("dominant-baseline", "middle")
-          .style("font-size", "9px")
-          .style("font-weight", "600")
-          .style("fill", "rgba(255,255,255,0.85)")
+          .style("font-size", "8px")
+          .style("font-weight", "700")
+          .style("fill", "rgba(255,255,255,0.8)")
           .style("pointer-events", "none")
           .style("user-select", "none")
-          .text((d) => getShortName(d.properties.name));
+          .text((d) => d.short);
 
         renderKoreaPins(pinsG, placesRef.current, highlightedId ?? null, projection, onPinClickRef);
         onLoadRef.current?.();
@@ -147,7 +241,7 @@ export default function TravelKoreaMap({
         onLoadRef.current?.();
       });
 
-    // 줌/팬
+    // Zoom/pan
     const zoom = d3
       .zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.8, 12])
@@ -165,15 +259,16 @@ export default function TravelKoreaMap({
       const fc = { type: "FeatureCollection" as const, features: featuresRef.current };
       projection.fitSize([nw, nh], fc);
 
-      mapGroup
-        .selectAll<SVGPathElement, Feature<Geometry, ProvinceProperties>>("g.provinces path")
+      mapGroup.selectAll<SVGPathElement, Feature<Geometry, MunicipalityProperties>>("g.municipalities path")
         .attr("d", (d) => pathGen(d) ?? "");
 
-      mapGroup
-        .selectAll<SVGTextElement, Feature<Geometry, ProvinceProperties>>("g.provinces text")
+      mapGroup.selectAll<SVGPathElement, unknown>("g.municipality-borders path, g.province-borders path")
+        .attr("d", (d) => pathGen(d as Parameters<typeof pathGen>[0]) ?? "");
+
+      mapGroup.selectAll<SVGTextElement, typeof PROVINCE_LABEL_COORDS[number]>("g.province-labels text")
         .attr("transform", (d) => {
-          const centroid = pathGen.centroid(d);
-          return centroid ? `translate(${centroid[0]},${centroid[1]})` : "";
+          const pt = projection([d.lng, d.lat]);
+          return pt ? `translate(${pt[0]},${pt[1]})` : "";
         });
 
       renderKoreaPins(
@@ -196,7 +291,7 @@ export default function TravelKoreaMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── 필터 / 핀 업데이트 ───────────────────────────────────────────────────
+  // ── Update fills/pins when props change ──────────────────────────────────
   useEffect(() => {
     const svg = svgRef.current;
     const projection = projectionRef.current;
@@ -204,10 +299,10 @@ export default function TravelKoreaMap({
 
     const sel = d3.select(svg);
 
-    sel
-      .select("g.provinces")
-      .selectAll<SVGPathElement, Feature<Geometry, ProvinceProperties>>("path")
-      .attr("opacity", (d) => getProvinceOpacity(d.properties.name, selectedRegions));
+    sel.select("g.municipalities")
+      .selectAll<SVGPathElement, Feature<Geometry, MunicipalityProperties>>("path")
+      .attr("fill", (d) => getMunicipalityFill(d.properties.code, activeProvinces, selectedRegions))
+      .attr("opacity", (d) => getMunicipalityOpacity(d.properties.code, activeProvinces, selectedRegions));
 
     renderKoreaPins(
       sel.select<SVGGElement>("g.pins"),
@@ -216,7 +311,7 @@ export default function TravelKoreaMap({
       projection,
       onPinClickRef,
     );
-  }, [places, highlightedId, selectedRegions]);
+  }, [places, highlightedId, selectedRegions, activeProvinces]);
 
   return (
     <div
@@ -226,36 +321,7 @@ export default function TravelKoreaMap({
   );
 }
 
-// ── 헬퍼 ────────────────────────────────────────────────────────────────────
-
-function getProvinceOpacity(name: string, selectedRegions?: KoreaRegion[]): number {
-  if (!selectedRegions || selectedRegions.length === 0) return 0.8;
-  const region = PROVINCE_TO_REGION[name];
-  return region && selectedRegions.includes(region) ? 0.95 : 0.18;
-}
-
-function getShortName(name: string): string {
-  const overrides: Record<string, string> = {
-    "서울특별시": "서울",
-    "부산광역시": "부산",
-    "대구광역시": "대구",
-    "인천광역시": "인천",
-    "광주광역시": "광주",
-    "대전광역시": "대전",
-    "울산광역시": "울산",
-    "세종특별자치시": "세종",
-    "경기도": "경기",
-    "강원특별자치도": "강원",
-    "충청북도": "충북",
-    "충청남도": "충남",
-    "전북특별자치도": "전북",
-    "전라남도": "전남",
-    "경상북도": "경북",
-    "경상남도": "경남",
-    "제주특별자치도": "제주",
-  };
-  return overrides[name] ?? name;
-}
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
 function renderKoreaPins(
   group: d3.Selection<SVGGElement, unknown, null, undefined>,

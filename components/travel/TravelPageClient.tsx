@@ -91,6 +91,22 @@ export default function TravelPageClient() {
       .sort((a, b) => new Date(b.travel_date).getTime() - new Date(a.travel_date).getTime());
   }, [places, filter, activeMapTab]);
 
+  const activeContinents = useMemo(() => {
+    return [...new Set(
+      places
+        .filter((p) => !p.is_domestic && p.continent)
+        .map((p) => p.continent as TravelContinent),
+    )];
+  }, [places]);
+
+  const activeProvinces = useMemo(() => {
+    return [...new Set(
+      places
+        .filter((p) => p.is_domestic && p.province)
+        .map((p) => p.province!),
+    )];
+  }, [places]);
+
   const worldCount = places.filter((p) => !p.is_domestic).length;
   const domesticCount = places.filter((p) => p.is_domestic).length;
 
@@ -262,6 +278,7 @@ export default function TravelPageClient() {
               onPinClick={handlePinClick}
               highlightedId={highlightedId}
               selectedContinents={filter.continents}
+              activeContinents={activeContinents}
               onLoad={() => setMapReady(true)}
             />
           )}
@@ -271,6 +288,7 @@ export default function TravelPageClient() {
               onPinClick={handlePinClick}
               highlightedId={highlightedId}
               selectedRegions={filter.regions}
+              activeProvinces={activeProvinces}
               onLoad={() => setMapReady(true)}
             />
           )}
