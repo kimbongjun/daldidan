@@ -4,11 +4,13 @@ import { useEffect, useState } from "react";
 import { MapPin, Globe, Plus, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import type { TravelPlace } from "@/lib/travel-shared";
+import TravelDetailModal from "@/components/travel/TravelDetailModal";
 import { useTravelStore } from "@/store/useTravelStore";
 
 export default function TravelWidget() {
   const { places, setPlaces } = useTravelStore();
   const [loading, setLoading] = useState(true);
+  const [selectedPlace, setSelectedPlace] = useState<TravelPlace | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -117,8 +119,7 @@ export default function TravelWidget() {
             />
           ))
         ) : allPlaces.length === 0 ? (
-          <Link
-            href="/travel"
+          <div
             style={{
               flex: 1,
               display: "flex",
@@ -136,21 +137,24 @@ export default function TravelWidget() {
           >
             <Plus size={20} style={{ color: "var(--accent-emerald, #10b981)" }} />
             첫 여행지를 공유해보세요
-          </Link>
+          </div>
         ) : (
           allPlaces.map((place) => (
-            <Link
+            <button
               key={place.id}
-              href="/travel"
+              type="button"
+              onClick={() => setSelectedPlace(place)}
               style={{
                 display: "flex",
                 alignItems: "center",
                 gap: "0.5rem",
                 padding: "0.4rem 0.5rem",
                 borderRadius: 8,
-                textDecoration: "none",
                 background: "var(--bg-base)",
                 border: "1px solid var(--border)",
+                width: "100%",
+                cursor: "pointer",
+                textAlign: "left",
               }}
             >
               {place.photo_url ? (
@@ -202,10 +206,19 @@ export default function TravelWidget() {
                   {place.country} · {place.travel_date.slice(0, 7)}
                 </p>
               </div>
-            </Link>
+            </button>
           ))
         )}
       </div>
+
+      {selectedPlace && (
+        <TravelDetailModal
+          place={selectedPlace}
+          onClose={() => setSelectedPlace(null)}
+          onEdit={() => undefined}
+          onDelete={() => undefined}
+        />
+      )}
 
       <style>{`
         @keyframes pulse {
