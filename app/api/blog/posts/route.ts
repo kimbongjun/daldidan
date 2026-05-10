@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "제목과 본문을 입력해주세요." }, { status: 400 });
   }
 
-  const aiMetadata = await generateBlogAiMetadata(title, contentHtml);
+  const aiMetadata = await generateBlogAiMetadata(title, contentHtml, category);
   const description = aiMetadata.summary || fallbackDescription;
 
   const slug = await ensureUniqueBlogSlug(title);
@@ -153,7 +153,7 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: "수정에 필요한 정보가 부족합니다." }, { status: 400 });
   }
 
-  const aiMetadata = await generateBlogAiMetadata(title, contentHtml);
+  const aiMetadata = await generateBlogAiMetadata(title, contentHtml, category);
   const description = aiMetadata.summary || fallbackDescription;
 
   const { data: existing, error: fetchError } = await supabase

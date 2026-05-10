@@ -2,7 +2,7 @@ import { createGroqClient } from "@/lib/groq";
 import { extractDescriptionFromHtml } from "@/lib/blog-shared";
 
 const DEFAULT_BLOG_SUMMARY_MODEL = "gemma2-9b-it";
-const MAX_SUMMARY_LENGTH = 50;
+const MAX_SUMMARY_LENGTH = 60;
 const MAX_KEYWORDS = 5;
 const HANJA_REGEX = /[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF]/g;
 const KOREAN_TRAILING_PARTICLE_REGEX = /(에서|으로|에게|까지|처럼|보다|마저|조차|부터|한테|하고|과의|과를|과가|으로는|으로도|이랑|랑|은|는|이|가|을|를|과|와|도|만|의|에|로|께|랑)$/u;
@@ -264,28 +264,29 @@ async function requestBlogAiMetadata(
   digest: string,
   groq: ReturnType<typeof createGroqClient>["client"],
   model: string,
+  category?: string | null,
 ) {
+  const categoryLine = category ? `카테고리: ${category}` : "";
+
   const completion = await groq.chat.completions.create({
     model,
     messages: [
       {
         role: "system",
         content: [
-          "당신은 한국어 블로그 편집자입니다.",
-          "글의 내용과 분량을 분석해 아래 세 유형 중 가장 적합한 것을 선택해 요약하세요.",
+          "너는 블로그 콘텐츠의 핵심을 꿰뚫어 한 줄의 매력적인 문장으로 요약하는 '전문 콘텐츠 에디터'야.",
           "",
-          "[시사점형] 정보·인사이트·분석이 풍부한 글 → 핵심 발견이나 시사점을 담은 한 문장",
-          "예: '이번 달 가계부를 보니 커피값이 식비를 앞질렀다.'",
+          "제약사항:",
+          "1. 복사 금지: 본문에 포함된 문장을 그대로 가져오지 말고, 너의 언어로 완전히 재구성해.",
+          "2. 단일 문장: 반드시 마침표로 끝나는 한 개의 문장으로 작성해.",
+          "3. 자연스러운 한국어: 번역투(~에 대한, ~을 하는 것 등)를 지양하고, 독자가 읽었을 때 매끄러운 구어체나 문어체로 작성해.",
+          "4. 정보의 우선순위: [카테고리]의 맥락 속에서 [제목]이 전달하려는 핵심 목표를 [본문]의 근거를 바탕으로 요약해.",
+          "5. 글자 수: 공백 포함 40~60자 내외로 작성.",
           "",
-          "[교훈형] 경험담·반성·배운 점이 담긴 글 → 경험에서 얻은 교훈을 한 문장으로",
-          "예: '시행착오 끝에 얻은 결론, 계획은 단순할수록 오래 간다.'",
+          "예시: '제철을 맞아 당도와 식감이 뛰어난 사과를 직접 시식하고 추천하는 후기입니다.'",
           "",
-          "[인사말형] 내용이 짧거나 일기처럼 가벼운 글 → 소소한 기록임을 담담하게 표현",
-          "예: '오늘 하루도 소소하게 기록해 둔 찰나의 이야기.'",
-          "",
-          "규칙: 본문 문장 복사 금지. 비꼼·독설·냉소·비속어 금지.",
-          "반드시 아래 형식만 반환하세요.",
-          "SUMMARY: 40~55자 한 문장",
+          "비꼼·독설·냉소·비속어 금지. 아래 형식만 반환하세요.",
+          "SUMMARY: 한 문장 요약",
           "KEYWORDS: 썸네일 검색용 핵심 키워드 3~5개, 쉼표로 구분",
         ].join(" "),
       },
@@ -293,15 +294,16 @@ async function requestBlogAiMetadata(
         role: "user",
         content: [
           `제목: ${title}`,
+          categoryLine,
           "",
           "글에서 추린 핵심 단락:",
           digest,
           "",
-          "위 내용을 분석해 글의 유형(시사점형/교훈형/인사말형)을 판단하고 해당 유형에 맞는 자연스러운 한 줄 요약을 작성하세요.",
+          "위 내용을 바탕으로 카테고리 맥락에 맞는 자연스러운 한 줄 요약을 작성하세요.",
           "- 본문 표현을 그대로 옮기지 말 것",
-          "- 글자수는 40~55자로 맞출 것",
+          "- 공백 포함 40~60자로 맞출 것",
           "- 키워드는 이미지 검색에 바로 쓸 수 있게 명사 중심으로 만들 것",
-        ].join("\n"),
+        ].filter(Boolean).join("\n"),
       },
     ],
     temperature: 0.8,
@@ -311,7 +313,11 @@ async function requestBlogAiMetadata(
   return completion.choices[0]?.message?.content ?? "";
 }
 
-export async function generateBlogAiMetadata(title: string, contentHtml: string): Promise<BlogAiMetadata> {
+export async function generateBlogAiMetadata(
+  title: string,
+  contentHtml: string,
+  category?: string | null,
+): Promise<BlogAiMetadata> {
   const { plainText, digest, fallback, cleanedTitle } = buildSummarySource(title, contentHtml);
   const plainTextSlice = plainText.slice(0, 5000);
   const fallbackKeywords = buildFallbackKeywords(cleanedTitle, fallback);
@@ -332,7 +338,7 @@ export async function generateBlogAiMetadata(title: string, contentHtml: string)
     const { client: groq, model } = createGroqClient({ model: configuredModel });
 
     const firstPass = parseMetadataResponse(
-      await requestBlogAiMetadata(cleanedTitle, digest || `- ${plainTextSlice}`, groq, model),
+      await requestBlogAiMetadata(cleanedTitle, digest || `- ${plainTextSlice}`, groq, model, category),
     );
     const firstSummary = sanitizeBlogAiSummary(firstPass.summary, fallbackSummary);
 
@@ -344,7 +350,7 @@ export async function generateBlogAiMetadata(title: string, contentHtml: string)
     }
 
     const secondPass = parseMetadataResponse(
-      await requestBlogAiMetadata(`${cleanedTitle} (요약은 반드시 재서술)`, digest || `- ${plainTextSlice}`, groq, model),
+      await requestBlogAiMetadata(`${cleanedTitle} (요약은 반드시 재서술)`, digest || `- ${plainTextSlice}`, groq, model, category),
     );
     const secondSummary = sanitizeBlogAiSummary(secondPass.summary, fallbackSummary);
 
