@@ -196,18 +196,20 @@ export default function TravelPageClient() {
         </button>
       </header>
 
-      {/* 본문: 데스크톱 = 사이드바 + 지구본, 모바일 = 지구본 + 사이드바 */}
       <div className="travel-layout">
+        {/* 지도 영역 — DOM 최우선, sticky로 스크롤 중에도 고정 */}
+        <div className="travel-globe-wrap">
+          <TravelWorldMap
+            places={filteredPlaces}
+            onPinClick={handlePinClick}
+            highlightedId={highlightedId}
+            selectedContinents={filter.continents}
+          />
+        </div>
+
+        {/* 사이드바 — 지도 렌더링 이후 */}
         <div className="travel-sidebar-wrap">
-          <div
-            className="travel-sidebar-inner"
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              padding: "1rem",
-              boxSizing: "border-box",
-            }}
-          >
+          <div className="travel-sidebar-inner">
             {loading ? (
               <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
                 {[1, 2, 3].map((i) => (
@@ -229,16 +231,6 @@ export default function TravelPageClient() {
               />
             )}
           </div>
-        </div>
-
-        {/* 지도 영역 */}
-        <div className="travel-globe-wrap">
-          <TravelWorldMap
-            places={filteredPlaces}
-            onPinClick={handlePinClick}
-            highlightedId={highlightedId}
-            selectedContinents={filter.continents}
-          />
         </div>
       </div>
 
@@ -268,64 +260,51 @@ export default function TravelPageClient() {
           flex-direction: column;
           overflow: hidden;
         }
+        /* 스크롤 컨테이너: 레이아웃 전체가 세로 스크롤 */
         .travel-layout {
           flex: 1;
           min-height: 0;
-          display: flex;
-          flex-direction: row;
-        }
-        .travel-sidebar-wrap {
-          width: 320px;
-          flex-shrink: 0;
-          border-right: 1px solid var(--border);
-          background: var(--bg-base);
           overflow-y: auto;
+          overflow-x: hidden;
+          display: flex;
+          flex-direction: column;
         }
-        .travel-sidebar-inner {
-          height: auto;
-        }
-        .travel-sidebar-panel {
-          height: auto;
-        }
-        .travel-record-list {
-          padding-bottom: 1rem;
-        }
+        /* 지도: 고정 높이로 D3 clientHeight 보장 + sticky */
         .travel-globe-wrap {
-          flex: 1;
-          min-width: 0;
-          min-height: 0;
+          width: 100%;
+          height: min(62dvh, 680px);
+          flex-shrink: 0;
           background: #0d1b2a;
           overflow: hidden;
-          position: relative;
+          position: sticky;
+          top: 0;
+          z-index: 10;
         }
+        /* 사이드바: 전체 너비, 자연 스크롤 */
+        .travel-sidebar-wrap {
+          width: 100%;
+          background: var(--bg-base);
+          border-top: 1px solid var(--border);
+        }
+        .travel-sidebar-inner {
+          padding: 1rem;
+          box-sizing: border-box;
+        }
+        .travel-sidebar-panel { height: auto; }
+        .travel-record-list { padding-bottom: 1.5rem; }
         .hide-xs { display: inline; }
         @keyframes pulse {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.4; }
         }
         @media (max-width: 768px) {
-          .travel-page-shell {
-            height: auto;
-            min-height: 100dvh;
-            overflow-y: auto;
-          }
-          .travel-layout {
-            flex-direction: column-reverse;
-          }
-          .travel-sidebar-wrap {
-            width: 100%;
-            border-right: none;
-            border-top: 1px solid var(--border);
-            overflow-y: visible;
-          }
-          .travel-record-list {
-            padding-bottom: 0;
-          }
           .travel-globe-wrap {
-            flex: none;
-            height: 45vh;
-            min-height: 280px;
+            height: 45dvh;
+            min-height: 260px;
+            position: sticky;
           }
+        }
+        @media (max-width: 480px) {
           .hide-xs { display: none; }
         }
       `}</style>
