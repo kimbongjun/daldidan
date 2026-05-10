@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { MapPin, Globe, Plus, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import type { TravelPlace } from "@/lib/travel-shared";
@@ -11,6 +11,7 @@ export default function TravelWidget() {
   const { places, setPlaces } = useTravelStore();
   const [loading, setLoading] = useState(true);
   const [selectedPlace, setSelectedPlace] = useState<TravelPlace | null>(null);
+  const [activeTab, setActiveTab] = useState<"all" | "world" | "domestic">("all");
 
   useEffect(() => {
     void (async () => {
@@ -26,7 +27,19 @@ export default function TravelWidget() {
     })();
   }, [setPlaces]);
 
-  const countryCount = new Set(places.map((p) => p.country)).size;
+  const displayPlaces = useMemo(() => {
+    if (activeTab === "world") return places.filter((p) => !p.is_domestic);
+    if (activeTab === "domestic") return places.filter((p) => p.is_domestic);
+    return places;
+  }, [places, activeTab]);
+
+  const statA = activeTab === "domestic"
+    ? { label: "국내 여행지", value: String(displayPlaces.length) }
+    : { label: activeTab === "world" ? "해외 여행지" : "전체 여행지", value: String(displayPlaces.length) };
+
+  const statB = activeTab === "domestic"
+    ? { label: "방문 지역", value: String(new Set(displayPlaces.map((p) => p.province).filter(Boolean)).size) }
+    : { label: "방문 국가", value: String(new Set(displayPlaces.map((p) => p.country)).size) };
 
   return (
     <div
@@ -79,11 +92,29 @@ export default function TravelWidget() {
         </Link>
       </div>
 
+      {/* 탭 */}
+      <div style={{ display: "flex", gap: 0, background: "var(--bg-base)", borderRadius: 999, padding: 2 }}>
+        {(["all", "world", "domestic"] as const).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            style={{
+              flex: 1, padding: "3px 0", borderRadius: 999, border: "none",
+              fontSize: "0.7rem", fontWeight: activeTab === tab ? 700 : 400,
+              cursor: "pointer",
+              background: activeTab === tab ? "var(--bg-card)" : "transparent",
+              color: activeTab === tab ? "var(--text-primary)" : "var(--text-secondary)",
+              boxShadow: activeTab === tab ? "0 1px 4px rgba(0,0,0,0.12)" : "none",
+              transition: "all 0.15s",
+            }}
+          >
+            {tab === "all" ? "전체" : tab === "world" ? "해외" : "국내"}
+          </button>
+        ))}
+      </div>
+
       <div style={{ display: "flex", gap: "0.5rem" }}>
-        {[
-          { label: "전체 여행지", value: loading ? "—" : String(places.length) },
-          { label: "전체 국가", value: loading ? "—" : String(countryCount) },
-        ].map(({ label, value }) => (
+        {[statA, statB].map(({ label, value }) => (
           <div
             key={label}
             style={{
@@ -95,7 +126,7 @@ export default function TravelWidget() {
             }}
           >
             <p style={{ margin: 0, fontSize: "1.3rem", fontWeight: 800, color: "var(--accent-emerald, #10b981)" }}>
-              {value}
+              {loading ? "—" : value}
             </p>
             <p style={{ margin: 0, fontSize: "0.7rem", color: "var(--text-secondary)", marginTop: 1 }}>
               {label}
@@ -117,7 +148,7 @@ export default function TravelWidget() {
               }}
             />
           ))
-        ) : places.length === 0 ? (
+        ) : displayPlaces.length === 0 ? (
           <div
             style={{
               flex: 1,
@@ -138,7 +169,7 @@ export default function TravelWidget() {
             첫 여행지를 공유해보세요
           </div>
         ) : (
-          places.map((place) => (
+          displayPlaces.map((place) => (
             <button
               key={place.id}
               type="button"
@@ -202,7 +233,7 @@ export default function TravelWidget() {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  {place.country} · {place.travel_date.slice(0, 7)}
+                  {place.is_domestic ? (place.province ?? place.country) : place.country} · {place.travel_date.slice(0, 7)}
                 </p>
               </div>
             </button>

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { X, Edit2, Trash2, MapPin, Calendar, FileText } from "lucide-react";
+import { X, Edit2, Trash2, MapPin, Calendar, FileText, ExternalLink } from "lucide-react";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
 import type { TravelPlace } from "@/lib/travel-shared";
@@ -133,8 +133,10 @@ export default function TravelDetailModal({ place, currentUserId, onClose, onEdi
             {place.city}
           </h2>
           <p style={{ margin: 0, fontSize: "0.9rem", color: "var(--text-secondary)" }}>
-            {place.country}
-            {place.continent && ` · ${CONTINENT_LABELS[place.continent as TravelContinent] ?? place.continent}`}
+            {place.is_domestic
+              ? `${place.province ?? place.country}`
+              : `${place.country}${place.continent ? ` · ${CONTINENT_LABELS[place.continent as TravelContinent] ?? place.continent}` : ""}`
+            }
           </p>
 
           <div style={{ margin: "1rem 0", display: "flex", flexDirection: "column", gap: "0.6rem" }}>
@@ -150,6 +152,24 @@ export default function TravelDetailModal({ place, currentUserId, onClose, onEdi
                 {place.lat.toFixed(4)}°N, {place.lng.toFixed(4)}°E
               </span>
             </div>
+            {place.drive_link && (
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <ExternalLink size={15} style={{ color: "var(--accent-emerald, #10b981)", flexShrink: 0 }} />
+                <a
+                  href={place.drive_link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    fontSize: "0.85rem",
+                    color: "var(--accent-emerald, #10b981)",
+                    textDecoration: "none",
+                    fontWeight: 600,
+                  }}
+                >
+                  여행 추억 보기 →
+                </a>
+              </div>
+            )}
           </div>
 
           {place.note && (

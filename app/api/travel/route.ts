@@ -8,7 +8,7 @@ export async function GET() {
 
   const { data, error } = await supabase
     .from("travel_locations")
-    .select("id, user_id, country, city, lat, lng, travel_date, photo_url, note, continent, created_at")
+    .select("id, user_id, country, city, lat, lng, travel_date, photo_url, note, continent, is_domestic, province, drive_link, created_at, updated_at")
     .order("travel_date", { ascending: false });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -29,6 +29,9 @@ export async function POST(request: NextRequest) {
     photo_url?: string | null;
     note?: string | null;
     continent?: string | null;
+    is_domestic?: boolean;
+    province?: string | null;
+    drive_link?: string | null;
   };
 
   if (!body.country?.trim()) return NextResponse.json({ error: "국가를 입력하세요." }, { status: 400 });
@@ -50,8 +53,11 @@ export async function POST(request: NextRequest) {
       photo_url: body.photo_url ?? null,
       note: body.note?.trim() ?? null,
       continent: body.continent ?? null,
+      is_domestic: Boolean(body.is_domestic ?? false),
+      province: body.province ?? null,
+      drive_link: body.drive_link ?? null,
     })
-    .select("id, user_id, country, city, lat, lng, travel_date, photo_url, note, continent, created_at")
+    .select("id, user_id, country, city, lat, lng, travel_date, photo_url, note, continent, is_domestic, province, drive_link, created_at, updated_at")
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

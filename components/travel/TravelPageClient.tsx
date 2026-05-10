@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { ArrowLeft, Plus } from "lucide-react";
 import Link from "next/link";
-import type { TravelPlace, TravelContinent } from "@/lib/travel-shared";
+import type { TravelPlace, TravelContinent, KoreaRegion } from "@/lib/travel-shared";
+import { PROVINCE_TO_REGION } from "@/lib/travel-shared";
 import { useTravelStore } from "@/store/useTravelStore";
 import TravelSidebar from "@/components/travel/TravelSidebar";
 import TravelDetailModal from "@/components/travel/TravelDetailModal";
@@ -17,8 +18,28 @@ const TravelWorldMap = dynamic(
   { ssr: false }
 );
 
+const TravelKoreaMap = dynamic(
+  () => import("@/components/travel/TravelKoreaMap"),
+  { ssr: false }
+);
+
 export default function TravelPageClient() {
-  const { places, setPlaces, isAddModalOpen, isDetailModalOpen, selectedPlace, editingPlace, openAddModal, closeAddModal, openDetailModal, closeDetailModal, filter, setFilter } = useTravelStore();
+  const {
+    places,
+    setPlaces,
+    isAddModalOpen,
+    isDetailModalOpen,
+    selectedPlace,
+    editingPlace,
+    openAddModal,
+    closeAddModal,
+    openDetailModal,
+    closeDetailModal,
+    filter,
+    setFilter,
+    activeMapTab,
+    setActiveMapTab,
+  } = useTravelStore();
   const [loading, setLoading] = useState(true);
   const [mapReady, setMapReady] = useState(false);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
@@ -27,6 +48,7 @@ export default function TravelPageClient() {
   // 페이지 마운트 즉시 지도 모듈 preload — 리스트 노출 중 백그라운드 다운로드
   useEffect(() => {
     void import("@/components/travel/TravelWorldMap");
+    void import("@/components/travel/TravelKoreaMap");
   }, []);
 
   useEffect(() => {
@@ -54,13 +76,23 @@ export default function TravelPageClient() {
   const filteredPlaces = useMemo(() => {
     return places
       .filter((p) => {
+        // activeMapTab에 따라 domestic/world 분리
+        if (activeMapTab === "world" && p.is_domestic) return false;
+        if (activeMapTab === "domestic" && !p.is_domestic) return false;
         const year = new Date(p.travel_date).getFullYear();
         if (filter.years.length > 0 && !filter.years.includes(year)) return false;
-        if (filter.continents.length > 0 && !filter.continents.includes(p.continent as TravelContinent)) return false;
+        if (activeMapTab === "world" && filter.continents.length > 0 && !filter.continents.includes(p.continent as TravelContinent)) return false;
+        if (activeMapTab === "domestic" && filter.regions.length > 0) {
+          const region = p.province ? PROVINCE_TO_REGION[p.province] : null;
+          if (!region || !filter.regions.includes(region)) return false;
+        }
         return true;
       })
       .sort((a, b) => new Date(b.travel_date).getTime() - new Date(a.travel_date).getTime());
-  }, [places, filter]);
+  }, [places, filter, activeMapTab]);
+
+  const worldCount = places.filter((p) => !p.is_domestic).length;
+  const domesticCount = places.filter((p) => p.is_domestic).length;
 
   const handlePinClick = useCallback((place: TravelPlace) => {
     setHighlightedId(place.id);
@@ -108,8 +140,16 @@ export default function TravelPageClient() {
     setFilter({ continents: next });
   }
 
+  function toggleRegion(region: KoreaRegion) {
+    const next = filter.regions.includes(region)
+      ? filter.regions.filter((r) => r !== region)
+      : [...filter.regions, region];
+    setFilter({ regions: next });
+  }
+
   function resetYearFilter() { setFilter({ years: [] }); }
   function resetContinentFilter() { setFilter({ continents: [] }); }
+  function resetRegionFilter() { setFilter({ regions: [] }); }
 
   return (
     <div className="travel-page-shell">
@@ -149,7 +189,7 @@ export default function TravelPageClient() {
               우리의 여행 지도
             </h1>
             <p style={{ margin: 0, fontSize: "0.72rem", color: "var(--text-secondary)" }}>
-              {places.length}곳의 여행 기록
+              {`해외 ${worldCount}곳 · 국내 ${domesticCount}곳`}
             </p>
           </div>
         </div>
@@ -178,18 +218,59 @@ export default function TravelPageClient() {
       <div className="travel-layout">
         {/* 1순위: 지도 영역 — 항상 상단 표시, 로딩 중엔 오버레이 */}
         <div className="travel-globe-wrap">
+          {/* 세계/국내 탭 — 지도 위 상단 중앙 */}
+          <div style={{
+            position: "absolute", top: 12, left: "50%", transform: "translateX(-50%)",
+            zIndex: 10, display: "flex", gap: 0,
+            background: "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)",
+            borderRadius: 999, padding: 3,
+          }}>
+            {(["world", "domestic"] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => {
+                  setActiveMapTab(tab);
+                  setFilter({ years: [], continents: [], regions: [] });
+                  setMapReady(false);
+                }}
+                style={{
+                  padding: "5px 16px", borderRadius: 999, border: "none",
+                  fontSize: "0.8rem", fontWeight: activeMapTab === tab ? 700 : 500,
+                  cursor: "pointer",
+                  background: activeMapTab === tab ? "rgba(16,185,129,0.9)" : "transparent",
+                  color: activeMapTab === tab ? "#fff" : "rgba(255,255,255,0.65)",
+                  transition: "all 0.2s",
+                }}
+              >
+                {tab === "world" ? "🌍 세계여행" : "🇰🇷 국내여행"}
+              </button>
+            ))}
+          </div>
+
+          {/* 로딩 오버레이 */}
           {!mapReady && (
             <div className="globe-loading-overlay">
               <div className="globe-loading-pulse" />
               <span className="globe-loading-text">지도 불러오는 중…</span>
             </div>
           )}
-          {!loading && (
+
+          {/* 조건부 지도 렌더링 */}
+          {!loading && activeMapTab === "world" && (
             <TravelWorldMap
               places={filteredPlaces}
               onPinClick={handlePinClick}
               highlightedId={highlightedId}
               selectedContinents={filter.continents}
+              onLoad={() => setMapReady(true)}
+            />
+          )}
+          {!loading && activeMapTab === "domestic" && (
+            <TravelKoreaMap
+              places={filteredPlaces}
+              onPinClick={handlePinClick}
+              highlightedId={highlightedId}
+              selectedRegions={filter.regions}
               onLoad={() => setMapReady(true)}
             />
           )}
@@ -206,14 +287,18 @@ export default function TravelPageClient() {
               </div>
             ) : (
               <TravelSidebar
-                places={places}
+                places={places.filter((p) => activeMapTab === "world" ? !p.is_domestic : p.is_domestic)}
                 filteredPlaces={filteredPlaces}
                 selectedYears={filter.years}
                 selectedContinents={filter.continents}
+                selectedRegions={filter.regions}
+                activeMapTab={activeMapTab}
                 onYearToggle={toggleYear}
                 onContinentToggle={toggleContinent}
+                onRegionToggle={toggleRegion}
                 onYearReset={resetYearFilter}
                 onContinentReset={resetContinentFilter}
+                onRegionReset={resetRegionFilter}
                 onPlaceClick={handlePinClick}
                 highlightedId={highlightedId}
               />

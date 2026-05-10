@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { X, Upload, Loader2, Search } from "lucide-react";
 import type { TravelPlace, TravelContinent } from "@/lib/travel-shared";
-import { CONTINENTS, CONTINENT_LABELS } from "@/lib/travel-shared";
+import { CONTINENTS, CONTINENT_LABELS, KOREA_PROVINCES, PROVINCE_COORDINATES } from "@/lib/travel-shared";
 import { searchCountries, findCountryByName, type CountryData } from "@/lib/travel-countries";
 
 interface TravelFormModalProps {
@@ -22,6 +22,9 @@ interface FormState {
   lat: number | null;
   lng: number | null;
   photo_url: string | null;
+  is_domestic: boolean;
+  province: string;
+  drive_link: string;
 }
 
 export default function TravelFormModal({ editingPlace, onClose, onSave }: TravelFormModalProps) {
@@ -37,6 +40,9 @@ export default function TravelFormModal({ editingPlace, onClose, onSave }: Trave
     lat: editingPlace?.lat ?? null,
     lng: editingPlace?.lng ?? null,
     photo_url: editingPlace?.photo_url ?? null,
+    is_domestic: editingPlace?.is_domestic ?? false,
+    province: editingPlace?.province ?? "",
+    drive_link: editingPlace?.drive_link ?? "",
   });
 
   const [countrySuggestions, setCountrySuggestions] = useState<CountryData[]>([]);
@@ -103,27 +109,38 @@ export default function TravelFormModal({ editingPlace, onClose, onSave }: Trave
     let lng = form.lng;
     let continent = form.continent;
 
-    if ((lat === null || lng === null) && form.country.trim()) {
-      const found = findCountryByName(form.country.trim());
-      if (found) { lat = found.lat; lng = found.lng; continent = found.continent; }
-    }
-
-    if (!form.country.trim()) { setError("국가를 입력하세요."); return; }
-    if (!form.city.trim()) { setError("도시를 입력하세요."); return; }
     if (!form.travel_date) { setError("날짜를 선택하세요."); return; }
-    if (lat === null || lng === null) { setError("유효한 국가를 선택하거나 좌표를 확인하세요."); return; }
+
+    if (form.is_domestic) {
+      if (!form.province) { setError("시도를 선택하세요."); return; }
+      if (!form.city.trim()) { setError("장소명을 입력하세요."); return; }
+      lat = PROVINCE_COORDINATES[form.province]?.lat ?? null;
+      lng = PROVINCE_COORDINATES[form.province]?.lng ?? null;
+      if (lat === null) { setError("시도를 선택하세요."); return; }
+    } else {
+      if ((lat === null || lng === null) && form.country.trim()) {
+        const found = findCountryByName(form.country.trim());
+        if (found) { lat = found.lat; lng = found.lng; continent = found.continent; }
+      }
+      if (!form.country.trim()) { setError("국가를 입력하세요."); return; }
+      if (!form.city.trim()) { setError("도시를 입력하세요."); return; }
+      if (lat === null || lng === null) { setError("유효한 국가를 선택하거나 좌표를 확인하세요."); return; }
+    }
 
     setSaving(true);
     try {
       const payload = {
-        country: form.country.trim(),
+        country: form.is_domestic ? (form.province || "대한민국") : form.country.trim(),
         city: form.city.trim(),
         lat,
         lng,
         travel_date: form.travel_date,
         photo_url: form.photo_url,
         note: form.note.trim() || null,
-        continent: continent || null,
+        continent: form.is_domestic ? null : (continent || null),
+        is_domestic: form.is_domestic,
+        province: form.is_domestic ? (form.province || null) : null,
+        drive_link: form.drive_link.trim() || null,
       };
 
       const url = editingPlace ? `/api/travel/${editingPlace.id}` : "/api/travel";
@@ -226,108 +243,157 @@ export default function TravelFormModal({ editingPlace, onClose, onSave }: Trave
         {/* 폼 */}
         <form id="travel-form" onSubmit={handleSubmit} style={{ overflowY: "auto", flex: 1, padding: "1.1rem 1.25rem", display: "flex", flexDirection: "column", gap: "0.9rem" }}>
 
-          {/* 국가 */}
-          <div style={{ position: "relative" }} ref={suggRef}>
-            <label style={labelStyle}>국가 *</label>
-            <div style={{ position: "relative" }}>
-              <input
-                type="text"
-                value={form.country}
-                onChange={(e) => handleCountryInput(e.target.value)}
-                onFocus={() => form.country.trim() && setShowSuggestions(true)}
-                placeholder="예: 일본, Japan"
-                style={{ ...inputStyle, paddingRight: "2rem" }}
-                autoComplete="off"
-              />
-              <Search size={14} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", color: "var(--text-secondary)", pointerEvents: "none" }} />
-            </div>
-            {showSuggestions && countrySuggestions.length > 0 && (
-              <div
-                style={{
-                  position: "absolute",
-                  top: "100%",
-                  left: 0,
-                  right: 0,
-                  zIndex: 100,
-                  background: "var(--bg-card)",
-                  border: "1px solid var(--border)",
-                  borderRadius: 10,
-                  overflow: "hidden",
-                  boxShadow: "0 8px 24px rgba(0,0,0,0.2)",
-                  marginTop: 4,
-                }}
-              >
-                {countrySuggestions.map((c) => (
-                  <button
-                    key={c.en}
-                    type="button"
-                    onClick={() => selectCountry(c)}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      width: "100%",
-                      padding: "0.55rem 0.85rem",
-                      background: "none",
-                      border: "none",
-                      cursor: "pointer",
-                      textAlign: "left",
-                      color: "var(--text-primary)",
-                      fontSize: "0.85rem",
-                      borderBottom: "1px solid var(--border)",
-                    }}
-                  >
-                    <span style={{ fontWeight: 600 }}>{c.ko}</span>
-                    <span style={{ color: "var(--text-secondary)", fontSize: "0.75rem" }}>
-                      {CONTINENT_LABELS[c.continent]}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
-            {form.lat !== null && (
-              <p style={{ margin: "0.25rem 0 0", fontSize: "0.72rem", color: "var(--accent-emerald, #10b981)" }}>
-                ✓ 좌표 적용됨 ({form.lat.toFixed(2)}, {form.lng?.toFixed(2)})
-              </p>
-            )}
-          </div>
-
-          {/* 대륙 */}
+          {/* 여행 유형 토글 */}
           <div>
-            <label style={labelStyle}>대륙</label>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>
-              {CONTINENTS.map((c) => (
+            <label style={labelStyle}>여행 유형</label>
+            <div style={{ display: "flex", gap: "0.35rem" }}>
+              {([false, true] as const).map((isDomestic) => (
                 <button
-                  key={c}
+                  key={String(isDomestic)}
                   type="button"
-                  onClick={() => patch({ continent: form.continent === c ? "" : c })}
+                  onClick={() => patch({ is_domestic: isDomestic, country: "", continent: "", lat: null, lng: null, province: "" })}
                   style={{
-                    padding: "3px 12px",
-                    borderRadius: 999,
-                    fontSize: "0.78rem",
-                    fontWeight: 600,
-                    cursor: "pointer",
+                    flex: 1, padding: "0.5rem", borderRadius: 10, fontSize: "0.85rem", fontWeight: 600, cursor: "pointer",
                     border: "1px solid",
-                    borderColor: form.continent === c ? "var(--accent-emerald, #10b981)" : "var(--border)",
-                    background: form.continent === c ? "var(--accent-emerald, #10b981)" : "transparent",
-                    color: form.continent === c ? "#fff" : "var(--text-secondary)",
+                    borderColor: form.is_domestic === isDomestic ? "var(--accent-emerald, #10b981)" : "var(--border)",
+                    background: form.is_domestic === isDomestic ? "var(--accent-emerald, #10b981)" : "transparent",
+                    color: form.is_domestic === isDomestic ? "#fff" : "var(--text-secondary)",
                     transition: "all 0.15s",
                   }}
                 >
-                  {CONTINENT_LABELS[c]}
+                  {isDomestic ? "🇰🇷 국내여행" : "🌍 해외여행"}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* 도시 */}
+          {/* 해외 전용: 국가 자동완성 */}
+          {!form.is_domestic && (
+            <div style={{ position: "relative" }} ref={suggRef}>
+              <label style={labelStyle}>국가 *</label>
+              <div style={{ position: "relative" }}>
+                <input
+                  type="text"
+                  value={form.country}
+                  onChange={(e) => handleCountryInput(e.target.value)}
+                  onFocus={() => form.country.trim() && setShowSuggestions(true)}
+                  placeholder="예: 일본, Japan"
+                  style={{ ...inputStyle, paddingRight: "2rem" }}
+                  autoComplete="off"
+                />
+                <Search size={14} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", color: "var(--text-secondary)", pointerEvents: "none" }} />
+              </div>
+              {showSuggestions && countrySuggestions.length > 0 && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "100%",
+                    left: 0,
+                    right: 0,
+                    zIndex: 100,
+                    background: "var(--bg-card)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 10,
+                    overflow: "hidden",
+                    boxShadow: "0 8px 24px rgba(0,0,0,0.2)",
+                    marginTop: 4,
+                  }}
+                >
+                  {countrySuggestions.map((c) => (
+                    <button
+                      key={c.en}
+                      type="button"
+                      onClick={() => selectCountry(c)}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        width: "100%",
+                        padding: "0.55rem 0.85rem",
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        textAlign: "left",
+                        color: "var(--text-primary)",
+                        fontSize: "0.85rem",
+                        borderBottom: "1px solid var(--border)",
+                      }}
+                    >
+                      <span style={{ fontWeight: 600 }}>{c.ko}</span>
+                      <span style={{ color: "var(--text-secondary)", fontSize: "0.75rem" }}>
+                        {CONTINENT_LABELS[c.continent]}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {form.lat !== null && (
+                <p style={{ margin: "0.25rem 0 0", fontSize: "0.72rem", color: "var(--accent-emerald, #10b981)" }}>
+                  ✓ 좌표 적용됨 ({form.lat.toFixed(2)}, {form.lng?.toFixed(2)})
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* 해외 전용: 대륙 */}
+          {!form.is_domestic && (
+            <div>
+              <label style={labelStyle}>대륙</label>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>
+                {CONTINENTS.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => patch({ continent: form.continent === c ? "" : c })}
+                    style={{
+                      padding: "3px 12px",
+                      borderRadius: 999,
+                      fontSize: "0.78rem",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      border: "1px solid",
+                      borderColor: form.continent === c ? "var(--accent-emerald, #10b981)" : "var(--border)",
+                      background: form.continent === c ? "var(--accent-emerald, #10b981)" : "transparent",
+                      color: form.continent === c ? "#fff" : "var(--text-secondary)",
+                      transition: "all 0.15s",
+                    }}
+                  >
+                    {CONTINENT_LABELS[c]}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 국내 전용: 시도 셀렉트 */}
+          {form.is_domestic && (
+            <div>
+              <label style={labelStyle}>시도 *</label>
+              <select
+                value={form.province}
+                onChange={(e) => {
+                  const prov = e.target.value;
+                  const coords = PROVINCE_COORDINATES[prov];
+                  patch({ province: prov, lat: coords?.lat ?? null, lng: coords?.lng ?? null });
+                }}
+                style={{ ...inputStyle }}
+              >
+                <option value="">시도 선택</option>
+                {KOREA_PROVINCES.map((p) => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* 도시 / 장소명 */}
           <div>
-            <label style={labelStyle}>도시 *</label>
+            <label style={labelStyle}>{form.is_domestic ? "장소명 *" : "도시 *"}</label>
             <input
               type="text"
               value={form.city}
               onChange={(e) => patch({ city: e.target.value })}
-              placeholder="예: 도쿄, 오사카"
+              placeholder={form.is_domestic ? "예: 경복궁, 해운대 해수욕장" : "예: 도쿄, 오사카"}
               style={inputStyle}
             />
           </div>
@@ -411,6 +477,18 @@ export default function TravelFormModal({ editingPlace, onClose, onSave }: Trave
               placeholder="여행에 대한 기억, 감상을 남겨보세요..."
               rows={3}
               style={{ ...inputStyle, resize: "vertical", lineHeight: 1.5, fontFamily: "inherit" }}
+            />
+          </div>
+
+          {/* 구글 드라이브 링크 */}
+          <div>
+            <label style={labelStyle}>여행 추억 링크 (선택)</label>
+            <input
+              type="url"
+              value={form.drive_link}
+              onChange={(e) => patch({ drive_link: e.target.value })}
+              placeholder="구글 드라이브 공유 링크를 붙여넣으세요"
+              style={inputStyle}
             />
           </div>
 

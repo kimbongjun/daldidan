@@ -4,18 +4,22 @@ import { MapPin, Filter, ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
-import type { TravelPlace, TravelContinent } from "@/lib/travel-shared";
-import { CONTINENTS, CONTINENT_LABELS } from "@/lib/travel-shared";
+import type { TravelPlace, TravelContinent, KoreaRegion } from "@/lib/travel-shared";
+import { CONTINENTS, CONTINENT_LABELS, KOREA_REGIONS, KOREA_REGION_LABELS } from "@/lib/travel-shared";
 
 interface TravelSidebarProps {
   places: TravelPlace[];
   filteredPlaces: TravelPlace[];
   selectedYears: number[];
   selectedContinents: TravelContinent[];
+  selectedRegions: KoreaRegion[];
+  activeMapTab: "world" | "domestic";
   onYearToggle: (year: number) => void;
   onContinentToggle: (continent: TravelContinent) => void;
+  onRegionToggle: (region: KoreaRegion) => void;
   onYearReset: () => void;
   onContinentReset: () => void;
+  onRegionReset: () => void;
   onPlaceClick: (place: TravelPlace) => void;
   highlightedId?: string | null;
 }
@@ -25,10 +29,14 @@ export default function TravelSidebar({
   filteredPlaces,
   selectedYears,
   selectedContinents,
+  selectedRegions,
+  activeMapTab,
   onYearToggle,
   onContinentToggle,
+  onRegionToggle,
   onYearReset,
   onContinentReset,
+  onRegionReset,
   onPlaceClick,
   highlightedId,
 }: TravelSidebarProps) {
@@ -36,7 +44,7 @@ export default function TravelSidebar({
 
   const allYears = [...new Set(places.map((p) => new Date(p.travel_date).getFullYear()))].sort((a, b) => b - a);
 
-  const isFiltered = selectedYears.length > 0 || selectedContinents.length > 0;
+  const isFiltered = selectedYears.length > 0 || selectedContinents.length > 0 || selectedRegions.length > 0;
 
   return (
     <aside
@@ -136,32 +144,14 @@ export default function TravelSidebar({
               </div>
             )}
 
-            <div>
-              <p style={{ fontSize: "0.72rem", fontWeight: 600, color: "var(--text-secondary)", margin: "0 0 0.35rem" }}>
-                대륙
-              </p>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem" }}>
-                <button
-                  onClick={onContinentReset}
-                  style={{
-                    padding: "2px 10px",
-                    borderRadius: 999,
-                    fontSize: "0.75rem",
-                    fontWeight: 600,
-                    cursor: "pointer",
-                    border: "1px solid",
-                    borderColor: selectedContinents.length === 0 ? "var(--accent-emerald, #10b981)" : "var(--border)",
-                    background: selectedContinents.length === 0 ? "var(--accent-emerald, #10b981)" : "transparent",
-                    color: selectedContinents.length === 0 ? "#fff" : "var(--text-secondary)",
-                    transition: "all 0.15s",
-                  }}
-                >
-                  전체
-                </button>
-                {CONTINENTS.map((c) => (
+            {activeMapTab === "world" && (
+              <div>
+                <p style={{ fontSize: "0.72rem", fontWeight: 600, color: "var(--text-secondary)", margin: "0 0 0.35rem" }}>
+                  대륙
+                </p>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem" }}>
                   <button
-                    key={c}
-                    onClick={() => onContinentToggle(c)}
+                    onClick={onContinentReset}
                     style={{
                       padding: "2px 10px",
                       borderRadius: 999,
@@ -169,17 +159,84 @@ export default function TravelSidebar({
                       fontWeight: 600,
                       cursor: "pointer",
                       border: "1px solid",
-                      borderColor: selectedContinents.includes(c) ? "var(--accent-emerald, #10b981)" : "var(--border)",
-                      background: selectedContinents.includes(c) ? "var(--accent-emerald, #10b981)" : "transparent",
-                      color: selectedContinents.includes(c) ? "#fff" : "var(--text-secondary)",
+                      borderColor: selectedContinents.length === 0 ? "var(--accent-emerald, #10b981)" : "var(--border)",
+                      background: selectedContinents.length === 0 ? "var(--accent-emerald, #10b981)" : "transparent",
+                      color: selectedContinents.length === 0 ? "#fff" : "var(--text-secondary)",
                       transition: "all 0.15s",
                     }}
                   >
-                    {CONTINENT_LABELS[c]}
+                    전체
                   </button>
-                ))}
+                  {CONTINENTS.map((c) => (
+                    <button
+                      key={c}
+                      onClick={() => onContinentToggle(c)}
+                      style={{
+                        padding: "2px 10px",
+                        borderRadius: 999,
+                        fontSize: "0.75rem",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        border: "1px solid",
+                        borderColor: selectedContinents.includes(c) ? "var(--accent-emerald, #10b981)" : "var(--border)",
+                        background: selectedContinents.includes(c) ? "var(--accent-emerald, #10b981)" : "transparent",
+                        color: selectedContinents.includes(c) ? "#fff" : "var(--text-secondary)",
+                        transition: "all 0.15s",
+                      }}
+                    >
+                      {CONTINENT_LABELS[c]}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
+
+            {activeMapTab === "domestic" && (
+              <div>
+                <p style={{ fontSize: "0.72rem", fontWeight: 600, color: "var(--text-secondary)", margin: "0 0 0.35rem" }}>
+                  지역
+                </p>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem" }}>
+                  <button
+                    onClick={onRegionReset}
+                    style={{
+                      padding: "2px 10px",
+                      borderRadius: 999,
+                      fontSize: "0.75rem",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      border: "1px solid",
+                      borderColor: selectedRegions.length === 0 ? "var(--accent-emerald, #10b981)" : "var(--border)",
+                      background: selectedRegions.length === 0 ? "var(--accent-emerald, #10b981)" : "transparent",
+                      color: selectedRegions.length === 0 ? "#fff" : "var(--text-secondary)",
+                      transition: "all 0.15s",
+                    }}
+                  >
+                    전체
+                  </button>
+                  {KOREA_REGIONS.map((r) => (
+                    <button
+                      key={r}
+                      onClick={() => onRegionToggle(r)}
+                      style={{
+                        padding: "2px 10px",
+                        borderRadius: 999,
+                        fontSize: "0.75rem",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        border: "1px solid",
+                        borderColor: selectedRegions.includes(r) ? "var(--accent-emerald, #10b981)" : "var(--border)",
+                        background: selectedRegions.includes(r) ? "var(--accent-emerald, #10b981)" : "transparent",
+                        color: selectedRegions.includes(r) ? "#fff" : "var(--text-secondary)",
+                        transition: "all 0.15s",
+                      }}
+                    >
+                      {KOREA_REGION_LABELS[r]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -278,7 +335,7 @@ export default function TravelSidebar({
                     whiteSpace: "nowrap",
                   }}
                 >
-                  {place.country} · {format(new Date(place.travel_date), "yyyy.MM", { locale: ko })}
+                  {activeMapTab === "domestic" ? (place.province ?? place.country) : place.country} · {format(new Date(place.travel_date), "yyyy.MM", { locale: ko })}
                 </p>
               </div>
             </button>
