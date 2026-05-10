@@ -47,14 +47,14 @@ create policy "본인 여행 기록만 추가"
   on public.travel_locations for insert
   with check (auth.uid() = user_id);
 
-create policy "본인 여행 기록만 수정"
+create policy "인증 유저 전체 여행 기록 수정"
   on public.travel_locations for update
-  using (auth.uid() = user_id)
-  with check (auth.uid() = user_id);
+  using (auth.uid() IS NOT NULL)
+  with check (auth.uid() IS NOT NULL);
 
-create policy "본인 여행 기록만 삭제"
+create policy "인증 유저 전체 여행 기록 삭제"
   on public.travel_locations for delete
-  using (auth.uid() = user_id);
+  using (auth.uid() IS NOT NULL);
 
 -- ── culture_events (공개 캐시) ────────────────────────────────
 alter table public.culture_events enable row level security;
