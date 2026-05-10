@@ -45,11 +45,9 @@ export default function TravelSidebar({
       className="travel-sidebar-panel"
       style={{
         width: "100%",
-        height: "100%",
         display: "flex",
         flexDirection: "column",
         gap: "0.75rem",
-        overflow: "hidden",
       }}
     >
       {/* 헤더 */}
@@ -226,12 +224,10 @@ export default function TravelSidebar({
         )}
       </div>
 
-      {/* 장소 목록 - 전체 기준: 내용 높이만큼 펼침 / 필터 적용: 내부 스크롤 */}
+      {/* 장소 목록 - 내부 스크롤 없이 전체 항목 노출 */}
       <div
         className="travel-record-list"
         style={{
-          flex: 1,
-          minHeight: 0,
           display: "flex",
           flexDirection: "column",
           gap: "0.4rem",

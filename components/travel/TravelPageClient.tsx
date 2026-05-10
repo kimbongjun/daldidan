@@ -141,6 +141,7 @@ export default function TravelPageClient() {
     <div
       className="travel-page-shell"
       style={{
+        minHeight: "100vh",
         background: "var(--bg-base)",
         display: "flex",
         flexDirection: "column",
@@ -211,10 +212,7 @@ export default function TravelPageClient() {
       {/* 본문: 데스크톱 = 사이드바 + 지구본, 모바일 = 지구본 + 사이드바 */}
       <div
         style={{
-          flex: 1,
           display: "flex",
-          overflow: "hidden",
-          minHeight: 0,
         }}
         className="travel-layout"
       >
@@ -283,49 +281,34 @@ export default function TravelPageClient() {
 
       <style>{`
         .travel-page-shell {
-          height: 100dvh;
-          overflow: hidden;
+          overflow: visible;
         }
         .travel-layout {
-          flex-direction: row;
-          min-height: 0;
+          display: grid;
+          grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
+          align-items: start;
         }
         .travel-sidebar-wrap {
-          width: 300px;
-          min-width: 260px;
-          max-width: 320px;
           border-right: 1px solid var(--border);
-          flex-shrink: 0;
-          overflow: hidden;
-          height: 100%;
-          min-height: 0;
           background: var(--bg-base);
         }
         .travel-sidebar-inner {
-          height: 100%;
-          min-height: 0;
-          overflow: hidden;
+          height: auto;
         }
         .travel-sidebar-panel {
-          height: 100%;
-          min-height: 0;
+          height: auto;
         }
         .travel-record-list {
-          overflow-y: auto;
-          overscroll-behavior: contain;
-          padding-right: 0.35rem;
           padding-bottom: 1rem;
-          scrollbar-gutter: stable;
-          -webkit-overflow-scrolling: touch;
         }
         .travel-globe-wrap {
-          flex: 1;
           min-width: 0;
-          height: 100%;
-          min-height: 0;
+          height: min(68vh, 760px);
           background: #0d1b2a;
           border-radius: 0;
           overflow: hidden;
+          position: sticky;
+          top: 0;
         }
         .hide-xs { display: inline; }
         @keyframes pulse {
@@ -334,36 +317,27 @@ export default function TravelPageClient() {
         }
         @media (max-width: 768px) {
           .travel-page-shell {
-            height: auto;
             min-height: 100dvh;
             overflow: visible;
           }
           .travel-layout {
+            display: flex;
             flex-direction: column-reverse;
-            overflow-y: auto;
           }
           .travel-sidebar-wrap {
             width: 100%;
-            max-width: 100%;
             border-right: none;
             border-top: 1px solid var(--border);
             height: auto;
-            max-height: 55vh;
-          }
-          .travel-sidebar-inner,
-          .travel-sidebar-panel {
-            height: auto;
           }
           .travel-record-list {
-            overflow: visible;
-            padding-right: 0;
             padding-bottom: 0;
-            scrollbar-gutter: auto;
           }
           .travel-globe-wrap {
             height: 45vh;
             min-height: 280px;
-            flex: none;
+            position: relative;
+            top: auto;
           }
           .hide-xs { display: none; }
         }
