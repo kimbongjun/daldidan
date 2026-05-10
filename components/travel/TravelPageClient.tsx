@@ -139,8 +139,8 @@ export default function TravelPageClient() {
 
   return (
     <div
+      className="travel-page-shell"
       style={{
-        minHeight: "100vh",
         background: "var(--bg-base)",
         display: "flex",
         flexDirection: "column",
@@ -214,6 +214,7 @@ export default function TravelPageClient() {
           flex: 1,
           display: "flex",
           overflow: "hidden",
+          minHeight: 0,
         }}
         className="travel-layout"
       >
@@ -281,6 +282,10 @@ export default function TravelPageClient() {
       )}
 
       <style>{`
+        .travel-page-shell {
+          height: 100dvh;
+          overflow: hidden;
+        }
         .travel-layout {
           flex-direction: row;
           min-height: 0;
@@ -293,26 +298,34 @@ export default function TravelPageClient() {
           flex-shrink: 0;
           overflow: hidden;
           height: 100%;
+          min-height: 0;
+          background: var(--bg-base);
         }
         .travel-sidebar-inner {
           height: 100%;
           min-height: 0;
+          overflow: hidden;
         }
         .travel-sidebar-panel {
+          height: 100%;
           min-height: 0;
         }
         .travel-record-list {
           overflow-y: auto;
           overscroll-behavior: contain;
-          padding-right: 0.15rem;
+          padding-right: 0.35rem;
+          padding-bottom: 1rem;
           scrollbar-gutter: stable;
+          -webkit-overflow-scrolling: touch;
         }
         .travel-globe-wrap {
           flex: 1;
           min-width: 0;
-          height: calc(100vh - 73px);
+          height: 100%;
+          min-height: 0;
           background: #0d1b2a;
           border-radius: 0;
+          overflow: hidden;
         }
         .hide-xs { display: inline; }
         @keyframes pulse {
@@ -320,6 +333,11 @@ export default function TravelPageClient() {
           50% { opacity: 0.4; }
         }
         @media (max-width: 768px) {
+          .travel-page-shell {
+            height: auto;
+            min-height: 100dvh;
+            overflow: visible;
+          }
           .travel-layout {
             flex-direction: column-reverse;
             overflow-y: auto;
@@ -339,6 +357,7 @@ export default function TravelPageClient() {
           .travel-record-list {
             overflow: visible;
             padding-right: 0;
+            padding-bottom: 0;
             scrollbar-gutter: auto;
           }
           .travel-globe-wrap {
