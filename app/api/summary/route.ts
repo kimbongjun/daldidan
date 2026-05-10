@@ -7,7 +7,7 @@ const PROMPTS: Record<SummaryTarget, (items: string[]) => string> = {
   blog: (titles) =>
     `다음은 최근 블로그 글 제목 목록입니다:\n${titles.map((t, i) => `${i + 1}. ${t}`).join("\n")}\n\n이 글들이 어떤 주제들을 다루고 있는지 따뜻하고 자연스럽게 30자 이내로 한 줄로 요약해주세요. 비속어, 한자, 냉소, 과장된 부정 표현은 사용하지 말고 한글과 숫자와 공백만 사용하세요. 문장 부호 제외하고 텍스트만 반환하세요.`,
   budget: (entries) =>
-    `다음은 최근 가계부 내역 목록입니다:\n${entries.map((t, i) => `${i + 1}. ${t}`).join("\n")}\n\n이 소비 패턴을 보고 가계부 전체 분위기를 다정하고 산뜻하게 20자 이내로 한 줄 요약해주세요. 비속어, 한자, 냉소, 자조, 과장된 부정 표현은 사용하지 말고 한글과 숫자와 공백만 사용하세요. 문장 부호 제외하고 텍스트만 반환하세요.`,
+    `다음은 최근 가계부 내역 목록입니다:\n${entries.map((t, i) => `${i + 1}. ${t}`).join("\n")}\n\n이 소비 패턴을 보고 가계부 전체 분위기를 다정하고 산뜻하게 공백 포함 40~60자 내외의 마침표로 끝나는 완성된 한 문장으로 요약해주세요. 문장 중간에 끊기지 않도록 반드시 완전한 문장으로 작성하세요. 비속어, 한자, 냉소, 자조, 과장된 부정 표현은 사용하지 말고 한글과 숫자와 공백만 사용하세요. 텍스트만 반환하세요.`,
 };
 
 // 캐시: target → { summary, generatedAt }
@@ -42,6 +42,16 @@ function limitTextLength(value: string, maxLength: number) {
   return Array.from(value).slice(0, maxLength).join("").trim();
 }
 
+function takeFirstCompleteSentence(value: string, maxLength: number) {
+  const chars = Array.from(value.trim());
+  if (chars.length <= maxLength) return chars.join("").trim();
+
+  // 마침표·느낌표·물음표로 끝나는 첫 문장 경계를 maxLength 안에서 탐색
+  const slice = chars.slice(0, maxLength).join("");
+  const match = slice.match(/^.*[.!?]/u);
+  return (match ? match[0] : slice).trim();
+}
+
 function containsForbiddenWord(text: string, forbiddenWords: string[]) {
   return forbiddenWords.some((word) => text.includes(word));
 }
@@ -68,7 +78,7 @@ function sanitizeBudgetSummary(summary: string, items: string[]) {
     return SAFE_BUDGET_FALLBACKS[fallbackIndex];
   }
 
-  return limitTextLength(normalized, 20);
+  return takeFirstCompleteSentence(normalized, 60);
 }
 
 function sanitizeBlogSummary(summary: string, items: string[]) {
@@ -139,7 +149,7 @@ export async function POST(request: NextRequest) {
         { role: "user", content: PROMPTS[target](items.slice(0, 10)) },
       ],
       temperature: 0.9,
-      max_tokens: 80,
+      max_tokens: 150,
     });
 
     const block = message.content[0];
