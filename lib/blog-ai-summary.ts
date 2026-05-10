@@ -320,7 +320,7 @@ export async function generateBlogAiMetadata(
   contentHtml: string,
   category?: string | null,
 ): Promise<BlogAiMetadata> {
-  const { plainText, digest, fallback, cleanedTitle } = buildSummarySource(title, contentHtml);
+  const { plainText, fallback, cleanedTitle } = buildSummarySource(title, contentHtml);
   const plainTextSlice = plainText.slice(0, 5000);
   const fallbackKeywords = buildFallbackKeywords(cleanedTitle, fallback);
   const fallbackSummary = buildHumorousSummary(cleanedTitle, fallbackKeywords);
