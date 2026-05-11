@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Camera, ImagePlus, Link as LinkIcon, LoaderCircle, ScanLine, TriangleAlert, X } from "lucide-react";
 import type { LottoQrResponse } from "@/app/api/lotto/qr/route";
@@ -119,25 +119,6 @@ export default function LottoQrScannerModal({ open, onClose }: Props) {
   }, []);
 
   useEffect(() => {
-    if (!open) {
-      void stopScanner();
-      setStatus("idle");
-      setError(null);
-      setManualQr("");
-      setResult(null);
-      lastScanRef.current = null;
-      return;
-    }
-
-    void loadQrLibrary();
-    void startScanner();
-
-    return () => {
-      void stopScanner();
-    };
-  }, [open]);
-
-  useEffect(() => {
     if (!open || typeof document === "undefined") return;
 
     const { body, documentElement } = document;
@@ -153,7 +134,7 @@ export default function LottoQrScannerModal({ open, onClose }: Props) {
     };
   }, [open]);
 
-  const stopScanner = async () => {
+  const stopScanner = useCallback(async () => {
     const scanner = html5QrCodeRef.current;
     if (!scanner) return;
 
@@ -172,9 +153,9 @@ export default function LottoQrScannerModal({ open, onClose }: Props) {
     } catch {
       // DOM 정리 실패는 무시한다.
     }
-  };
+  }, []);
 
-  const submitQr = async (rawQr: string) => {
+  const submitQr = useCallback(async (rawQr: string) => {
     setStatus("submitting");
     setError(null);
 
@@ -200,16 +181,16 @@ export default function LottoQrScannerModal({ open, onClose }: Props) {
       setStatus("error");
       lastScanRef.current = null;
     }
-  };
+  }, [stopScanner]);
 
-  const loadQrLibrary = () => {
+  const loadQrLibrary = useCallback(() => {
     if (!qrLibraryRef.current) {
       qrLibraryRef.current = import("html5-qrcode");
     }
     return qrLibraryRef.current;
-  };
+  }, []);
 
-  const openCapturePicker = () => {
+  const openCapturePicker = useCallback(() => {
     const input = captureInputRef.current;
     if (!input) return;
     try {
@@ -221,7 +202,7 @@ export default function LottoQrScannerModal({ open, onClose }: Props) {
       // iOS Safari 등 일부 브라우저는 showPicker 대신 click만 허용한다.
     }
     input.click();
-  };
+  }, []);
 
   const pickPreferredCamera = (cameras: CameraDevice[]): CameraDevice | null => {
     if (cameras.length === 0) return null;
@@ -232,7 +213,7 @@ export default function LottoQrScannerModal({ open, onClose }: Props) {
     return cameras[cameras.length - 1] ?? null;
   };
 
-  const applyFastCameraConstraints = async (scanner: Html5Qrcode) => {
+  const applyFastCameraConstraints = useCallback(async (scanner: Html5Qrcode) => {
     try {
       const capabilities = scanner.getRunningTrackCapabilities() as Record<string, unknown>;
       const advanced: Record<string, unknown>[] = [];
@@ -246,9 +227,9 @@ export default function LottoQrScannerModal({ open, onClose }: Props) {
     } catch {
       // 일부 모바일 브라우저는 focusMode/capabilities를 노출하지 않는다.
     }
-  };
+  }, []);
 
-  const startScanner = async () => {
+  const startScanner = useCallback(async () => {
     if (typeof window === "undefined") return;
     if (!navigator.mediaDevices?.getUserMedia) {
       setStatus("error");
@@ -326,17 +307,17 @@ export default function LottoQrScannerModal({ open, onClose }: Props) {
       setStatus("error");
       setError(readErrorMessage(e, "카메라를 시작하지 못했습니다. 사진 업로드나 QR 주소 입력을 사용해 주세요."));
     }
-  };
+  }, [applyFastCameraConstraints, loadQrLibrary, scannerRegionId, stopScanner, submitQr]);
 
-  const handleManualSubmit = async () => {
+  const handleManualSubmit = useCallback(async () => {
     if (!manualQr.trim()) {
       setError("QR 문자열 또는 주소를 입력해 주세요.");
       return;
     }
     await submitQr(manualQr.trim());
-  };
+  }, [manualQr, submitQr]);
 
-  const handleCaptureImage = async (file: File | null) => {
+  const handleCaptureImage = useCallback(async (file: File | null) => {
     if (!file) return;
 
     setStatus("submitting");
@@ -366,7 +347,26 @@ export default function LottoQrScannerModal({ open, onClose }: Props) {
       setStatus("error");
       setError(readErrorMessage(e, "촬영 이미지에서 QR을 읽지 못했습니다."));
     }
-  };
+  }, [loadQrLibrary, scannerRegionId, stopScanner, submitQr]);
+
+  useEffect(() => {
+    if (!open) {
+      void stopScanner();
+      setStatus("idle");
+      setError(null);
+      setManualQr("");
+      setResult(null);
+      lastScanRef.current = null;
+      return;
+    }
+
+    void loadQrLibrary();
+    void startScanner();
+
+    return () => {
+      void stopScanner();
+    };
+  }, [loadQrLibrary, open, startScanner, stopScanner]);
 
   if (!open || !mounted) return null;
 

@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
+import Image from "next/image";
 import { X, Upload, Loader2, Search } from "lucide-react";
 import type { TravelPlace, TravelContinent } from "@/lib/travel-shared";
 import { CONTINENTS, CONTINENT_LABELS, KOREA_PROVINCES, PROVINCE_COORDINATES, PROVINCE_MUNICIPALITIES } from "@/lib/travel-shared";
@@ -437,7 +438,13 @@ export default function TravelFormModal({ editingPlace, onClose, onSave }: Trave
             <input ref={fileRef} type="file" accept="image/*" onChange={handleFileChange} style={{ display: "none" }} />
             {form.photo_url ? (
               <div style={{ position: "relative", borderRadius: 10, overflow: "hidden", height: 120 }}>
-                <img src={form.photo_url} alt="preview" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                <Image
+                  src={form.photo_url}
+                  alt="preview"
+                  fill
+                  sizes="(max-width: 480px) 100vw, 390px"
+                  style={{ objectFit: "cover" }}
+                />
                 <button
                   type="button"
                   onClick={() => patch({ photo_url: null })}

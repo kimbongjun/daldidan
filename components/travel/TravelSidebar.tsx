@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { MapPin, Filter, ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
 import { format } from "date-fns";
@@ -290,11 +291,15 @@ export default function TravelSidebar({
               }}
             >
               {place.photo_url ? (
-                <img
-                  src={place.photo_url}
-                  alt={place.city}
-                  style={{ width: 40, height: 40, borderRadius: 8, objectFit: "cover", flexShrink: 0 }}
-                />
+                <span style={{ position: "relative", width: 40, height: 40, borderRadius: 8, overflow: "hidden", flexShrink: 0 }}>
+                  <Image
+                    src={place.photo_url}
+                    alt={place.city}
+                    fill
+                    sizes="40px"
+                    style={{ objectFit: "cover" }}
+                  />
+                </span>
               ) : (
                 <div
                   style={{

@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as d3 from "d3";
 import { feature, mesh } from "topojson-client";
-import type { Topology, GeometryCollection } from "topojson-specification";
-import type { Feature, Geometry } from "geojson";
+import type { FeatureCollection, Geometry } from "geojson";
+import type { GeometryCollection, Topology } from "topojson-specification";
 import type { TravelPlace, KoreaRegion } from "@/lib/travel-shared";
-import { PROVINCE_TO_REGION, CODE_TO_PROVINCE } from "@/lib/travel-shared";
+import { CODE_TO_PROVINCE, PROVINCE_TO_REGION } from "@/lib/travel-shared";
 
 interface MunicipalityProperties {
   name: string;
@@ -15,7 +15,8 @@ interface MunicipalityProperties {
   base_year: string;
 }
 
-type KoreaMunicipalityTopology = Topology<{
+type MunicipalityCollection = FeatureCollection<Geometry, MunicipalityProperties>;
+type MunicipalityTopology = Topology<{
   skorea_municipalities_2018_geo: GeometryCollection<MunicipalityProperties>;
 }>;
 
@@ -28,6 +29,22 @@ interface TravelKoreaMapProps {
   onLoad?: () => void;
 }
 
+interface MapSize {
+  width: number;
+  height: number;
+}
+
+interface TooltipState {
+  x: number;
+  y: number;
+  title: string;
+  subtitle?: string;
+}
+
+const KOREA_MUNICIPALITIES_TOPO_URL = "/data/korea-municipalities-topo.json";
+const DEFAULT_SIZE: MapSize = { width: 600, height: 500 };
+const GRAY_FILL = "#374151";
+
 const REGION_COLORS: Record<KoreaRegion, string> = {
   "서울": "#f59e0b",
   "경기/인천": "#60a5fa",
@@ -37,8 +54,6 @@ const REGION_COLORS: Record<KoreaRegion, string> = {
   "경상": "#fb923c",
   "제주": "#e879f9",
 };
-
-const GRAY_FILL = "#374151";
 
 const PROVINCE_LABEL_COORDS: Array<{ name: string; short: string; lat: number; lng: number }> = [
   { name: "서울특별시", short: "서울", lat: 37.5665, lng: 126.978 },
@@ -60,33 +75,52 @@ const PROVINCE_LABEL_COORDS: Array<{ name: string; short: string; lat: number; l
   { name: "제주특별자치도", short: "제주", lat: 33.4996, lng: 126.5312 },
 ];
 
-function getMunicipalityFill(
+let topologyCache: Promise<MunicipalityTopology> | null = null;
+
+function loadKoreaTopology() {
+  topologyCache ??= fetch(KOREA_MUNICIPALITIES_TOPO_URL).then((response) => {
+    if (!response.ok) throw new Error(`TopoJSON fetch failed: ${response.status}`);
+    return response.json() as Promise<MunicipalityTopology>;
+  });
+  return topologyCache;
+}
+
+function getProvince(code: string) {
+  return CODE_TO_PROVINCE[code.slice(0, 2)] ?? null;
+}
+
+function getRegion(code: string) {
+  const province = getProvince(code);
+  return province ? PROVINCE_TO_REGION[province] : null;
+}
+
+function getAreaFill(
   code: string,
   activeProvinces?: string[],
   selectedRegions?: KoreaRegion[],
-): string {
-  const province = CODE_TO_PROVINCE[code.slice(0, 2)];
-  const region = province ? PROVINCE_TO_REGION[province] : null;
-  if (!region) return GRAY_FILL;
+) {
+  const province = getProvince(code);
+  const region = getRegion(code);
+  if (!province || !region) return GRAY_FILL;
 
   if (selectedRegions && selectedRegions.length > 0) {
     return selectedRegions.includes(region) ? REGION_COLORS[region] : GRAY_FILL;
   }
 
   if (activeProvinces && activeProvinces.length > 0) {
-    return province && activeProvinces.includes(province) ? REGION_COLORS[region] : GRAY_FILL;
+    return activeProvinces.includes(province) ? REGION_COLORS[region] : GRAY_FILL;
   }
 
   return REGION_COLORS[region];
 }
 
-function getMunicipalityOpacity(
+function getAreaOpacity(
   code: string,
   activeProvinces?: string[],
   selectedRegions?: KoreaRegion[],
-): number {
-  const province = CODE_TO_PROVINCE[code.slice(0, 2)];
-  const region = province ? PROVINCE_TO_REGION[province] : null;
+) {
+  const province = getProvince(code);
+  const region = getRegion(code);
 
   if (selectedRegions && selectedRegions.length > 0) {
     return region && selectedRegions.includes(region) ? 0.95 : 0.2;
@@ -99,6 +133,25 @@ function getMunicipalityOpacity(
   return 0.85;
 }
 
+function hasActivePlace(
+  code: string,
+  activeProvinces?: string[],
+  selectedRegions?: KoreaRegion[],
+) {
+  const province = getProvince(code);
+  const region = getRegion(code);
+
+  if (selectedRegions && selectedRegions.length > 0) {
+    return Boolean(region && selectedRegions.includes(region));
+  }
+
+  if (activeProvinces && activeProvinces.length > 0) {
+    return Boolean(province && activeProvinces.includes(province));
+  }
+
+  return true;
+}
+
 export default function TravelKoreaMap({
   places,
   onPinClick,
@@ -108,257 +161,348 @@ export default function TravelKoreaMap({
   onLoad,
 }: TravelKoreaMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const svgRef = useRef<SVGSVGElement | null>(null);
-  const projectionRef = useRef<d3.GeoProjection | null>(null);
-  const pathGenRef = useRef<d3.GeoPath | null>(null);
-  const featuresRef = useRef<Feature<Geometry, MunicipalityProperties>[]>([]);
-  const placesRef = useRef(places);
-  const onPinClickRef = useRef(onPinClick);
-  const onLoadRef = useRef(onLoad);
-  const activeProvincesRef = useRef(activeProvinces);
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [topology, setTopology] = useState<MunicipalityTopology | null>(null);
+  const [size, setSize] = useState<MapSize>(DEFAULT_SIZE);
+  const [transform, setTransform] = useState<d3.ZoomTransform>(d3.zoomIdentity);
+  const [tooltip, setTooltip] = useState<TooltipState | null>(null);
 
-  useEffect(() => { onLoadRef.current = onLoad; }, [onLoad]);
-  useEffect(() => { placesRef.current = places; }, [places]);
-  useEffect(() => { onPinClickRef.current = onPinClick; }, [onPinClick]);
-  useEffect(() => { activeProvincesRef.current = activeProvinces; }, [activeProvinces]);
+  useEffect(() => {
+    let cancelled = false;
 
-  // ── Main D3 initialisation (runs once) ────────────────────────────────────
+    loadKoreaTopology()
+      .then((data) => {
+        if (cancelled) return;
+        setTopology(data);
+        onLoad?.();
+      })
+      .catch(() => {
+        if (!cancelled) onLoad?.();
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [onLoad]);
+
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
-    const w = container.clientWidth || 600;
-    const h = container.clientHeight || 500;
+    const updateSize = () => {
+      const width = container.clientWidth || DEFAULT_SIZE.width;
+      const height = container.clientHeight || DEFAULT_SIZE.height;
+      setSize((current) => (
+        current.width === width && current.height === height
+          ? current
+          : { width, height }
+      ));
+    };
 
-    d3.select(container).selectAll("svg").remove();
+    updateSize();
+    const resizeObserver = new ResizeObserver(updateSize);
+    resizeObserver.observe(container);
 
-    const svg = d3
-      .select(container)
-      .append("svg")
-      .attr("width", "100%")
-      .attr("height", "100%")
-      .style("display", "block")
-      .style("background", "#0d1b2a");
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, []);
 
-    svgRef.current = svg.node();
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
 
-    const projection = d3.geoMercator()
-      .center([127.7, 36.0])
-      .scale(Math.min(w, h) * 5.5)
-      .translate([w / 2, h / 2]);
-    projectionRef.current = projection;
-
-    const pathGen = d3.geoPath().projection(projection);
-    pathGenRef.current = pathGen;
-
-    const mapGroup = svg.append("g").attr("class", "map-group");
-    const municipalitiesG = mapGroup.append("g").attr("class", "municipalities");
-    const municipalityBordersG = mapGroup.append("g").attr("class", "municipality-borders");
-    const provinceBordersG = mapGroup.append("g").attr("class", "province-borders");
-    const labelsG = mapGroup.append("g").attr("class", "province-labels");
-    const pinsG = mapGroup.append("g").attr("class", "pins");
-
-    fetch("/data/korea-municipalities-topo.json")
-      .then((r) => r.json())
-      .then((topo: KoreaMunicipalityTopology) => {
-        const municipalities = feature(topo, topo.objects.skorea_municipalities_2018_geo);
-        featuresRef.current = municipalities.features as Feature<Geometry, MunicipalityProperties>[];
-
-        projection.fitSize([w, h], municipalities);
-
-        // Municipality fills
-        municipalitiesG
-          .selectAll<SVGPathElement, Feature<Geometry, MunicipalityProperties>>("path")
-          .data(municipalities.features as Feature<Geometry, MunicipalityProperties>[])
-          .join("path")
-          .attr("d", (d) => pathGen(d) ?? "")
-          .attr("fill", (d) => getMunicipalityFill(d.properties.code, activeProvincesRef.current, selectedRegions))
-          .attr("opacity", (d) => getMunicipalityOpacity(d.properties.code, activeProvincesRef.current, selectedRegions))
-          .attr("stroke", "none")
-          .style("cursor", "pointer")
-          .on("click", (_event, d) => {
-            const province = CODE_TO_PROVINCE[d.properties.code.slice(0, 2)];
-            const matching = placesRef.current.find((p) => p.province === province);
-            if (matching) onPinClickRef.current(matching);
-          });
-
-        // Thin municipality borders
-        const muniMesh = mesh(
-          topo,
-          topo.objects.skorea_municipalities_2018_geo,
-          (a, b) => a !== b,
-        );
-        municipalityBordersG
-          .append("path")
-          .datum(muniMesh)
-          .attr("d", pathGen)
-          .attr("fill", "none")
-          .attr("stroke", "#1e293b")
-          .attr("stroke-width", 0.3);
-
-        // Thick province borders
-        const provMesh = mesh(
-          topo,
-          topo.objects.skorea_municipalities_2018_geo,
-          (a, b) => {
-            if (a === b) return true; // exterior (coastline)
-            const ap = (a as unknown as { properties: MunicipalityProperties }).properties.code.slice(0, 2);
-            const bp = (b as unknown as { properties: MunicipalityProperties }).properties.code.slice(0, 2);
-            return ap !== bp;
-          },
-        );
-        provinceBordersG
-          .append("path")
-          .datum(provMesh)
-          .attr("d", pathGen)
-          .attr("fill", "none")
-          .attr("stroke", "#1e293b")
-          .attr("stroke-width", 1.2);
-
-        // Province labels
-        labelsG
-          .selectAll("text")
-          .data(PROVINCE_LABEL_COORDS)
-          .join("text")
-          .attr("transform", (d) => {
-            const pt = projection([d.lng, d.lat]);
-            return pt ? `translate(${pt[0]},${pt[1]})` : "";
-          })
-          .attr("text-anchor", "middle")
-          .attr("dominant-baseline", "middle")
-          .style("font-size", "8px")
-          .style("font-weight", "700")
-          .style("fill", "rgba(255,255,255,0.8)")
-          .style("pointer-events", "none")
-          .style("user-select", "none")
-          .text((d) => d.short);
-
-        renderKoreaPins(pinsG, placesRef.current, highlightedId ?? null, projection, onPinClickRef);
-        onLoadRef.current?.();
-      })
-      .catch(() => {
-        renderKoreaPins(pinsG, placesRef.current, highlightedId ?? null, projection, onPinClickRef);
-        onLoadRef.current?.();
-      });
-
-    // Zoom/pan
     const zoom = d3
       .zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.8, 12])
       .on("zoom", (event) => {
-        mapGroup.attr("transform", event.transform.toString());
+        setTransform(event.transform);
       });
-    svg.call(zoom);
 
-    // ResizeObserver
-    const ro = new ResizeObserver(() => {
-      const nw = container.clientWidth;
-      const nh = container.clientHeight;
-      if (!nw || !nh || featuresRef.current.length === 0) return;
-
-      const fc = { type: "FeatureCollection" as const, features: featuresRef.current };
-      projection.fitSize([nw, nh], fc);
-
-      mapGroup.selectAll<SVGPathElement, Feature<Geometry, MunicipalityProperties>>("g.municipalities path")
-        .attr("d", (d) => pathGen(d) ?? "");
-
-      mapGroup.selectAll<SVGPathElement, unknown>("g.municipality-borders path, g.province-borders path")
-        .attr("d", (d) => pathGen(d as Parameters<typeof pathGen>[0]) ?? "");
-
-      mapGroup.selectAll<SVGTextElement, typeof PROVINCE_LABEL_COORDS[number]>("g.province-labels text")
-        .attr("transform", (d) => {
-          const pt = projection([d.lng, d.lat]);
-          return pt ? `translate(${pt[0]},${pt[1]})` : "";
-        });
-
-      renderKoreaPins(
-        mapGroup.select<SVGGElement>("g.pins"),
-        placesRef.current,
-        null,
-        projection,
-        onPinClickRef,
-      );
-    });
-    ro.observe(container);
+    const selection = d3.select(svg);
+    selection.call(zoom);
 
     return () => {
-      ro.disconnect();
-      d3.select(container).selectAll("svg").remove();
-      svgRef.current = null;
-      projectionRef.current = null;
-      pathGenRef.current = null;
+      selection.on(".zoom", null);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Update fills/pins when props change ──────────────────────────────────
-  useEffect(() => {
-    const svg = svgRef.current;
-    const projection = projectionRef.current;
-    if (!svg || !projection) return;
+  const municipalities = useMemo(() => {
+    if (!topology) return null;
+    return feature(
+      topology,
+      topology.objects.skorea_municipalities_2018_geo,
+    ) as MunicipalityCollection;
+  }, [topology]);
 
-    const sel = d3.select(svg);
+  const borders = useMemo(() => {
+    if (!topology) return { municipality: null, province: null };
 
-    sel.select("g.municipalities")
-      .selectAll<SVGPathElement, Feature<Geometry, MunicipalityProperties>>("path")
-      .attr("fill", (d) => getMunicipalityFill(d.properties.code, activeProvinces, selectedRegions))
-      .attr("opacity", (d) => getMunicipalityOpacity(d.properties.code, activeProvinces, selectedRegions));
-
-    renderKoreaPins(
-      sel.select<SVGGElement>("g.pins"),
-      places,
-      highlightedId ?? null,
-      projection,
-      onPinClickRef,
+    const municipality = mesh(
+      topology,
+      topology.objects.skorea_municipalities_2018_geo,
+      (a, b) => a !== b,
     );
-  }, [places, highlightedId, selectedRegions, activeProvinces]);
+
+    const province = mesh(
+      topology,
+      topology.objects.skorea_municipalities_2018_geo,
+      (a, b) => {
+        if (a === b) return true;
+        const ap = (a as unknown as { properties: MunicipalityProperties }).properties.code.slice(0, 2);
+        const bp = (b as unknown as { properties: MunicipalityProperties }).properties.code.slice(0, 2);
+        return ap !== bp;
+      },
+    );
+
+    return { municipality, province };
+  }, [topology]);
+
+  const projection = useMemo(() => {
+    if (!municipalities) return null;
+    return d3.geoMercator().fitSize([size.width, size.height], municipalities);
+  }, [municipalities, size.height, size.width]);
+
+  const pathGen = useMemo(() => {
+    if (!projection) return null;
+    return d3.geoPath(projection);
+  }, [projection]);
+
+  const areaPaths = useMemo(() => {
+    if (!municipalities || !pathGen) return [];
+
+    return municipalities.features.map((area) => ({
+      area,
+      d: pathGen(area) ?? "",
+      fill: getAreaFill(area.properties.code, activeProvinces, selectedRegions),
+      opacity: getAreaOpacity(area.properties.code, activeProvinces, selectedRegions),
+      isActive: hasActivePlace(area.properties.code, activeProvinces, selectedRegions),
+      province: getProvince(area.properties.code),
+      region: getRegion(area.properties.code),
+    }));
+  }, [activeProvinces, municipalities, pathGen, selectedRegions]);
+
+  const borderPaths = useMemo(() => {
+    if (!pathGen) return { municipality: "", province: "" };
+    return {
+      municipality: borders.municipality ? pathGen(borders.municipality) ?? "" : "",
+      province: borders.province ? pathGen(borders.province) ?? "" : "",
+    };
+  }, [borders.municipality, borders.province, pathGen]);
+
+  const labels = useMemo(() => {
+    if (!projection) return [];
+    return PROVINCE_LABEL_COORDS.map((label) => {
+      const point = projection([label.lng, label.lat]);
+      if (!point) return null;
+      return { ...label, x: point[0], y: point[1] };
+    }).filter(Boolean) as Array<typeof PROVINCE_LABEL_COORDS[number] & { x: number; y: number }>;
+  }, [projection]);
+
+  const pins = useMemo(() => {
+    if (!projection) return [];
+    return places
+      .map((place) => {
+        const point = projection([place.lng, place.lat]);
+        if (!point) return null;
+        const region = place.province ? PROVINCE_TO_REGION[place.province] : null;
+
+        return {
+          place,
+          x: point[0],
+          y: point[1],
+          fill: place.id === highlightedId
+            ? "goldenrod"
+            : region ? REGION_COLORS[region] : "#10b981",
+          highlighted: place.id === highlightedId,
+        };
+      })
+      .filter(Boolean) as Array<{
+        place: TravelPlace;
+        x: number;
+        y: number;
+        fill: string;
+        highlighted: boolean;
+      }>;
+  }, [highlightedId, places, projection]);
+
+  const handlePointerMove = useCallback((event: React.PointerEvent, title: string, subtitle?: string) => {
+    const rect = containerRef.current?.getBoundingClientRect();
+    setTooltip({
+      x: event.clientX - (rect?.left ?? 0),
+      y: event.clientY - (rect?.top ?? 0),
+      title,
+      subtitle,
+    });
+  }, []);
+
+  const handleAreaClick = useCallback((province: string | null) => {
+    if (!province) return;
+    const matching = places.find((place) => place.province === province);
+    if (matching) onPinClick(matching);
+  }, [onPinClick, places]);
 
   return (
     <div
       ref={containerRef}
-      style={{ width: "100%", height: "100%", minHeight: 320, overflow: "hidden" }}
-    />
+      style={{ width: "100%", height: "100%", minHeight: 320, overflow: "hidden", position: "relative" }}
+    >
+      <svg
+        ref={svgRef}
+        role="img"
+        aria-label="국내 여행 지도"
+        width="100%"
+        height="100%"
+        viewBox={`0 0 ${size.width} ${size.height}`}
+        preserveAspectRatio="xMidYMid meet"
+        style={{ display: "block", background: "#0d1b2a" }}
+        onPointerLeave={() => setTooltip(null)}
+      >
+        <rect width={size.width} height={size.height} fill="#0d1b2a" />
+
+        {municipalities && (
+          <g transform={transform.toString()}>
+            <g className="municipalities">
+              {areaPaths.map(({ area, d, fill, opacity, isActive, province, region }) => (
+                <path
+                  key={area.properties.code}
+                  d={d}
+                  fill={fill}
+                  opacity={opacity}
+                  stroke="none"
+                  role="button"
+                  tabIndex={isActive ? 0 : -1}
+                  aria-label={area.properties.name}
+                  style={{
+                    cursor: isActive ? "pointer" : "default",
+                    outline: "none",
+                    transition: "opacity 140ms ease, fill 140ms ease",
+                  }}
+                  onClick={() => handleAreaClick(province)}
+                  onKeyDown={(event) => {
+                    if (!isActive) return;
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      handleAreaClick(province);
+                    }
+                  }}
+                  onPointerMove={(event) => handlePointerMove(
+                    event,
+                    area.properties.name,
+                    province ? `${province}${region ? ` · ${region}` : ""}` : undefined,
+                  )}
+                  onPointerLeave={() => setTooltip(null)}
+                />
+              ))}
+            </g>
+
+            {borderPaths.municipality && (
+              <path
+                d={borderPaths.municipality}
+                fill="none"
+                stroke="#1e293b"
+                strokeWidth={0.3}
+                pointerEvents="none"
+              />
+            )}
+            {borderPaths.province && (
+              <path
+                d={borderPaths.province}
+                fill="none"
+                stroke="#1e293b"
+                strokeWidth={1.2}
+                pointerEvents="none"
+              />
+            )}
+
+            <g className="province-labels" pointerEvents="none">
+              {labels.map((label) => (
+                <text
+                  key={label.name}
+                  x={label.x}
+                  y={label.y}
+                  textAnchor="middle"
+                  dominantBaseline="middle"
+                  style={{
+                    fontSize: 8,
+                    fontWeight: 700,
+                    fill: "rgba(255,255,255,0.8)",
+                    userSelect: "none",
+                  }}
+                >
+                  {label.short}
+                </text>
+              ))}
+            </g>
+
+            <g className="pins">
+              {pins.map(({ place, x, y, fill, highlighted }) => (
+                <circle
+                  key={place.id}
+                  cx={x}
+                  cy={y}
+                  r={highlighted ? 8.5 : 7}
+                  fill={fill}
+                  stroke="#ffffff"
+                  strokeWidth={highlighted ? 2.5 : 1.5}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`${place.city}${place.province ? ` (${place.province})` : ""}`}
+                  style={{
+                    cursor: "pointer",
+                    filter: highlighted ? "drop-shadow(0 0 8px rgba(245,158,11,0.85))" : undefined,
+                  }}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onPinClick(place);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      onPinClick(place);
+                    }
+                  }}
+                  onPointerMove={(event) => handlePointerMove(
+                    event,
+                    place.city,
+                    place.province ? `${place.province} · ${place.travel_date.slice(0, 7)}` : place.travel_date.slice(0, 7),
+                  )}
+                  onPointerLeave={() => setTooltip(null)}
+                />
+              ))}
+            </g>
+          </g>
+        )}
+      </svg>
+
+      {tooltip && (
+        <div
+          style={{
+            position: "absolute",
+            left: Math.min(tooltip.x + 12, Math.max(12, size.width - 156)),
+            top: tooltip.y + 12,
+            pointerEvents: "none",
+            border: "1px solid rgba(148,163,184,0.45)",
+            borderRadius: 8,
+            padding: "0.42rem 0.55rem",
+            background: "rgba(15,23,42,0.9)",
+            color: "#f8fafc",
+            boxShadow: "0 10px 28px rgba(0,0,0,0.25)",
+            fontSize: "0.76rem",
+            fontWeight: 700,
+            lineHeight: 1.35,
+            backdropFilter: "blur(8px)",
+            zIndex: 2,
+          }}
+        >
+          <div>{tooltip.title}</div>
+          {tooltip.subtitle && (
+            <div style={{ color: "rgba(226,232,240,0.72)", fontSize: "0.68rem", fontWeight: 600 }}>
+              {tooltip.subtitle}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
-}
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-function renderKoreaPins(
-  group: d3.Selection<SVGGElement, unknown, null, undefined>,
-  places: TravelPlace[],
-  highlightedId: string | null,
-  projection: d3.GeoProjection,
-  onPinClickRef: React.MutableRefObject<(place: TravelPlace) => void>,
-) {
-  const circles = group
-    .selectAll<SVGCircleElement, TravelPlace>("circle")
-    .data(places, (d) => d.id);
-
-  circles.exit().remove();
-
-  const entered = circles
-    .enter()
-    .append("circle")
-    .attr("r", 7)
-    .attr("stroke", "#ffffff")
-    .attr("stroke-width", 1.5)
-    .style("cursor", "pointer")
-    .on("click", (_event, d) => {
-      onPinClickRef.current(d);
-    });
-
-  entered.append("title");
-
-  const merged = entered.merge(circles);
-  merged
-    .attr("cx", (d) => { const p = projection([d.lng, d.lat]); return p ? p[0] : 0; })
-    .attr("cy", (d) => { const p = projection([d.lng, d.lat]); return p ? p[1] : 0; })
-    .attr("fill", (d) => {
-      if (d.id === highlightedId) return "goldenrod";
-      const region = d.province ? PROVINCE_TO_REGION[d.province] : null;
-      return region ? REGION_COLORS[region] : "#10b981";
-    })
-    .attr("stroke-width", (d) => (d.id === highlightedId ? 2.5 : 1.5));
-
-  merged.select("title").text((d) => `${d.city}${d.province ? ` (${d.province})` : ""}`);
 }

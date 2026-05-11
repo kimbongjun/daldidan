@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import Image from "next/image";
 import { X, Edit2, Trash2, MapPin, Calendar, FileText, ExternalLink } from "lucide-react";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
@@ -61,10 +62,12 @@ export default function TravelDetailModal({ place, currentUserId, onClose, onEdi
         {/* 대표 사진 */}
         {place.photo_url ? (
           <div style={{ position: "relative", height: 220, flexShrink: 0 }}>
-            <img
+            <Image
               src={place.photo_url}
               alt={`${place.city} 여행`}
-              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+              fill
+              sizes="(max-width: 480px) 100vw, 440px"
+              style={{ objectFit: "cover" }}
             />
             <div
               style={{

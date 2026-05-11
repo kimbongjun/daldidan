@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
+import Image from "next/image";
 import { MapPin, Globe, Plus, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import type { TravelPlace } from "@/lib/travel-shared";
@@ -188,11 +189,15 @@ export default function TravelWidget() {
               }}
             >
               {place.photo_url ? (
-                <img
-                  src={place.photo_url}
-                  alt={place.city}
-                  style={{ width: 28, height: 28, borderRadius: 6, objectFit: "cover", flexShrink: 0 }}
-                />
+                <span style={{ position: "relative", width: 28, height: 28, borderRadius: 6, overflow: "hidden", flexShrink: 0 }}>
+                  <Image
+                    src={place.photo_url}
+                    alt={place.city}
+                    fill
+                    sizes="28px"
+                    style={{ objectFit: "cover" }}
+                  />
+                </span>
               ) : (
                 <div
                   style={{
