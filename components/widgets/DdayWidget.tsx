@@ -90,8 +90,6 @@ export default function DdayWidget() {
         border: "1px solid var(--border)",
         borderRadius: "0.75rem",
         overflow: "hidden",
-        minWidth: 0,
-        flexShrink: 1,
       }}
     >
       <style>{`
@@ -137,8 +135,6 @@ export default function DdayWidget() {
                 fontSize: "0.72rem",
                 fontWeight: 700,
                 whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
                 transition: "color 0.2s ease",
                 color: isHovered ? "#7C3AED" : "var(--text-primary)",
               }}

@@ -574,8 +574,7 @@ export default function Header() {
         </button>
       </div>
 
-      <div className="flex items-center justify-between gap-2 min-w-0">
-        <DdayWidget />
+      <div className="flex items-center justify-end gap-2">
         <div className="flex items-center gap-1.5 shrink-0">
         {/* 테마 토글 */}
         <button
@@ -899,6 +898,10 @@ export default function Header() {
           </Link>
         )}
       </div>
+      </div>
+      {/* 디데이 위젯 — 유틸 네비 하단, 우측 정렬 */}
+      <div className="flex justify-end">
+        <DdayWidget />
       </div>
     </header>
 
