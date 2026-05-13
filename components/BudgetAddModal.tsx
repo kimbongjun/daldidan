@@ -77,13 +77,41 @@ function emptyForm(defaultBuyer = "공동"): FormData {
   };
 }
 
-interface BudgetAddModalProps {
-  onClose: () => void;
+interface InitialData {
+  id: string;
+  category: string;
+  buyer?: string;
+  merchantName?: string;
+  location?: string;
+  receiptImageUrl?: string | null;
+  amount: number;
+  note: string;
+  date: string;
 }
 
-export default function BudgetAddModal({ onClose }: BudgetAddModalProps) {
+interface BudgetAddModalProps {
+  onClose: () => void;
+  initialData?: InitialData;
+}
+
+export default function BudgetAddModal({ onClose, initialData }: BudgetAddModalProps) {
+  const isEditMode = !!initialData;
   const queryClient = useQueryClient();
-  const [form, setForm] = useState<FormData>(emptyForm());
+  const [form, setForm] = useState<FormData>(() =>
+    initialData
+      ? {
+          type: "expense",
+          category: initialData.category,
+          buyer: initialData.buyer ?? "공동",
+          merchantName: initialData.merchantName ?? "",
+          location: initialData.location ?? "",
+          receiptImageUrl: initialData.receiptImageUrl ?? null,
+          amount: initialData.amount,
+          note: initialData.note,
+          date: initialData.date,
+        }
+      : emptyForm()
+  );
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [saveError, setSaveError] = useState("");
 
@@ -128,8 +156,12 @@ export default function BudgetAddModal({ onClose }: BudgetAddModalProps) {
 
   const saveMutation = useMutation({
     mutationFn: async (formData: FormData) => {
-      const res = await fetch("/api/transactions", {
-        method: "POST",
+      const url = isEditMode
+        ? `/api/transactions/${initialData!.id}`
+        : "/api/transactions";
+      const method = isEditMode ? "PATCH" : "POST";
+      const res = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...formData, type: "expense" }),
       });
@@ -141,7 +173,7 @@ export default function BudgetAddModal({ onClose }: BudgetAddModalProps) {
     },
     onSuccess: (data) => {
       sendNativeNotification(
-        "가계부 내역이 추가되었어요",
+        isEditMode ? "가계부 내역이 수정되었어요" : "가계부 내역이 추가되었어요",
         `${data.note || data.category} · ${data.amount.toLocaleString()}원`,
       );
       setSaveStatus("success");
@@ -253,7 +285,7 @@ export default function BudgetAddModal({ onClose }: BudgetAddModalProps) {
         >
           {/* 헤더 */}
           <div className="flex items-center justify-between">
-            <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>지출 추가</p>
+            <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>{isEditMode ? "지출 수정" : "지출 추가"}</p>
             <button
               onClick={onClose}
               className="flex items-center justify-center rounded-lg hover:opacity-70 transition-opacity"
@@ -376,7 +408,7 @@ export default function BudgetAddModal({ onClose }: BudgetAddModalProps) {
           >
             {saveStatus === "saving" && <LoaderCircle size={14} className="animate-spin" />}
             {saveStatus === "success" && <CheckCircle2 size={14} />}
-            {saveStatus === "saving" ? "저장 중..." : saveStatus === "success" ? "저장됨!" : "지출 추가"}
+            {saveStatus === "saving" ? "저장 중..." : saveStatus === "success" ? "저장됨!" : isEditMode ? "수정 완료" : "지출 추가"}
           </button>
         </div>
       </div>

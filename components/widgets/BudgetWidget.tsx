@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, LogIn, Plus, ReceiptText, TrendingDown, Wallet } from "lucide-react";
+import { ArrowRight, LogIn, Pencil, Plus, ReceiptText, TrendingDown, Wallet } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { queryKeys } from "@/lib/queryKeys";
 import type { AuthUser as User } from "@supabase/supabase-js";
@@ -76,6 +76,7 @@ function BudgetSkeleton() {
 export default function BudgetWidget() {
   const [user, setUser] = useState<User | null | undefined>(undefined);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
 
   useEffect(() => {
     const supabase = createClient();
@@ -154,6 +155,20 @@ export default function BudgetWidget() {
   return (
     <>
       {showAddModal && <BudgetAddModal onClose={() => setShowAddModal(false)} />}
+      {editingTransaction && (
+        <BudgetAddModal
+          onClose={() => setEditingTransaction(null)}
+          initialData={{
+            id: editingTransaction.id,
+            category: editingTransaction.category,
+            buyer: editingTransaction.buyer,
+            merchantName: editingTransaction.merchant_name,
+            amount: editingTransaction.amount,
+            note: editingTransaction.note,
+            date: editingTransaction.date,
+          }}
+        />
+      )}
       <div className="bento-card h-full flex flex-col p-5 gap-4">
         <div className="flex items-center justify-between">
           <div>
@@ -223,7 +238,7 @@ export default function BudgetWidget() {
         <div className="flex flex-col gap-1.5">
           <p className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>최근 지출</p>
           {expenseTransactions.slice(0, 3).map((tx) => (
-            <div key={tx.id} className="flex items-center justify-between gap-2 rounded-lg px-2.5 py-2" style={{ background: "rgba(255,255,255,0.04)" }}>
+            <div key={tx.id} className="group flex items-center justify-between gap-2 rounded-lg px-2.5 py-2" style={{ background: "rgba(255,255,255,0.04)" }}>
               <div className="flex items-center gap-2 min-w-0 flex-1">
                 <span
                   className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full font-semibold"
@@ -243,9 +258,18 @@ export default function BudgetWidget() {
                   </p>
                 </div>
               </div>
-              <span className="text-xs font-black shrink-0" style={{ color: "#F43F5E" }}>
-                −{tx.amount.toLocaleString()}
-              </span>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <span className="text-xs font-black" style={{ color: "#F43F5E" }}>
+                  −{tx.amount.toLocaleString()}
+                </span>
+                <button
+                  onClick={() => setEditingTransaction(tx)}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity hover:opacity-70 p-1 rounded"
+                  aria-label="수정"
+                >
+                  <Pencil size={12} style={{ color: "var(--text-muted)" }} />
+                </button>
+              </div>
             </div>
           ))}
         </div>
