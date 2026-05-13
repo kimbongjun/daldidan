@@ -10,7 +10,7 @@ export interface TransactionItem {
   prevPrice: number | null; // 이전 거래가 (비교용, 만원)
   tradeDate: string;     // 계약일 (YYYY-MM-DD)
   tradeType: "매매" | "전세" | "월세";
-  detailUrl: string;     // 네이버 부동산 검색 URL
+  detailUrl: string;     // 호갱노노 검색 URL
 }
 
 /**
@@ -44,8 +44,8 @@ const SEOUL_DISTRICTS = [
 const today = new Date();
 const fmt = (d: Date) => d.toISOString().slice(0, 10);
 const subDays = (d: Date, n: number) => new Date(d.getTime() - n * 86400000);
-const naverUrl = (name: string) =>
-  `https://new.land.naver.com/complexes?q=${encodeURIComponent(name)}`;
+const hogangnono = (name: string) =>
+  `https://hogangnono.com/search?q=${encodeURIComponent(name)}`;
 
 const MOCK_TRANSACTIONS: TransactionItem[] = [
   {
@@ -58,7 +58,7 @@ const MOCK_TRANSACTIONS: TransactionItem[] = [
     prevPrice: 125000,
     tradeDate: fmt(subDays(today, 2)),
     tradeType: "매매",
-    detailUrl: naverUrl("래미안 대치팰리스"),
+    detailUrl: hogangnono("래미안 대치팰리스"),
   },
   {
     id: "tx-002",
@@ -70,7 +70,7 @@ const MOCK_TRANSACTIONS: TransactionItem[] = [
     prevPrice: 128000,
     tradeDate: fmt(subDays(today, 4)),
     tradeType: "매매",
-    detailUrl: naverUrl("아크로리버파크"),
+    detailUrl: hogangnono("아크로리버파크"),
   },
   {
     id: "tx-003",
@@ -82,7 +82,7 @@ const MOCK_TRANSACTIONS: TransactionItem[] = [
     prevPrice: 106000,
     tradeDate: fmt(subDays(today, 6)),
     tradeType: "매매",
-    detailUrl: naverUrl("헬리오시티"),
+    detailUrl: hogangnono("헬리오시티"),
   },
   {
     id: "tx-004",
@@ -94,7 +94,7 @@ const MOCK_TRANSACTIONS: TransactionItem[] = [
     prevPrice: 92000,
     tradeDate: fmt(subDays(today, 8)),
     tradeType: "매매",
-    detailUrl: naverUrl("마포 래미안 푸르지오"),
+    detailUrl: hogangnono("마포 래미안 푸르지오"),
   },
   {
     id: "tx-005",
@@ -106,7 +106,7 @@ const MOCK_TRANSACTIONS: TransactionItem[] = [
     prevPrice: 88000,
     tradeDate: fmt(subDays(today, 9)),
     tradeType: "매매",
-    detailUrl: naverUrl("강동 힐스테이트"),
+    detailUrl: hogangnono("강동 힐스테이트"),
   },
   {
     id: "tx-006",
@@ -118,7 +118,7 @@ const MOCK_TRANSACTIONS: TransactionItem[] = [
     prevPrice: 87000,
     tradeDate: fmt(subDays(today, 11)),
     tradeType: "매매",
-    detailUrl: naverUrl("영등포 자이"),
+    detailUrl: hogangnono("영등포 자이"),
   },
   {
     id: "tx-007",
@@ -130,7 +130,7 @@ const MOCK_TRANSACTIONS: TransactionItem[] = [
     prevPrice: 82000,
     tradeDate: fmt(subDays(today, 13)),
     tradeType: "매매",
-    detailUrl: naverUrl("노원 롯데캐슬"),
+    detailUrl: hogangnono("노원 롯데캐슬"),
   },
   {
     id: "tx-008",
@@ -142,7 +142,7 @@ const MOCK_TRANSACTIONS: TransactionItem[] = [
     prevPrice: 80000,
     tradeDate: fmt(subDays(today, 15)),
     tradeType: "매매",
-    detailUrl: naverUrl("은평 뉴타운 래미안"),
+    detailUrl: hogangnono("은평 뉴타운 래미안"),
   },
   {
     id: "tx-009",
@@ -154,7 +154,7 @@ const MOCK_TRANSACTIONS: TransactionItem[] = [
     prevPrice: 85000,
     tradeDate: fmt(subDays(today, 17)),
     tradeType: "매매",
-    detailUrl: naverUrl("구로 에코자이"),
+    detailUrl: hogangnono("구로 에코자이"),
   },
   {
     id: "tx-010",
@@ -166,7 +166,7 @@ const MOCK_TRANSACTIONS: TransactionItem[] = [
     prevPrice: 86000,
     tradeDate: fmt(subDays(today, 19)),
     tradeType: "매매",
-    detailUrl: naverUrl("길음 래미안"),
+    detailUrl: hogangnono("길음 래미안"),
   },
 ];
 // ─────────────────────────────────────────────────────────────────────────────
@@ -250,7 +250,7 @@ async function fetchDistrictTransactions(
         prevPrice: null,
         tradeDate: `${yr}-${mo}-${dy}`,
         tradeType: "매매",
-        detailUrl: naverUrl(complexName),
+        detailUrl: hogangnono(complexName),
       };
     })
     .filter(

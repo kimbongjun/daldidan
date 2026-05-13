@@ -289,9 +289,9 @@ function TransactionTab() {
           <span className="text-[10px]" style={{ color: "#F59E0B" }}>
             샘플 데이터 · 실제 시세는
           </span>
-          <a href="https://land.naver.com" target="_blank" rel="noopener noreferrer"
+          <a href="https://hogangnono.com" target="_blank" rel="noopener noreferrer"
             className="text-[10px] font-semibold underline" style={{ color: "#F59E0B" }}>
-            네이버 부동산
+            호갱노노
           </a>
           <span className="text-[10px]" style={{ color: "#F59E0B" }}>에서 확인</span>
         </div>
