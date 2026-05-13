@@ -574,9 +574,8 @@ export default function Header() {
         </button>
       </div>
 
-      <div className="flex items-center justify-between gap-2">
-        <DdayWidget />
-        <div className="flex items-center gap-1.5 shrink-0">
+      <div className="flex items-center justify-end gap-2">
+        <div className="flex items-center gap-1.5">
         {/* 테마 토글 */}
         <button
           onClick={toggleTheme}
@@ -900,7 +899,8 @@ export default function Header() {
         )}
       </div>
       </div>
+      <DdayWidget />
     </header>
-    
+
   );
 }

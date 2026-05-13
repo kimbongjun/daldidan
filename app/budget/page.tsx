@@ -633,6 +633,7 @@ export default function BudgetPage() {
                       onDelete={() => handleDelete(tx.id)}
                       onViewReceipt={tx.receiptImageUrl ? () => setViewingReceiptTx(tx) : undefined}
                       onView={() => setViewingDetailTx(tx)}
+                      onEdit={() => startEdit(tx)}
                     />
                   ))}
                   <Pagination
@@ -847,7 +848,7 @@ function OcrUploader({
 
 // ── 거래 행 ────────────────────────────────────────────────────
 function TransactionRow({
-  tx, isEditing, isOwner, onDelete, onViewReceipt, onView,
+  tx, isEditing, isOwner, onDelete, onViewReceipt, onView, onEdit,
 }: {
   tx: Transaction;
   isEditing: boolean;
@@ -855,6 +856,7 @@ function TransactionRow({
   onDelete?: () => void;
   onViewReceipt?: () => void;
   onView?: () => void;
+  onEdit?: () => void;
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -916,6 +918,15 @@ function TransactionRow({
           className="opacity-50 hover:opacity-90 transition-opacity shrink-0"
         >
           <ReceiptText size={13} style={{ color: ACCENT }} />
+        </button>
+      )}
+      {isOwner && onEdit && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onEdit(); }}
+          aria-label="거래 수정"
+          className="opacity-50 hover:opacity-90 transition-opacity shrink-0"
+        >
+          <Pencil size={13} style={{ color: ACCENT }} />
         </button>
       )}
       {isOwner && (
