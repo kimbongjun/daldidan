@@ -36,23 +36,23 @@ create policy "본인 거래만 삭제"
   on public.transactions for delete
   using (auth.uid() = user_id);
 
--- ── travel_locations (공유 여행 지도) ──────────────────────────
+-- ── travel_locations (공유 여행 지도 — 등록자 무관 누구나 편집) ──
 alter table public.travel_locations enable row level security;
 
-create policy "인증 유저 전체 여행 기록 조회"
+create policy "travel_select"
   on public.travel_locations for select
   using (auth.uid() IS NOT NULL);
 
-create policy "본인 여행 기록만 추가"
+create policy "travel_insert"
   on public.travel_locations for insert
   with check (auth.uid() = user_id);
 
-create policy "인증 유저 전체 여행 기록 수정"
+create policy "travel_update"
   on public.travel_locations for update
-  using (auth.uid() IS NOT NULL)
+  using  (auth.uid() IS NOT NULL)
   with check (auth.uid() IS NOT NULL);
 
-create policy "인증 유저 전체 여행 기록 삭제"
+create policy "travel_delete"
   on public.travel_locations for delete
   using (auth.uid() IS NOT NULL);
 

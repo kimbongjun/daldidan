@@ -21,7 +21,6 @@ export default function TravelDetailModal({ place, currentUserId, onClose, onEdi
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  const isOwner = !!currentUserId && currentUserId === place.user_id;
   function handleDelete() {
     if (confirm(`"${place.city}" 여행 기록을 삭제할까요?`)) {
       onDelete(place.id);
@@ -194,8 +193,8 @@ export default function TravelDetailModal({ place, currentUserId, onClose, onEdi
           )}
         </div>
 
-        {/* 액션 버튼: 작성자만 표시 */}
-        {isOwner && (
+        {/* 액션 버튼: 인증 유저 전체 표시 */}
+        {!!currentUserId && (
           <div
             style={{
               padding: "0.875rem 1.25rem",

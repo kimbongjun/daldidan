@@ -41,7 +41,6 @@ export async function PATCH(
     .from("travel_locations")
     .update(updates)
     .eq("id", id)
-    .eq("user_id", user.id)
     .select("id, user_id, country, city, lat, lng, travel_date, photo_url, note, continent, is_domestic, province, drive_link, created_at, updated_at")
     .single();
 
@@ -62,8 +61,7 @@ export async function DELETE(
   const { error } = await supabase
     .from("travel_locations")
     .delete()
-    .eq("id", id)
-    .eq("user_id", user.id);
+    .eq("id", id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return new NextResponse(null, { status: 204 });
