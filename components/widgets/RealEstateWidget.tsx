@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, ArrowUp, ArrowDown, Minus, TrendingUp, Home, Wallet, CalendarCheck, AlertTriangle } from "lucide-react";
 import type { SubscriptionItem } from "@/app/api/realestate/subscriptions/route";
 import type { PolicyRate } from "@/app/api/realestate/rates/route";
-import type { TransactionItem, MarketIndex } from "@/app/api/realestate/transactions/route";
+import type { TransactionItem } from "@/app/api/realestate/transactions/route";
 import type { IllegalResupplyItem } from "@/app/api/realestate/illegal-resupply/route";
 import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 import { queryKeys } from "@/lib/queryKeys";
@@ -270,45 +270,52 @@ function TransactionTab() {
     queryKey: queryKeys.realEstate.transactions,
     queryFn: async ({ signal }) => {
       const res = await fetchWithTimeout("/api/realestate/transactions", { signal }, 12000);
-      return res.json() as Promise<{ transactions: TransactionItem[]; marketIndex: MarketIndex[] }>;
+      return res.json() as Promise<{ transactions: TransactionItem[]; isMock?: boolean }>;
     },
     staleTime: 10 * 60 * 1000,
   });
 
   const transactions = data?.transactions ?? [];
-  const marketIndex = data?.marketIndex ?? [];
+  const isMock = data?.isMock ?? false;
 
   if (loading) return <div className="flex flex-col gap-2">{[1, 2, 3].map((i) => <SkeletonRow key={i} />)}</div>;
 
   return (
-    <div className="flex flex-col gap-3">
-      {/* 시장 지수 게이지 */}
-      {marketIndex.length > 0 && (
-        <div className="flex gap-2">
-          {marketIndex.map((idx) => {
-            const pct = Math.min(Math.max((idx.value / 200) * 100, 0), 100);
-            const color = idx.value > 100 ? "#F43F5E" : idx.value < 100 ? "#10B981" : ACCENT;
-            return (
-              <div key={idx.label} className="flex-1 rounded-xl px-3 py-2.5"
-                style={{ background: "rgba(255,255,255,0.04)", border: "1px solid var(--border)" }}>
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[10px] font-semibold truncate" style={{ color: "var(--text-muted)" }}>{idx.label}</span>
-                  <span className="text-xs font-black" style={{ color }}>{idx.value}</span>
-                </div>
-                <div style={{ height: 4, borderRadius: 999, background: "var(--border)", overflow: "hidden" }}>
-                  <div style={{ width: `${pct}%`, height: "100%", borderRadius: 999, background: color, transition: "width 0.6s ease" }} />
-                </div>
-              </div>
-            );
-          })}
+    <div className="flex flex-col gap-2">
+      {/* Mock 안내 배너 */}
+      {isMock && (
+        <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg"
+          style={{ background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.2)" }}>
+          <span className="text-[10px]" style={{ color: "#F59E0B" }}>
+            샘플 데이터 · 실제 시세는
+          </span>
+          <a href="https://land.naver.com" target="_blank" rel="noopener noreferrer"
+            className="text-[10px] font-semibold underline" style={{ color: "#F59E0B" }}>
+            네이버 부동산
+          </a>
+          <span className="text-[10px]" style={{ color: "#F59E0B" }}>에서 확인</span>
         </div>
       )}
 
-      {/* 실거래 목록 */}
-      <div className="flex flex-col gap-1.5 overflow-y-auto scrollbar-hide" style={{ maxHeight: 168 }}>
+      {/* 필터 조건 칩 */}
+      <div className="flex gap-1.5 flex-wrap">
+        {["서울", "아파트", "59형", "매매 10억대"].map((chip) => (
+          <span key={chip} className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+            style={{ background: `${ACCENT}18`, color: ACCENT, border: `1px solid ${ACCENT}30` }}>
+            {chip}
+          </span>
+        ))}
+      </div>
+
+      {/* 매물 리스트 */}
+      <div className="flex flex-col gap-1.5 overflow-y-auto scrollbar-hide" style={{ maxHeight: isMock ? 190 : 220 }}>
         {transactions.map((tx) => (
-          <div key={tx.id} className="flex items-center gap-2.5 rounded-xl px-3 py-2"
-            style={{ background: "rgba(255,255,255,0.04)" }}>
+          <a key={tx.id}
+            href={tx.detailUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2.5 rounded-xl px-3 py-2 hover:opacity-80 transition-opacity"
+            style={{ background: "rgba(255,255,255,0.04)", border: "1px solid transparent" }}>
             <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
               style={{ background: `${ACCENT}18` }}>
               <Home size={13} style={{ color: ACCENT }} />
@@ -326,9 +333,19 @@ function TransactionTab() {
                 {priceFmt(tx.price)}
               </p>
               <PriceDiff prev={tx.prevPrice} curr={tx.price} />
+              <p className="text-[9px] mt-0.5" style={{ color: "var(--text-muted)" }}>
+                {tx.tradeDate.slice(5).replace("-", ".")}
+              </p>
             </div>
-          </div>
+          </a>
         ))}
+
+        {transactions.length === 0 && (
+          <div className="rounded-xl px-3 py-6 text-center text-xs"
+            style={{ background: "rgba(255,255,255,0.04)", color: "var(--text-muted)" }}>
+            조건에 맞는 실거래 내역이 없습니다.
+          </div>
+        )}
       </div>
     </div>
   );

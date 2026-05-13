@@ -215,6 +215,16 @@ export default function TravelKoreaMap({
     const zoom = d3
       .zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.8, 12])
+      .filter((event: Event) => {
+        // pin circle 위의 mousedown은 zoom 제스처를 시작하지 않음.
+        // 이를 허용하면 d3-drag의 click.drag 핸들러가 window capture로 등록되어
+        // stopImmediatePropagation()으로 React onClick을 차단한다.
+        if (event.type === "mousedown" && (event.target as SVGElement).tagName === "circle") {
+          return false;
+        }
+        const e = event as MouseEvent;
+        return (!e.ctrlKey || event.type === "wheel") && !e.button;
+      })
       .on("zoom", (event) => {
         setTransform(event.transform);
       });
