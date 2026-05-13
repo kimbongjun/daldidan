@@ -1557,7 +1557,7 @@ function TransactionDetailModal({
               <button
                 onClick={onEdit}
                 className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-opacity hover:opacity-80"
-                style={{ background: "rgba(255,255,255,0.06)", color: "var(--text-primary)", border: "1px solid var(--border)" }}
+                style={{ background: ACCENT, color: "#fff" }}
               >
                 <Pencil size={13} />
                 수정하기
