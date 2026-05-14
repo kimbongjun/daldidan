@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus, Building2, MapPin, LayoutGrid } from "lucide-react";
+import { Plus, Building2, MapPin, LayoutGrid, CalendarDays, SquareStack } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import { getInspectionRecords } from "@/lib/inspection";
 
@@ -49,55 +49,112 @@ export default async function InspectionListPage() {
             </Link>
           </div>
         ) : (
-          <div className="overflow-x-auto rounded-2xl" style={{ border: "1px solid var(--border)" }}>
-            <table className="w-full text-sm">
-              <thead>
-                <tr style={{ background: "rgba(255,255,255,0.04)", borderBottom: "1px solid var(--border)" }}>
-                  {["단지명", "동·호수", "주소", "평형", "연식"].map((h) => (
-                    <th key={h} className="text-left px-4 py-3 font-semibold text-xs"
-                      style={{ color: "var(--text-muted)", whiteSpace: "nowrap" }}>
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {records.map((r, idx) => (
-                  <tr key={r.id}
-                    style={{
-                      borderBottom: idx < records.length - 1 ? "1px solid var(--border)" : "none",
-                      transition: "background 0.15s",
-                    }}
-                    className="hover:bg-white/[0.03]">
-                    <td className="px-4 py-3">
-                      <Link href={`/inspection/${r.id}`}
-                        className="flex items-center gap-2 font-semibold transition-opacity hover:opacity-70"
-                        style={{ color: ACCENT }}>
-                        <Building2 size={13} />
-                        {r.complex_name}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3" style={{ color: "var(--text-primary)" }}>
-                      {r.dong_ho ?? <span style={{ color: "var(--text-muted)" }}>-</span>}
-                    </td>
-                    <td className="px-4 py-3 max-w-[200px]">
-                      <span className="flex items-center gap-1 truncate" style={{ color: "var(--text-muted)" }}>
-                        {r.address ? (
-                          <><MapPin size={11} />{r.address}</>
-                        ) : "-"}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3" style={{ color: "var(--text-primary)" }}>
-                      {r.pyeong ?? <span style={{ color: "var(--text-muted)" }}>-</span>}
-                    </td>
-                    <td className="px-4 py-3" style={{ color: "var(--text-primary)" }}>
-                      {r.year_built ? `${r.year_built}년` : <span style={{ color: "var(--text-muted)" }}>-</span>}
-                    </td>
+          <>
+            {/* ── 데스크톱: 테이블 (sm 이상) ── */}
+            <div className="hidden sm:block overflow-x-auto rounded-2xl" style={{ border: "1px solid var(--border)" }}>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr style={{ background: "rgba(255,255,255,0.04)", borderBottom: "1px solid var(--border)" }}>
+                    {["단지명", "동·호수", "주소", "평형", "연식"].map((h) => (
+                      <th key={h} className="text-left px-4 py-3 font-semibold text-xs"
+                        style={{ color: "var(--text-muted)", whiteSpace: "nowrap" }}>
+                        {h}
+                      </th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {records.map((r, idx) => (
+                    <tr key={r.id}
+                      style={{
+                        borderBottom: idx < records.length - 1 ? "1px solid var(--border)" : "none",
+                        transition: "background 0.15s",
+                      }}
+                      className="hover:bg-white/[0.03]">
+                      <td className="px-4 py-3">
+                        <Link href={`/inspection/${r.id}`}
+                          className="flex items-center gap-2 font-semibold transition-opacity hover:opacity-70"
+                          style={{ color: ACCENT }}>
+                          <Building2 size={13} />
+                          {r.complex_name}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-3" style={{ color: "var(--text-primary)" }}>
+                        {r.dong_ho ?? <span style={{ color: "var(--text-muted)" }}>-</span>}
+                      </td>
+                      <td className="px-4 py-3 max-w-[200px]">
+                        <span className="flex items-center gap-1 truncate" style={{ color: "var(--text-muted)" }}>
+                          {r.address ? <><MapPin size={11} />{r.address}</> : "-"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3" style={{ color: "var(--text-primary)" }}>
+                        {r.pyeong ?? <span style={{ color: "var(--text-muted)" }}>-</span>}
+                      </td>
+                      <td className="px-4 py-3" style={{ color: "var(--text-primary)" }}>
+                        {r.year_built ? `${r.year_built}년` : <span style={{ color: "var(--text-muted)" }}>-</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* ── 모바일: 카드 리스트 (sm 미만) ── */}
+            <div className="flex flex-col gap-3 sm:hidden">
+              {records.map((r) => (
+                <Link
+                  key={r.id}
+                  href={`/inspection/${r.id}`}
+                  className="flex flex-col gap-2.5 px-4 py-4 rounded-2xl transition-opacity hover:opacity-80"
+                  style={{ background: "rgba(255,255,255,0.04)", border: "1px solid var(--border)" }}
+                >
+                  {/* 단지명 */}
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                      style={{ background: `${ACCENT}18` }}>
+                      <Building2 size={14} style={{ color: ACCENT }} />
+                    </div>
+                    <p className="text-sm font-bold truncate" style={{ color: ACCENT }}>
+                      {r.complex_name}
+                    </p>
+                  </div>
+
+                  {/* 동·호수 + 평형 + 연식 */}
+                  <div className="flex flex-wrap gap-2">
+                    {r.dong_ho && (
+                      <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full"
+                        style={{ background: "rgba(255,255,255,0.06)", color: "var(--text-primary)" }}>
+                        <SquareStack size={10} style={{ color: "var(--text-muted)" }} />
+                        {r.dong_ho}
+                      </span>
+                    )}
+                    {r.pyeong && (
+                      <span className="text-xs px-2 py-0.5 rounded-full"
+                        style={{ background: "rgba(255,255,255,0.06)", color: "var(--text-primary)" }}>
+                        {r.pyeong}
+                      </span>
+                    )}
+                    {r.year_built && (
+                      <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full"
+                        style={{ background: "rgba(255,255,255,0.06)", color: "var(--text-primary)" }}>
+                        <CalendarDays size={10} style={{ color: "var(--text-muted)" }} />
+                        {r.year_built}년
+                      </span>
+                    )}
+                  </div>
+
+                  {/* 주소 */}
+                  {r.address && (
+                    <p className="flex items-center gap-1 text-xs truncate"
+                      style={{ color: "var(--text-muted)" }}>
+                      <MapPin size={10} />
+                      {r.address}
+                    </p>
+                  )}
+                </Link>
+              ))}
+            </div>
+          </>
         )}
       </div>
     </div>
