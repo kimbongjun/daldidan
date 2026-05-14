@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus, Building2, MapPin, LayoutGrid, CalendarDays, SquareStack } from "lucide-react";
+import { Plus, Building2, MapPin, LayoutGrid } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import { getInspectionRecords } from "@/lib/inspection";
 
@@ -100,57 +100,40 @@ export default async function InspectionListPage() {
             </div>
 
             {/* ── 모바일: 카드 리스트 (sm 미만) ── */}
-            <div className="flex flex-col gap-3 sm:hidden">
+            <div className="flex flex-col gap-2 sm:hidden">
               {records.map((r) => (
                 <Link
                   key={r.id}
                   href={`/inspection/${r.id}`}
-                  className="flex flex-col gap-2.5 px-4 py-4 rounded-2xl transition-opacity hover:opacity-80"
+                  className="flex flex-col gap-2 px-4 py-3.5 rounded-2xl transition-opacity hover:opacity-80"
                   style={{ background: "rgba(255,255,255,0.04)", border: "1px solid var(--border)" }}
                 >
-                  {/* 단지명 */}
+                  {/* 단지명 — 타이틀 row */}
                   <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-                      style={{ background: `${ACCENT}18` }}>
-                      <Building2 size={14} style={{ color: ACCENT }} />
-                    </div>
+                    <Building2 size={13} style={{ color: ACCENT, flexShrink: 0 }} />
                     <p className="text-sm font-bold truncate" style={{ color: ACCENT }}>
                       {r.complex_name}
                     </p>
                   </div>
 
-                  {/* 동·호수 + 평형 + 연식 */}
-                  <div className="flex flex-wrap gap-2">
-                    {r.dong_ho && (
-                      <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full"
-                        style={{ background: "rgba(255,255,255,0.06)", color: "var(--text-primary)" }}>
-                        <SquareStack size={10} style={{ color: "var(--text-muted)" }} />
-                        {r.dong_ho}
-                      </span>
-                    )}
-                    {r.pyeong && (
-                      <span className="text-xs px-2 py-0.5 rounded-full"
-                        style={{ background: "rgba(255,255,255,0.06)", color: "var(--text-primary)" }}>
-                        {r.pyeong}
-                      </span>
-                    )}
-                    {r.year_built && (
-                      <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full"
-                        style={{ background: "rgba(255,255,255,0.06)", color: "var(--text-primary)" }}>
-                        <CalendarDays size={10} style={{ color: "var(--text-muted)" }} />
-                        {r.year_built}년
-                      </span>
-                    )}
+                  {/* 나머지 필드 — 한 줄 column */}
+                  <div className="flex items-center gap-0 overflow-hidden text-xs" style={{ color: "var(--text-muted)" }}>
+                    {[
+                      r.dong_ho,
+                      r.address,
+                      r.pyeong,
+                      r.year_built ? `${r.year_built}년` : null,
+                    ]
+                      .filter(Boolean)
+                      .map((val, i, arr) => (
+                        <span key={i} className="flex items-center shrink-0">
+                          <span className="truncate" style={{ maxWidth: "28vw" }}>{val}</span>
+                          {i < arr.length - 1 && (
+                            <span className="mx-1.5 shrink-0" style={{ opacity: 0.3 }}>|</span>
+                          )}
+                        </span>
+                      ))}
                   </div>
-
-                  {/* 주소 */}
-                  {r.address && (
-                    <p className="flex items-center gap-1 text-xs truncate"
-                      style={{ color: "var(--text-muted)" }}>
-                      <MapPin size={10} />
-                      {r.address}
-                    </p>
-                  )}
                 </Link>
               ))}
             </div>
