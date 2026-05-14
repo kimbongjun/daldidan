@@ -1,5 +1,6 @@
 import { signIn } from "@/lib/supabase/actions/auth";
 import { Sparkles, LogIn } from "lucide-react";
+import BiometricLoginButton from "@/components/auth/BiometricLoginButton";
 
 export default async function LoginPage({
   searchParams,
@@ -139,6 +140,16 @@ export default async function LoginPage({
               로그인
             </button>
           </form>
+
+          {/* 생체 인증 로그인 — 이전에 등록한 기기에서만 표시 */}
+          <div style={{ marginTop: "1rem" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.875rem" }}>
+              <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
+              <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", whiteSpace: "nowrap" }}>또는</span>
+              <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
+            </div>
+            <BiometricLoginButton next={next} />
+          </div>
         </div>
 
         <p style={{ textAlign: "center", fontSize: "0.72rem", color: "var(--text-muted)", marginTop: "1.25rem" }}>

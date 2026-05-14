@@ -14,6 +14,7 @@ import {
 import { SortableContext, arrayMove, rectSortingStrategy } from "@dnd-kit/sortable";
 import Footer from "@/components/Footer";
 import Header from "@/components/Header";
+import BiometricSetupBanner from "@/components/auth/BiometricSetupBanner";
 import BudgetWidget from "@/components/widgets/BudgetWidget";
 import BlogWidget from "@/components/widgets/BlogWidget";
 import RealEstateWidget from "@/components/widgets/RealEstateWidget";
@@ -106,6 +107,7 @@ export default function DashboardShell({ initialBlogPosts }: DashboardShellProps
         }}
       >
         <Header />
+        <BiometricSetupBanner />
         <BentoGrid initialBlogPosts={initialBlogPosts} />
         <BottomNav />
         <Footer />
