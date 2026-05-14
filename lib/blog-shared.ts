@@ -1,4 +1,4 @@
-export const BLOG_CATEGORIES = ["여행", "스윙", "일상", "육아", "재테크", "기타"] as const;
+export const BLOG_CATEGORIES = ["여행", "스윙", "일상", "육아", "재테크", "운동", "쇼핑", "문화생활", "기타"] as const;
 export type BlogCategory = (typeof BLOG_CATEGORIES)[number];
 
 export interface BlogPostSummary {
