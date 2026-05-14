@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, ArrowUp, ArrowDown, Minus, TrendingUp, Home, Wallet, CalendarCheck, AlertTriangle } from "lucide-react";
+import { ArrowRight, ArrowUp, ArrowDown, Minus, TrendingUp, Home, Wallet, CalendarCheck, AlertTriangle, ClipboardList } from "lucide-react";
 import type { SubscriptionItem } from "@/app/api/realestate/subscriptions/route";
 import type { PolicyRate } from "@/app/api/realestate/rates/route";
 import type { TransactionItem } from "@/app/api/realestate/transactions/route";
@@ -536,15 +537,24 @@ export default function RealEstateWidget() {
             청약 · 실거래 · 금리 · 재공급
           </p>
         </div>
-        <a
-          href="https://www.applyhome.co.kr"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg shrink-0 transition-opacity hover:opacity-70"
-          style={{ background: `${ACCENT}22`, color: ACCENT }}
-        >
-          청약홈 <ArrowRight size={11} />
-        </a>
+        <div className="flex gap-2 shrink-0">
+          <Link
+            href="/inspection"
+            className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg transition-opacity hover:opacity-70"
+            style={{ background: `${ACCENT}22`, color: ACCENT }}
+          >
+            <ClipboardList size={11} /> 임장기록
+          </Link>
+          <a
+            href="https://www.applyhome.co.kr"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg transition-opacity hover:opacity-70"
+            style={{ background: `${ACCENT}22`, color: ACCENT }}
+          >
+            청약홈 <ArrowRight size={11} />
+          </a>
+        </div>
       </div>
 
       {/* 탭 */}
