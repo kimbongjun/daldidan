@@ -634,13 +634,22 @@ function EventDetailModal({
                     <p className="text-sm font-medium truncate" style={{ color: "var(--text-primary)" }}>
                       {ev.title}
                     </p>
-                    {ev.start_time && (
+                    {ev.end_date && ev.end_date !== ev.start_date ? (
+                      <p className="text-xs flex items-center gap-1" style={{ color: "var(--text-muted)" }}>
+                        <CalendarDays size={10} />
+                        {ev.start_date.slice(5).replace("-", "/")}
+                        {ev.start_time ? ` ${ev.start_time.slice(0, 5)}` : ""}
+                        {" ~ "}
+                        {ev.end_date.slice(5).replace("-", "/")}
+                        {ev.end_time ? ` ${ev.end_time.slice(0, 5)}` : ""}
+                      </p>
+                    ) : ev.start_time ? (
                       <p className="text-xs flex items-center gap-1" style={{ color: "var(--text-muted)" }}>
                         <Clock size={10} />
                         {ev.start_time.slice(0, 5)}
                         {ev.end_time ? ` – ${ev.end_time.slice(0, 5)}` : ""}
                       </p>
-                    )}
+                    ) : null}
                     {ev.location && (
                       <p className="text-xs flex items-center gap-1" style={{ color: "var(--text-muted)" }}>
                         <MapPin size={10} /> {ev.location}
@@ -747,12 +756,51 @@ export default function CalendarWidget() {
 
   const fetchError = fetchErrorRaw instanceof Error ? fetchErrorRaw.message : "";
 
-  // 날짜별 이벤트 맵
+  // 날짜별 이벤트 맵 (다일 이벤트는 범위 내 모든 날짜에 포함 — 클릭·모달용)
   const eventsByDate = useMemo(() => {
+    const map: Record<string, CalendarEvent[]> = {};
+    for (const ev of events) {
+      if (!ev.end_date || ev.end_date === ev.start_date) {
+        if (!map[ev.start_date]) map[ev.start_date] = [];
+        map[ev.start_date].push(ev);
+      } else {
+        const cur = new Date(ev.start_date);
+        const endDate = new Date(ev.end_date);
+        while (cur <= endDate) {
+          const ds = toDateStr(cur.getFullYear(), cur.getMonth() + 1, cur.getDate());
+          if (!map[ds]) map[ds] = [];
+          map[ds].push(ev);
+          cur.setDate(cur.getDate() + 1);
+        }
+      }
+    }
+    return map;
+  }, [events]);
+
+  // 시작 날짜별 이벤트 맵 (달력 점 표시용)
+  const startEventsByDate = useMemo(() => {
     const map: Record<string, CalendarEvent[]> = {};
     for (const ev of events) {
       if (!map[ev.start_date]) map[ev.start_date] = [];
       map[ev.start_date].push(ev);
+    }
+    return map;
+  }, [events]);
+
+  // 다일 이벤트 범위 바 메타데이터
+  const dateRangeMeta = useMemo(() => {
+    const map: Record<string, { isStart: boolean; isEnd: boolean; color: string }[]> = {};
+    for (const ev of events) {
+      if (!ev.end_date || ev.end_date === ev.start_date) continue;
+      const color = ev.is_shared ? SHARED_COLOR : getAuthorColor(ev.user_id);
+      const cur = new Date(ev.start_date);
+      const endDate = new Date(ev.end_date);
+      while (cur <= endDate) {
+        const ds = toDateStr(cur.getFullYear(), cur.getMonth() + 1, cur.getDate());
+        if (!map[ds]) map[ds] = [];
+        map[ds].push({ isStart: ds === ev.start_date, isEnd: ds === ev.end_date, color });
+        cur.setDate(cur.getDate() + 1);
+      }
     }
     return map;
   }, [events]);
@@ -903,58 +951,79 @@ export default function CalendarWidget() {
               return <div key={idx} />;
             }
             const dateStr = toDateStr(viewYear, viewMonth, dayNum);
-            const dayEvents = eventsByDate[dateStr] ?? [];
+            const startEvents = startEventsByDate[dateStr] ?? [];
+            const rangeBars = dateRangeMeta[dateStr] ?? [];
             const isToday = dateStr === today;
             const isPast = dateStr < today;
-            const weekday = (firstWeekday + dayNum - 1) % 7;
-            const isSun = weekday === 0;
-            const isSat = weekday === 6;
+            const colPos = (firstWeekday + dayNum - 1) % 7;
+            const isSun = colPos === 0;
+            const isSat = colPos === 6;
 
             const lunarLabel = toLunarDate(viewYear, viewMonth, dayNum);
             return (
-              <button
-                key={idx}
-                onClick={() => handleDayClick(dateStr)}
-                className="flex flex-col items-center gap-0.5 py-1 rounded-lg transition-opacity"
-                style={{
-                  background: isToday ? "rgba(92,171,242,0.2)" : "transparent",
-                  opacity: isPast ? 0.5 : 1,
-                  minHeight: 44,
-                }}
-              >
-                <span
-                  className="text-xs leading-none"
+              <div key={idx} className="relative">
+                {rangeBars.slice(0, 2).map((r, ri) => {
+                  const roundLeft = r.isStart || colPos === 0;
+                  const roundRight = r.isEnd || colPos === 6;
+                  return (
+                    <div
+                      key={ri}
+                      className="absolute pointer-events-none"
+                      style={{
+                        top: ri === 0 ? 7 : 27,
+                        height: 18,
+                        left: roundLeft ? 3 : 0,
+                        right: roundRight ? 3 : 0,
+                        background: r.color,
+                        opacity: 0.22,
+                        borderRadius: `${roundLeft ? 5 : 0}px ${roundRight ? 5 : 0}px ${roundRight ? 5 : 0}px ${roundLeft ? 5 : 0}px`,
+                      }}
+                    />
+                  );
+                })}
+                <button
+                  onClick={() => handleDayClick(dateStr)}
+                  className="relative z-10 w-full flex flex-col items-center gap-0.5 py-1 rounded-lg transition-opacity"
                   style={{
-                    color: isToday
-                      ? "#5CABF2"
-                      : isSun
-                      ? "#F43F5E"
-                      : isSat
-                      ? "#5CABF2"
-                      : "var(--text-primary)",
-                    fontWeight: isToday ? 700 : 400,
+                    background: isToday ? "rgba(92,171,242,0.2)" : "transparent",
+                    opacity: isPast ? 0.5 : 1,
+                    minHeight: 44,
                   }}
                 >
-                  {dayNum}
-                </span>
-                {lunarLabel && (
                   <span
-                    className="leading-none"
-                    style={{ fontSize: 7, color: "var(--text-muted)", letterSpacing: "-0.02em" }}
+                    className="text-xs leading-none"
+                    style={{
+                      color: isToday
+                        ? "#5CABF2"
+                        : isSun
+                        ? "#F43F5E"
+                        : isSat
+                        ? "#5CABF2"
+                        : "var(--text-primary)",
+                      fontWeight: isToday ? 700 : 400,
+                    }}
                   >
-                    {lunarLabel}
+                    {dayNum}
                   </span>
-                )}
-                <div className="flex gap-0.5 flex-wrap justify-center">
-                  {dayEvents.slice(0, 3).map((ev) => (
+                  {lunarLabel && (
                     <span
-                      key={ev.id}
-                      className="w-1.5 h-1.5 rounded-full"
-                      style={{ background: ev.is_shared ? SHARED_COLOR : getAuthorColor(ev.user_id) }}
-                    />
-                  ))}
-                </div>
-              </button>
+                      className="leading-none"
+                      style={{ fontSize: 7, color: "var(--text-muted)", letterSpacing: "-0.02em" }}
+                    >
+                      {lunarLabel}
+                    </span>
+                  )}
+                  <div className="flex gap-0.5 flex-wrap justify-center">
+                    {startEvents.slice(0, 3).map((ev) => (
+                      <span
+                        key={ev.id}
+                        className="w-1.5 h-1.5 rounded-full"
+                        style={{ background: ev.is_shared ? SHARED_COLOR : getAuthorColor(ev.user_id) }}
+                      />
+                    ))}
+                  </div>
+                </button>
+              </div>
             );
           })}
         </div>
