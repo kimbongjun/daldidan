@@ -21,6 +21,7 @@ import RealEstateWidget from "@/components/widgets/RealEstateWidget";
 import TravelWidget from "@/components/widgets/TravelWidget";
 import FortuneWidget from "@/components/widgets/FortuneWidget";
 import LottoWidget from "@/components/widgets/LottoWidget";
+import PlaygroundWidget from "@/components/widgets/PlaygroundWidget";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import BottomNav from "@/components/BottomNav";
 import { SortableWidgetItem } from "@/components/home/SortableWidgetItem";
@@ -46,6 +47,7 @@ const WIDGET_META: Record<
 > = {
   fortune: { label: "운세", minHeight: 0, mobileCols: 1, tabletCols: 1, desktopCols: 1 },
   lotto: { label: "로또", minHeight: 0, mobileCols: 1, tabletCols: 1, desktopCols: 1 },
+  playground: { label: "놀이터", minHeight: 0, mobileCols: 1, tabletCols: 2, desktopCols: 1 },
   blog: { label: "블로그", minHeight: 0, mobileCols: 1, tabletCols: 1, desktopCols: 2 },
   budget: { label: "가계부", minHeight: 0, mobileCols: 1, tabletCols: 1, desktopCols: 1 },
   calendar: { label: "캘린더", minHeight: 0, mobileCols: 1, tabletCols: 1, desktopCols: 1 },
@@ -199,6 +201,8 @@ function BentoGrid({ initialBlogPosts }: { initialBlogPosts: BlogPostSummary[] }
         return <ErrorBoundary><FortuneWidget /></ErrorBoundary>;
       case "lotto":
         return <ErrorBoundary><LottoWidget /></ErrorBoundary>;
+      case "playground":
+        return <ErrorBoundary><PlaygroundWidget /></ErrorBoundary>;
       case "stock":
         return (
           <ErrorBoundary>

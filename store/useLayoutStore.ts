@@ -9,11 +9,13 @@ export type WidgetId =
   | "calendar"
   | "stock"
   | "travel"
-  | "realestate";
+  | "realestate"
+  | "playground";
 
 const DEFAULT_WIDGET_ORDER: WidgetId[] = [
   "fortune",
   "lotto",
+  "playground",
   "blog",
   "budget",
   "calendar",
@@ -23,6 +25,7 @@ const DEFAULT_WIDGET_ORDER: WidgetId[] = [
 ];
 
 export const MOBILE_WIDGET_ORDER: WidgetId[] = [
+  "playground",
   "blog",
   "calendar",
   "budget",
