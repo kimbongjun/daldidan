@@ -223,7 +223,8 @@ function snapToGrid(
 function tickGame(state: GameState): Partial<GameState> {
   if (state.status !== 'playing') return {};
 
-  let { grid, fly, drops, score, shots, status, gridOffset, lastPressure } = state;
+  const { grid, fly, score, shots, status, gridOffset, lastPressure } = state;
+  let { drops } = state;
 
   // 낙하 버블 물리 업데이트 (중력 가속 + 화면 이탈 시 제거)
   drops = drops
@@ -233,7 +234,8 @@ function tickGame(state: GameState): Partial<GameState> {
   if (!fly) return { drops };
 
   // 비행 버블 위치 업데이트
-  let { x, y, dx, dy, color } = fly;
+  let { x, y, dx } = fly;
+  const { dy, color } = fly;
   x += dx;
   y += dy;
 
@@ -405,7 +407,7 @@ function drawAimLine(
   let cx = SHOOTER_X;
   let cy = SHOOTER_Y;
   let cdx = Math.sin(angle);
-  let cdy = -Math.cos(angle);
+  const cdy = -Math.cos(angle);
 
   // 최대 3번 반사까지 조준선 표시
   for (let bounce = 0; bounce < 3; bounce++) {
