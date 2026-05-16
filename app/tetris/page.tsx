@@ -11,13 +11,13 @@ import TetrisBoard, { NextPiecePreview, HoldPiecePreview } from '@/components/Te
 function ScoreCard({ label, value }: { label: string; value: number | string }) {
   return (
     <div
-      className="rounded-xl p-3 flex flex-col gap-1 items-center"
+      className="rounded-xl p-3 flex flex-col gap-1 items-center w-full overflow-hidden"
       style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
     >
-      <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
+      <p className="text-xs font-semibold uppercase tracking-wide w-full text-center truncate" style={{ color: 'var(--text-muted)' }}>
         {label}
       </p>
-      <p className="text-2xl font-black tabular-nums" style={{ color: 'var(--text-primary)' }}>
+      <p className="text-lg font-black tabular-nums w-full text-center leading-tight" style={{ color: 'var(--text-primary)' }}>
         {value}
       </p>
     </div>
@@ -72,7 +72,7 @@ export default function TetrisPage() {
       const bottomPad = Math.max(vh * 0.1, 20);
       const controlsH = 13 + 3 * 52 + 2 * 8 + bottomPad;
       const availH = vh - 57 - controlsH - 32;
-      const availW = vw - 32 - 16 - 120;
+      const availW = vw - 32 - 16 - 130;
 
       const byH = Math.floor((availH - 12 - 19) / 20);
       const byW = Math.floor((availW - 12 - 9) / 10);
@@ -197,7 +197,7 @@ export default function TetrisPage() {
         </div>
 
         {/* Side Panel */}
-        <div className="flex flex-col gap-3 shrink-0" style={{ width: 120 }}>
+        <div className="flex flex-col gap-3 shrink-0" style={{ width: 130 }}>
           {/* Hold */}
           <div
             className="rounded-xl p-3 flex flex-col gap-2"
@@ -244,14 +244,14 @@ export default function TetrisPage() {
               { key: 'C', desc: '홀드' },
               { key: 'P', desc: '일시정지' },
             ].map(({ key, desc }) => (
-              <div key={key} className="flex items-center justify-between gap-2">
+              <div key={key} className="flex items-center gap-1.5">
                 <span
-                  className="rounded px-1.5 py-0.5 text-[10px] font-bold font-mono"
+                  className="rounded px-1.5 py-0.5 text-[10px] font-bold font-mono shrink-0"
                   style={{ background: 'rgba(255,255,255,0.08)', color: 'var(--text-primary)' }}
                 >
                   {key}
                 </span>
-                <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{desc}</span>
+                <span className="text-[10px] flex-1 min-w-0 truncate text-right" style={{ color: 'var(--text-muted)' }}>{desc}</span>
               </div>
             ))}
           </div>
