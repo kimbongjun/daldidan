@@ -82,6 +82,61 @@ function Cell({ cell }: { cell: RenderCell }) {
   );
 }
 
+// ── Hold Piece Preview ────────────────────────────────────────────────────
+
+export function HoldPiecePreview({ type }: { type: TetrominoType | null }) {
+  const emptyGrid = Array.from({ length: 4 }, () => Array.from({ length: 4 }, () => false));
+
+  if (!type) {
+    return (
+      <div className="flex flex-col gap-0.5">
+        {emptyGrid.map((row, r) => (
+          <div key={r} className="flex gap-0.5">
+            {row.map((_, c) => (
+              <div key={c} className="w-5 h-5 rounded-sm" style={{ background: 'rgba(255,255,255,0.02)' }} />
+            ))}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  const shape = SHAPES[type];
+  const color = COLORS[type];
+  const rows = shape.length;
+  const cols = shape[0].length;
+  const padTop = Math.floor((4 - rows) / 2);
+  const padLeft = Math.floor((4 - cols) / 2);
+
+  const grid = Array.from({ length: 4 }, (_, r) =>
+    Array.from({ length: 4 }, (_, c) => {
+      const sr = r - padTop;
+      const sc = c - padLeft;
+      return sr >= 0 && sr < rows && sc >= 0 && sc < cols && shape[sr][sc] === 1;
+    }),
+  );
+
+  return (
+    <div className="flex flex-col gap-0.5">
+      {grid.map((row, r) => (
+        <div key={r} className="flex gap-0.5">
+          {row.map((filled, c) => (
+            <div
+              key={c}
+              className="w-5 h-5 rounded-sm"
+              style={
+                filled
+                  ? { background: color, boxShadow: `0 0 6px ${color}88`, border: '1px solid rgba(255,255,255,0.3)' }
+                  : { background: 'rgba(255,255,255,0.02)' }
+              }
+            />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── Next Piece Preview ────────────────────────────────────────────────────
 
 export function NextPiecePreview({ type }: { type: TetrominoType }) {

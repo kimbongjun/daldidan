@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { ArrowLeft, RotateCcw, Play, Pause } from 'lucide-react';
 import { useTetris } from '@/hooks/useTetris';
-import TetrisBoard, { NextPiecePreview } from '@/components/TetrisBoard';
+import TetrisBoard, { NextPiecePreview, HoldPiecePreview } from '@/components/TetrisBoard';
 
 // ── Score Card ────────────────────────────────────────────────────────────
 
@@ -29,20 +29,23 @@ function CtrlBtn({
   onClick,
   children,
   wide = false,
+  disabled = false,
 }: {
   onClick: () => void;
   children: React.ReactNode;
   wide?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
-      onPointerDown={e => { e.preventDefault(); onClick(); }}
+      onPointerDown={e => { e.preventDefault(); if (!disabled) onClick(); }}
       className={`flex items-center justify-center rounded-xl select-none active:scale-90 transition-transform font-bold text-lg ${wide ? 'col-span-2' : ''}`}
       style={{
-        background: 'rgba(255,255,255,0.07)',
+        background: disabled ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.07)',
         border: '1px solid rgba(255,255,255,0.12)',
         color: 'var(--text-primary)',
+        opacity: disabled ? 0.45 : 1,
         height: 52,
         userSelect: 'none',
         WebkitUserSelect: 'none',
@@ -57,10 +60,10 @@ function CtrlBtn({
 // ── Page ──────────────────────────────────────────────────────────────────
 
 export default function TetrisPage() {
-  const { gameState, ghostPiece, start, pause, resume, moveLeft, moveRight, softDrop, rotate, hardDrop } =
+  const { gameState, ghostPiece, start, pause, resume, moveLeft, moveRight, softDrop, rotate, hardDrop, holdPiece } =
     useTetris();
 
-  const { board, active, next, score, lines, level, status } = gameState;
+  const { board, active, next, hold, canHold, score, lines, level, status } = gameState;
 
   const isIdle = status === 'idle';
   const isPlaying = status === 'playing';
@@ -142,7 +145,8 @@ export default function TetrisPage() {
                   <p className="text-xl font-black" style={{ color: 'var(--text-primary)' }}>TETRIS</p>
                   <p className="text-xs text-center leading-relaxed" style={{ color: 'var(--text-muted)' }}>
                     ↑ 회전 &nbsp;|&nbsp; ↓ 소프트 드롭<br />
-                    스페이스 하드 드롭 &nbsp;|&nbsp; P 일시정지
+                    스페이스 하드 드롭 &nbsp;|&nbsp; C 홀드<br />
+                    P 일시정지
                   </p>
                 </>
               )}
@@ -171,6 +175,22 @@ export default function TetrisPage() {
 
         {/* Side Panel */}
         <div className="flex flex-col gap-3 shrink-0" style={{ width: 120 }}>
+          {/* Hold */}
+          <div
+            className="rounded-xl p-3 flex flex-col gap-2"
+            style={{
+              background: canHold ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.02)',
+              border: `1px solid ${canHold ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.04)'}`,
+            }}
+          >
+            <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
+              HOLD
+            </p>
+            <div className="flex items-center justify-center py-1" style={{ opacity: canHold ? 1 : 0.4 }}>
+              <HoldPiecePreview type={hold} />
+            </div>
+          </div>
+
           {/* Next */}
           <div
             className="rounded-xl p-3 flex flex-col gap-2"
@@ -198,6 +218,7 @@ export default function TetrisPage() {
               { key: '← →', desc: '이동' },
               { key: '↓', desc: '소프트' },
               { key: 'SPC', desc: '하드' },
+              { key: 'C', desc: '홀드' },
               { key: 'P', desc: '일시정지' },
             ].map(({ key, desc }) => (
               <div key={key} className="flex items-center justify-between gap-2">
@@ -216,21 +237,25 @@ export default function TetrisPage() {
 
       {/* ── Mobile Controls ─────────────────────────────────────────────── */}
       <div
-        className="sm:hidden shrink-0 px-4 pb-6 pt-2"
-        style={{ borderTop: '1px solid var(--border)' }}
+        className="sm:hidden shrink-0 px-4 pt-3"
+        style={{
+          borderTop: '1px solid var(--border)',
+          paddingBottom: 'max(20px, env(safe-area-inset-bottom, 20px))',
+        }}
       >
         <div className="grid grid-cols-3 gap-2 max-w-xs mx-auto">
-          {/* Row 1: rotate center */}
-          <div />
+          {/* Row 1: hold / rotate / empty */}
+          <CtrlBtn onClick={holdPiece} disabled={!canHold}>
+            <span style={{ fontSize: 13 }}>홀드</span>
+          </CtrlBtn>
           <CtrlBtn onClick={rotate}>↑</CtrlBtn>
           <div />
           {/* Row 2: left / down / right */}
           <CtrlBtn onClick={moveLeft}>←</CtrlBtn>
           <CtrlBtn onClick={softDrop}>↓</CtrlBtn>
           <CtrlBtn onClick={moveRight}>→</CtrlBtn>
-          {/* Row 3: hard drop */}
+          {/* Row 3: hard drop / pause */}
           <CtrlBtn onClick={hardDrop} wide>⬇ 하드 드롭</CtrlBtn>
-          {/* Row 3 col 3: pause */}
           <CtrlBtn onClick={isPlaying ? pause : resume}>
             {isPlaying ? '⏸' : '▶'}
           </CtrlBtn>

@@ -83,6 +83,8 @@ function createInitialState(): GameState {
     board: createEmptyBoard(),
     active: null,
     next: randomType(),
+    hold: null,
+    canHold: true,
     score: 0,
     lines: 0,
     level: 1,
@@ -141,6 +143,8 @@ export function useTetris() {
         board: clearedBoard,
         active: null,
         next: newNext,
+        hold: s.hold,
+        canHold: true,
         score: newScore,
         lines: newLines,
         level: newLevel,
@@ -153,6 +157,8 @@ export function useTetris() {
       board: clearedBoard,
       active: newPiece,
       next: newNext,
+      hold: s.hold,
+      canHold: true,
       score: newScore,
       lines: newLines,
       level: newLevel,
@@ -180,6 +186,8 @@ export function useTetris() {
       board: createEmptyBoard(),
       active: spawnPiece(firstType),
       next: randomType(),
+      hold: null,
+      canHold: true,
       score: 0,
       lines: 0,
       level: 1,
@@ -254,6 +262,8 @@ export function useTetris() {
         board: clearedBoard,
         active: null,
         next: newNext,
+        hold: s.hold,
+        canHold: true,
         score: newScore,
         lines: newLines,
         level: newLevel,
@@ -266,12 +276,44 @@ export function useTetris() {
       board: clearedBoard,
       active: newPiece,
       next: newNext,
+      hold: s.hold,
+      canHold: true,
       score: newScore,
       lines: newLines,
       level: newLevel,
       status: 'playing',
     }));
   }, [setState, stopLoop]);
+
+  // ── Hold ──────────────────────────────────────────────────────────────────
+  const holdPiece = useCallback(() => {
+    const s = stateRef.current;
+    if (s.status !== 'playing' || !s.active || !s.canHold) return;
+
+    const currentType = s.active.type;
+
+    if (s.hold === null) {
+      const nextType = s.next;
+      const newPiece = spawnPiece(nextType);
+      if (!isValid(s.board, newPiece.shape, newPiece.pos)) return;
+      setState(prev => ({
+        ...prev,
+        active: newPiece,
+        next: randomType(),
+        hold: currentType,
+        canHold: false,
+      }));
+    } else {
+      const swappedPiece = spawnPiece(s.hold);
+      if (!isValid(s.board, swappedPiece.shape, swappedPiece.pos)) return;
+      setState(prev => ({
+        ...prev,
+        active: swappedPiece,
+        hold: currentType,
+        canHold: false,
+      }));
+    }
+  }, [setState]);
 
   // ── Keyboard handler ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -300,6 +342,11 @@ export function useTetris() {
           e.preventDefault();
           hardDrop();
           break;
+        case 'c':
+        case 'C':
+          e.preventDefault();
+          holdPiece();
+          break;
         case 'p':
         case 'P':
         case 'Escape':
@@ -311,7 +358,7 @@ export function useTetris() {
 
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [moveLeft, moveRight, softDrop, rotate, hardDrop, pause, resume]);
+  }, [moveLeft, moveRight, softDrop, rotate, hardDrop, holdPiece, pause, resume]);
 
   useEffect(() => () => stopLoop(), [stopLoop]);
 
@@ -327,5 +374,5 @@ export function useTetris() {
         }
       : null;
 
-  return { gameState, ghostPiece, start, pause, resume, moveLeft, moveRight, softDrop, rotate, hardDrop };
+  return { gameState, ghostPiece, start, pause, resume, moveLeft, moveRight, softDrop, rotate, hardDrop, holdPiece };
 }
