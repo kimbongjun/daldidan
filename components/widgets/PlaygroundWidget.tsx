@@ -23,6 +23,14 @@ const GAMES: Game[] = [
     href: '/tetris',
     color: '#A855F7',
   },
+  {
+    id: 'puzzle-bobble',
+    emoji: '🫧',
+    name: '퍼즐버즐',
+    desc: '버블 매칭 퍼즐',
+    href: '/puzzle-bobble',
+    color: '#06B6D4',
+  },
 ];
 
 function GameCard({ game }: { game: Game }) {
@@ -124,32 +132,6 @@ export default function PlaygroundWidget() {
         {GAMES.map(game => (
           <GameCard key={game.id} game={game} />
         ))}
-
-        {/* Coming soon placeholder */}
-        <div
-          className="flex flex-col items-center gap-2 rounded-2xl p-4 opacity-40"
-          style={{
-            background: 'rgba(255,255,255,0.03)',
-            border: '1px dashed rgba(255,255,255,0.1)',
-            width: 130,
-          }}
-        >
-          <div
-            className="flex items-center justify-center rounded-2xl"
-            style={{ width: 60, height: 60, fontSize: '1.8rem', background: 'rgba(255,255,255,0.05)' }}
-          >
-            🐍
-          </div>
-          <p className="text-sm font-black text-center" style={{ color: 'var(--text-muted)' }}>
-            스네이크
-          </p>
-          <span
-            className="text-[10px] font-bold px-3 py-1 rounded-full"
-            style={{ background: 'rgba(255,255,255,0.06)', color: 'var(--text-muted)' }}
-          >
-            준비 중
-          </span>
-        </div>
 
         <div
           className="flex flex-col items-center gap-2 rounded-2xl p-4 opacity-40"
