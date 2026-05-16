@@ -187,9 +187,10 @@ interface TetrisBoardProps {
   board: Board;
   active: ActivePiece | null;
   ghost: ActivePiece | null;
+  cellSize?: number;
 }
 
-export default function TetrisBoard({ board, active, ghost }: TetrisBoardProps) {
+export default function TetrisBoard({ board, active, ghost, cellSize = 28 }: TetrisBoardProps) {
   const displayBoard = useMemo(
     () => buildDisplayBoard(board, active, ghost),
     [board, active, ghost],
@@ -211,7 +212,7 @@ export default function TetrisBoard({ board, active, ghost }: TetrisBoardProps) 
     >
       {displayBoard.map((row, r) =>
         row.map((cell, c) => (
-          <div key={`${r}-${c}`} style={{ width: 28, height: 28 }}>
+          <div key={`${r}-${c}`} style={{ width: cellSize, height: cellSize }}>
             <Cell cell={cell} />
           </div>
         )),

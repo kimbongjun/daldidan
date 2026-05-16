@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, RotateCcw, Play, Pause } from 'lucide-react';
 import { useTetris } from '@/hooks/useTetris';
@@ -60,6 +61,28 @@ function CtrlBtn({
 // ── Page ──────────────────────────────────────────────────────────────────
 
 export default function TetrisPage() {
+  const [cellSize, setCellSize] = useState(28);
+
+  useEffect(() => {
+    const calculate = () => {
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      if (vw >= 640) { setCellSize(28); return; }
+
+      const bottomPad = Math.max(vh * 0.1, 20);
+      const controlsH = 13 + 3 * 52 + 2 * 8 + bottomPad;
+      const availH = vh - 57 - controlsH - 32;
+      const availW = vw - 32 - 16 - 120;
+
+      const byH = Math.floor((availH - 12 - 19) / 20);
+      const byW = Math.floor((availW - 12 - 9) / 10);
+      setCellSize(Math.max(14, Math.min(28, byH, byW)));
+    };
+    calculate();
+    window.addEventListener('resize', calculate);
+    return () => window.removeEventListener('resize', calculate);
+  }, []);
+
   const { gameState, ghostPiece, start, pause, resume, moveLeft, moveRight, softDrop, rotate, hardDrop, holdPiece } =
     useTetris();
 
@@ -72,7 +95,7 @@ export default function TetrisPage() {
 
   return (
     <div
-      className="min-h-screen flex flex-col"
+      className="h-dvh flex flex-col overflow-hidden"
       style={{ background: 'var(--bg-base)' }}
     >
       {/* ── Header ─────────────────────────────────────────────────────── */}
@@ -112,11 +135,11 @@ export default function TetrisPage() {
       </div>
 
       {/* ── Game Area ──────────────────────────────────────────────────── */}
-      <div className="flex-1 flex items-start justify-center gap-4 p-4 overflow-auto">
+      <div className="flex-1 min-h-0 flex items-center justify-center gap-4 p-4 overflow-hidden">
 
         {/* Board */}
         <div className="relative shrink-0">
-          <TetrisBoard board={board} active={active} ghost={ghostPiece} />
+          <TetrisBoard board={board} active={active} ghost={ghostPiece} cellSize={cellSize} />
 
           {/* Overlays */}
           {(isIdle || isOver || isPaused) && (
@@ -240,7 +263,7 @@ export default function TetrisPage() {
         className="sm:hidden shrink-0 px-4 pt-3"
         style={{
           borderTop: '1px solid var(--border)',
-          paddingBottom: 'max(20px, env(safe-area-inset-bottom, 20px))',
+          paddingBottom: 'calc(10vh + env(safe-area-inset-bottom, 0px))',
         }}
       >
         <div className="grid grid-cols-3 gap-2 max-w-xs mx-auto">
