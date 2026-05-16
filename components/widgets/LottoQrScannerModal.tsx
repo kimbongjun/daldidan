@@ -168,6 +168,13 @@ export default function LottoQrScannerModal({ open, onClose }: Props) {
 
       const json = await res.json() as LottoQrResponse | { error?: string };
       if (!res.ok) {
+        if (res.status === 404) {
+          if (!mountedRef.current) return;
+          alert("아직 당첨 결과가 발표되지 않았습니다.\n결과 발표 후 다시 확인해 주세요.");
+          lastScanRef.current = null;
+          setStatus("idle");
+          return;
+        }
         throw new Error("error" in json && json.error ? json.error : "QR 결과 조회에 실패했습니다.");
       }
 
