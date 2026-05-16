@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, RotateCcw, Play, Pause } from 'lucide-react';
+import { ArrowLeft, RotateCcw, Play, Pause, Volume2, VolumeX } from 'lucide-react';
 import { useTetris } from '@/hooks/useTetris';
 import TetrisBoard, { NextPiecePreview, HoldPiecePreview } from '@/components/TetrisBoard';
+import { useChiptuneBGM } from '@/hooks/useChiptuneBGM';
 
 // ── Score Card ────────────────────────────────────────────────────────────
 
@@ -88,6 +89,26 @@ export default function TetrisPage() {
 
   const { board, active, next, hold, canHold, score, lines, level, status } = gameState;
 
+  const { muted, play: bgmPlay, pause: bgmPause, resume: bgmResume, stop: bgmStop, toggleMute } =
+    useChiptuneBGM('tetris');
+
+  const prevStatusRef = useRef<typeof status>('idle');
+  useEffect(() => {
+    const prev = prevStatusRef.current;
+    prevStatusRef.current = status;
+    if (status === 'playing') {
+      if (prev === 'paused') {
+        void bgmResume();
+      } else if (prev !== 'playing') {
+        void bgmPlay();
+      }
+    } else if (status === 'paused') {
+      void bgmPause();
+    } else if (status === 'over') {
+      bgmStop();
+    }
+  }, [status, bgmPlay, bgmPause, bgmResume, bgmStop]);
+
   const isIdle = status === 'idle';
   const isPlaying = status === 'playing';
   const isPaused = status === 'paused';
@@ -121,6 +142,16 @@ export default function TetrisPage() {
             🎮 테트리스
           </h1>
         </div>
+
+        <button
+          type="button"
+          onClick={toggleMute}
+          className="flex items-center justify-center rounded-lg transition-opacity hover:opacity-75"
+          style={{ width: 36, height: 36, background: 'rgba(168,85,247,0.12)', border: '1px solid rgba(168,85,247,0.25)', color: '#A855F7' }}
+          aria-label={muted ? '음악 켜기' : '음악 끄기'}
+        >
+          {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+        </button>
 
         {(isPlaying || isPaused) && (
           <button
