@@ -114,7 +114,7 @@ function ScoreCard({ label, value }: { label: string; value: number | string }) 
       <p className="text-[10px] font-semibold uppercase tracking-wide w-full text-center truncate" style={{ color: 'var(--text-muted)' }}>
         {label}
       </p>
-      <p className="text-sm font-black tabular-nums w-full text-center leading-tight" style={{ color: 'var(--text-primary)' }}>
+      <p className="text-sm font-black tabular-nums w-full text-center leading-tight truncate" style={{ color: 'var(--text-primary)' }}>
         {value}
       </p>
     </div>
@@ -201,7 +201,7 @@ export default function TetrisPage() {
       const bottomPad = Math.max(vh * 0.1, 20);
       const controlsH = 13 + 3 * 52 + 2 * 8 + bottomPad;
       const availH = vh - 57 - controlsH - 32;
-      const availW = vw - 32 - 16 - 130;
+      const availW = vw - 32 - 16 - 144;
 
       const byH = Math.floor((availH - 12 - 19) / 20);
       const byW = Math.floor((availW - 12 - 9) / 10);
@@ -412,7 +412,7 @@ export default function TetrisPage() {
         </div>
 
         {/* Side Panel */}
-        <div className="flex flex-col gap-2 shrink-0 self-stretch overflow-y-auto scrollbar-hide" style={{ width: 130 }}>
+        <div className="flex flex-col gap-2 shrink-0 self-stretch overflow-y-auto scrollbar-hide" style={{ width: 144 }}>
           {/* Hold */}
           <div
             className="rounded-xl p-2 flex flex-col gap-1.5"
@@ -421,7 +421,7 @@ export default function TetrisPage() {
               border: `1px solid ${canHold ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.04)'}`,
             }}
           >
-            <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
+            <p className="text-[10px] font-semibold uppercase tracking-wide truncate overflow-hidden" style={{ color: 'var(--text-muted)' }}>
               HOLD
             </p>
             <div className="flex items-center justify-center" style={{ opacity: canHold ? 1 : 0.4 }}>
@@ -434,7 +434,7 @@ export default function TetrisPage() {
             className="rounded-xl p-2 flex flex-col gap-1.5"
             style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
           >
-            <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
+            <p className="text-[10px] font-semibold uppercase tracking-wide truncate overflow-hidden" style={{ color: 'var(--text-muted)' }}>
               NEXT
             </p>
             <div className="flex items-center justify-center">
@@ -477,7 +477,7 @@ export default function TetrisPage() {
             style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(168,85,247,0.15)' }}
           >
             <p
-              className="text-[10px] font-semibold uppercase tracking-widest w-full text-center"
+              className="text-[10px] font-semibold uppercase tracking-wide w-full text-center truncate overflow-hidden"
               style={{ color: '#A855F7' }}
             >
               BEST
@@ -488,22 +488,22 @@ export default function TetrisPage() {
               <p className="text-[10px] text-center" style={{ color: 'var(--text-muted)' }}>기록 없음</p>
             ) : (
               leaderboard.map((entry, i) => (
-                <div key={i} className="flex items-center gap-1 w-full overflow-hidden">
+                <div key={i} className="flex items-center gap-1 w-full overflow-hidden min-w-0">
                   <span
                     className="text-[10px] font-bold shrink-0 tabular-nums"
-                    style={{ color: '#A855F7', minWidth: 12 }}
+                    style={{ color: '#A855F7', width: 14 }}
                   >
                     {i + 1}.
                   </span>
                   <span
                     className="text-[10px] flex-1 min-w-0 truncate"
-                    style={{ color: 'var(--text-muted)', maxWidth: 52 }}
+                    style={{ color: 'var(--text-muted)' }}
                   >
-                    {entry.nickname.slice(0, 6)}
+                    {entry.nickname}
                   </span>
                   <span
-                    className="text-[10px] font-bold tabular-nums shrink-0"
-                    style={{ color: 'var(--text-primary)' }}
+                    className="text-[10px] font-bold tabular-nums shrink-0 truncate overflow-hidden"
+                    style={{ color: 'var(--text-primary)', maxWidth: 58 }}
                   >
                     {entry.score.toLocaleString()}
                   </span>
