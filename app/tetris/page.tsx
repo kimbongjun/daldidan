@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, RotateCcw, Play, Pause, Volume2, VolumeX } from 'lucide-react';
 import { useTetris } from '@/hooks/useTetris';
@@ -26,22 +26,54 @@ function ScoreCard({ label, value }: { label: string; value: number | string }) 
 }
 
 // ── Mobile Control Button ─────────────────────────────────────────────────
+// DAS = 167ms (initial delay), ARR = 50ms (repeat interval) — matches keyboard behavior
+
+const DAS_DELAY = 167;
+const ARR_INTERVAL = 50;
 
 function CtrlBtn({
   onClick,
+  repeat = false,
   children,
   wide = false,
   disabled = false,
 }: {
   onClick: () => void;
+  repeat?: boolean;
   children: React.ReactNode;
   wide?: boolean;
   disabled?: boolean;
 }) {
+  const dasRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const arrRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const onClickRef = useRef(onClick);
+  onClickRef.current = onClick;
+
+  const clearRepeat = useCallback(() => {
+    if (dasRef.current) { clearTimeout(dasRef.current); dasRef.current = null; }
+    if (arrRef.current) { clearInterval(arrRef.current); arrRef.current = null; }
+  }, []);
+
+  useEffect(() => clearRepeat, [clearRepeat]);
+
+  const handlePointerDown = useCallback((e: React.PointerEvent) => {
+    e.preventDefault();
+    if (disabled) return;
+    onClickRef.current();
+    if (!repeat) return;
+    clearRepeat();
+    dasRef.current = setTimeout(() => {
+      arrRef.current = setInterval(() => onClickRef.current(), ARR_INTERVAL);
+    }, DAS_DELAY);
+  }, [disabled, repeat, clearRepeat]);
+
   return (
     <button
       type="button"
-      onPointerDown={e => { e.preventDefault(); if (!disabled) onClick(); }}
+      onPointerDown={handlePointerDown}
+      onPointerUp={clearRepeat}
+      onPointerCancel={clearRepeat}
+      onPointerLeave={clearRepeat}
       className={`flex items-center justify-center rounded-xl select-none active:scale-90 transition-transform font-bold text-lg ${wide ? 'col-span-2' : ''}`}
       style={{
         background: disabled ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.07)',
@@ -51,7 +83,7 @@ function CtrlBtn({
         height: 52,
         userSelect: 'none',
         WebkitUserSelect: 'none',
-        touchAction: 'manipulation',
+        touchAction: 'none',
       }}
     >
       {children}
@@ -306,9 +338,9 @@ export default function TetrisPage() {
           <CtrlBtn onClick={rotate}>↑</CtrlBtn>
           <div />
           {/* Row 2: left / down / right */}
-          <CtrlBtn onClick={moveLeft}>←</CtrlBtn>
-          <CtrlBtn onClick={softDrop}>↓</CtrlBtn>
-          <CtrlBtn onClick={moveRight}>→</CtrlBtn>
+          <CtrlBtn onClick={moveLeft} repeat>←</CtrlBtn>
+          <CtrlBtn onClick={softDrop} repeat>↓</CtrlBtn>
+          <CtrlBtn onClick={moveRight} repeat>→</CtrlBtn>
           {/* Row 3: hard drop / pause */}
           <CtrlBtn onClick={hardDrop} wide>⬇ 하드 드롭</CtrlBtn>
           <CtrlBtn onClick={isPlaying ? pause : resume}>
