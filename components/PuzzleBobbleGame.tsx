@@ -546,6 +546,13 @@ function drawFrame(ctx: CanvasRenderingContext2D, gs: GameState) {
   drawShooter(ctx, angle, current, next);
 }
 
+// ── Leaderboard Types ─────────────────────────────────────────────────────
+
+interface LeaderboardEntry {
+  nickname: string;
+  score: number;
+}
+
 // ===== React 컴포넌트 =====
 export default function PuzzleBobbleGame() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -571,8 +578,29 @@ export default function PuzzleBobbleGame() {
   const [uiScore, setUiScore] = useState(0);
   const [uiStatus, setUiStatus] = useState<GameState['status']>('playing');
 
+  // ── Leaderboard state ─────────────────────────────────────────────────
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [loadingLB, setLoadingLB] = useState(false);
+  const savedRef = useRef(false);
+
+  const fetchLeaderboard = useCallback(async () => {
+    setLoadingLB(true);
+    try {
+      const res = await fetch('/api/game-scores?gameId=puzzle-bobble');
+      if (res.status === 401) return;
+      if (!res.ok) return;
+      const data = (await res.json()) as { scores: Array<{ nickname: string; score: number }> };
+      setLeaderboard(data.scores.slice(0, 5).map(s => ({ nickname: s.nickname, score: s.score })));
+    } catch (err) {
+      console.error('fetchLeaderboard error:', err);
+    } finally {
+      setLoadingLB(false);
+    }
+  }, []);
+
   // 게임 재시작
   const restart = useCallback(() => {
+    savedRef.current = false;
     gsRef.current = {
       grid: createGrid(),
       fly: null,
@@ -651,6 +679,25 @@ export default function PuzzleBobbleGame() {
     };
   }, []);
 
+  // 게임 종료 시 스코어 저장 + 리더보드 조회
+  useEffect(() => {
+    if (uiStatus === 'playing') return;
+    if (savedRef.current) return;
+    savedRef.current = true;
+
+    fetch('/api/game-scores', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ gameId: 'puzzle-bobble', score: uiScore }),
+    })
+      .then(res => {
+        if (res.status === 401) return;
+        if (!res.ok) throw new Error('save failed');
+        return fetchLeaderboard();
+      })
+      .catch(err => console.error('saveScore error:', err));
+  }, [uiStatus, uiScore, fetchLeaderboard]);
+
   // 게임 루프 (requestAnimationFrame)
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -724,6 +771,42 @@ export default function PuzzleBobbleGame() {
               </p>
             </>
           )}
+          {/* Scoreboard */}
+          <div
+            style={{
+              width: '100%',
+              maxWidth: 200,
+              background: 'rgba(6,182,212,0.08)',
+              border: '1px solid rgba(6,182,212,0.25)',
+              borderRadius: 12,
+              padding: '10px 14px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 4,
+            }}
+          >
+            <p style={{ color: '#06B6D4', fontWeight: 700, fontSize: '0.75rem', textAlign: 'center', margin: 0 }}>
+              🏆 BEST SCORES
+            </p>
+            {loadingLB ? (
+              <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', textAlign: 'center', margin: 0 }}>...</p>
+            ) : leaderboard.length === 0 ? (
+              <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem', textAlign: 'center', margin: 0 }}>기록 없음</p>
+            ) : (
+              leaderboard.map((entry, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ color: '#06B6D4', fontWeight: 700, fontSize: '0.7rem', minWidth: 14 }}>{i + 1}.</span>
+                  <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.7rem', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 80 }}>
+                    {entry.nickname.slice(0, 6)}
+                  </span>
+                  <span style={{ color: 'white', fontWeight: 700, fontSize: '0.7rem', fontVariantNumeric: 'tabular-nums' }}>
+                    {entry.score.toLocaleString()}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+
           <button
             onClick={restart}
             style={{

@@ -7,6 +7,13 @@ import { useTetris } from '@/hooks/useTetris';
 import TetrisBoard, { NextPiecePreview, HoldPiecePreview } from '@/components/TetrisBoard';
 import { useChiptuneBGM } from '@/hooks/useChiptuneBGM';
 
+// ── Leaderboard Types ─────────────────────────────────────────────────────
+
+interface LeaderboardEntry {
+  nickname: string;
+  score: number;
+}
+
 // ── Score Card ────────────────────────────────────────────────────────────
 
 function ScoreCard({ label, value }: { label: string; value: number | string }) {
@@ -124,12 +131,37 @@ export default function TetrisPage() {
 
   const { board, active, next, hold, canHold, score, lines, level, status, clearingLines } = gameState;
 
+  // ── Leaderboard state ───────────────────────────────────────────────────
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [loadingLB, setLoadingLB] = useState(false);
+  const savedRef = useRef(false);
+
+  const fetchLeaderboard = useCallback(async () => {
+    setLoadingLB(true);
+    try {
+      const res = await fetch('/api/game-scores?gameId=tetris');
+      if (res.status === 401) return;
+      if (!res.ok) return;
+      const data = (await res.json()) as { scores: Array<{ nickname: string; score: number }> };
+      setLeaderboard(data.scores.slice(0, 5).map(s => ({ nickname: s.nickname, score: s.score })));
+    } catch (err) {
+      console.error('fetchLeaderboard error:', err);
+    } finally {
+      setLoadingLB(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void fetchLeaderboard();
+  }, [fetchLeaderboard]);
+
   const prevStatusRef = useRef<typeof status>('idle');
   useEffect(() => {
     const prev = prevStatusRef.current;
     prevStatusRef.current = status;
     // 'clearing'은 'playing'의 연장 — BGM 제어 불필요
     if (status === 'playing') {
+      savedRef.current = false;
       if (prev === 'paused') {
         void bgmResume();
       } else if (prev !== 'playing' && prev !== 'clearing') {
@@ -139,8 +171,22 @@ export default function TetrisPage() {
       void bgmPause();
     } else if (status === 'over') {
       bgmStop();
+      if (!savedRef.current) {
+        savedRef.current = true;
+        fetch('/api/game-scores', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ gameId: 'tetris', score }),
+        })
+          .then(res => {
+            if (res.status === 401) return;
+            if (!res.ok) throw new Error('save failed');
+            return fetchLeaderboard();
+          })
+          .catch(err => console.error('saveScore error:', err));
+      }
     }
-  }, [status, bgmPlay, bgmPause, bgmResume, bgmStop]);
+  }, [status, bgmPlay, bgmPause, bgmResume, bgmStop, score, fetchLeaderboard]);
 
   const isIdle = status === 'idle';
   const isPlaying = status === 'playing';
@@ -318,6 +364,47 @@ export default function TetrisPage() {
                 <span className="text-[10px] flex-1 min-w-0 truncate text-right" style={{ color: 'var(--text-muted)' }}>{desc}</span>
               </div>
             ))}
+          </div>
+
+          {/* Leaderboard */}
+          <div
+            className="rounded-xl p-2 flex flex-col gap-1"
+            style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(168,85,247,0.15)' }}
+          >
+            <p
+              className="text-[10px] font-semibold uppercase tracking-widest w-full text-center"
+              style={{ color: '#A855F7' }}
+            >
+              BEST
+            </p>
+            {loadingLB ? (
+              <p className="text-[10px] text-center" style={{ color: 'var(--text-muted)' }}>...</p>
+            ) : leaderboard.length === 0 ? (
+              <p className="text-[10px] text-center" style={{ color: 'var(--text-muted)' }}>기록 없음</p>
+            ) : (
+              leaderboard.map((entry, i) => (
+                <div key={i} className="flex items-center gap-1 w-full overflow-hidden">
+                  <span
+                    className="text-[10px] font-bold shrink-0 tabular-nums"
+                    style={{ color: '#A855F7', minWidth: 12 }}
+                  >
+                    {i + 1}.
+                  </span>
+                  <span
+                    className="text-[10px] flex-1 min-w-0 truncate"
+                    style={{ color: 'var(--text-muted)', maxWidth: 52 }}
+                  >
+                    {entry.nickname.slice(0, 6)}
+                  </span>
+                  <span
+                    className="text-[10px] font-bold tabular-nums shrink-0"
+                    style={{ color: 'var(--text-primary)' }}
+                  >
+                    {entry.score.toLocaleString()}
+                  </span>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>

@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Gamepad2 } from 'lucide-react';
 
@@ -33,7 +34,7 @@ const GAMES: Game[] = [
   },
 ];
 
-function GameCard({ game }: { game: Game }) {
+function GameCard({ game, myBest }: { game: Game; myBest: number | null }) {
   return (
     <Link
       href={game.href}
@@ -69,6 +70,13 @@ function GameCard({ game }: { game: Game }) {
         {game.desc}
       </p>
 
+      {/* My best score */}
+      {myBest !== null && (
+        <p className="text-xs font-bold text-center" style={{ color: game.color, margin: 0 }}>
+          🏆 {myBest.toLocaleString()}점
+        </p>
+      )}
+
       {/* Play button */}
       <span
         className="text-xs font-bold px-4 py-1.5 rounded-full mt-1"
@@ -84,6 +92,24 @@ function GameCard({ game }: { game: Game }) {
 }
 
 export default function PlaygroundWidget() {
+  const [bestScores, setBestScores] = useState<Record<string, number | null>>({});
+
+  useEffect(() => {
+    for (const game of GAMES) {
+      fetch(`/api/game-scores?gameId=${game.id}`)
+        .then(res => {
+          if (res.status === 401) return null;
+          if (!res.ok) return null;
+          return res.json() as Promise<{ myBest: number | null }>;
+        })
+        .then(data => {
+          if (data === null) return;
+          setBestScores(prev => ({ ...prev, [game.id]: data.myBest }));
+        })
+        .catch(err => console.error('bestScore fetch error:', err));
+    }
+  }, []);
+
   return (
     <div
       className="bento-card h-full flex flex-col p-5 gap-4"
@@ -130,7 +156,7 @@ export default function PlaygroundWidget() {
       {/* Games grid */}
       <div className="flex flex-wrap gap-3 justify-center flex-1 items-center">
         {GAMES.map(game => (
-          <GameCard key={game.id} game={game} />
+          <GameCard key={game.id} game={game} myBest={bestScores[game.id] ?? null} />
         ))}
 
         <div
