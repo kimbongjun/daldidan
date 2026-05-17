@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useRef } from 'react';
+import { ensureAudioUnlocked } from '@/lib/audioUnlock';
 
 // ── Singleton AudioContext ────────────────────────────────────────────────
 
@@ -8,6 +9,7 @@ let _ctx: AudioContext | null = null;
 
 function getCtx(): AudioContext | null {
   if (typeof window === 'undefined') return null;
+  ensureAudioUnlocked();
   if (!_ctx || _ctx.state === 'closed') {
     try {
       _ctx = new AudioContext();

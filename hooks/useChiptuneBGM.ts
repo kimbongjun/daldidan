@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ensureAudioUnlocked } from '@/lib/audioUnlock';
 
 export type BGMTrack = 'tetris' | 'puzzle-bobble';
 
@@ -106,6 +107,7 @@ export function useChiptuneBGM(track: BGMTrack) {
 
   const play = useCallback(async () => {
     if (typeof AudioContext === 'undefined') return;
+    ensureAudioUnlocked();
 
     if (!ctxRef.current) {
       const ctx    = new AudioContext();
