@@ -15,6 +15,16 @@ export interface ActivePiece {
 
 export type GameStatus = 'idle' | 'playing' | 'paused' | 'over' | 'clearing';
 
+export type ClearAction = 'single' | 'double' | 'triple' | 'tetris';
+
+export interface ScoreEvent {
+  id: number;
+  action: ClearAction;
+  combo: number;       // current combo count before this clear (0 = no combo bonus)
+  backToBack: boolean;
+  perfectClear: boolean;
+}
+
 export interface GameState {
   board: Board;
   active: ActivePiece | null;
@@ -26,4 +36,7 @@ export interface GameState {
   level: number;
   status: GameStatus;
   clearingLines: number[];
+  combo: number;
+  lastClearWasTetris: boolean;
+  lastScoreEvent: ScoreEvent | null;
 }

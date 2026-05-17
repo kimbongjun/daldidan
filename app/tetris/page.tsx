@@ -6,12 +6,101 @@ import { ArrowLeft, RotateCcw, Play, Pause, Volume2, VolumeX } from 'lucide-reac
 import { useTetris } from '@/hooks/useTetris';
 import TetrisBoard, { NextPiecePreview, HoldPiecePreview } from '@/components/TetrisBoard';
 import { useChiptuneBGM } from '@/hooks/useChiptuneBGM';
+import type { ScoreEvent } from '@/types/tetris';
 
 // ── Leaderboard Types ─────────────────────────────────────────────────────
 
 interface LeaderboardEntry {
   nickname: string;
   score: number;
+}
+
+// ── Score Popup ───────────────────────────────────────────────────────────
+
+const ACTION_CONFIG = {
+  single: { label: 'SINGLE',  color: 'rgba(255,255,255,0.88)', size: 13, shadow: '' },
+  double: { label: 'DOUBLE',  color: '#22D3EE',                size: 16, shadow: '0 0 10px #22D3EE99' },
+  triple: { label: 'TRIPLE',  color: '#4ADE80',                size: 20, shadow: '0 0 14px #4ADE8099' },
+  tetris: { label: 'TETRIS!', color: '#FACC15',                size: 26, shadow: '0 0 20px #FACC15BB, 0 0 40px #FACC1566' },
+} as const;
+
+function ScorePopup({ event }: { event: ScoreEvent }) {
+  const cfg = ACTION_CONFIG[event.action];
+
+  return (
+    <div
+      className="tetris-score-popup"
+      style={{
+        position: 'absolute',
+        left: '50%',
+        top: '32%',
+        transform: 'translateX(-50%)',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 3,
+        zIndex: 20,
+        whiteSpace: 'nowrap',
+        userSelect: 'none',
+      }}
+    >
+      {event.backToBack && (
+        <span
+          style={{
+            fontSize: 9,
+            fontWeight: 900,
+            letterSpacing: '0.14em',
+            textTransform: 'uppercase',
+            color: '#C084FC',
+            background: 'rgba(168,85,247,0.2)',
+            border: '1px solid rgba(168,85,247,0.4)',
+            borderRadius: 4,
+            padding: '1px 7px',
+          }}
+        >
+          BACK-TO-BACK
+        </span>
+      )}
+      <span
+        style={{
+          fontSize: cfg.size,
+          fontWeight: 900,
+          letterSpacing: '0.07em',
+          color: cfg.color,
+          textShadow: cfg.shadow,
+          lineHeight: 1,
+        }}
+      >
+        {cfg.label}
+      </span>
+      {event.combo > 0 && (
+        <span
+          style={{
+            fontSize: 11,
+            fontWeight: 800,
+            letterSpacing: '0.09em',
+            color: '#FB923C',
+            textShadow: '0 0 8px #FB923C99',
+          }}
+        >
+          COMBO ×{event.combo}
+        </span>
+      )}
+      {event.perfectClear && (
+        <span
+          style={{
+            fontSize: 12,
+            fontWeight: 900,
+            letterSpacing: '0.1em',
+            color: '#F0ABFC',
+            textShadow: '0 0 12px #F0ABFCBB, 0 0 24px #C084FC88',
+          }}
+        >
+          ✨ PERFECT CLEAR!
+        </span>
+      )}
+    </div>
+  );
 }
 
 // ── Score Card ────────────────────────────────────────────────────────────
@@ -129,7 +218,19 @@ export default function TetrisPage() {
   const { gameState, ghostPiece, start, pause, resume, moveLeft, moveRight, softDrop, rotate, hardDrop, holdPiece } =
     useTetris({ muted });
 
-  const { board, active, next, hold, canHold, score, lines, level, status, clearingLines } = gameState;
+  const { board, active, next, hold, canHold, score, lines, level, status, clearingLines, lastScoreEvent } = gameState;
+
+  // ── Score popup queue ───────────────────────────────────────────────────
+  const [scorePopups, setScorePopups] = useState<ScoreEvent[]>([]);
+
+  useEffect(() => {
+    if (!lastScoreEvent) return;
+    setScorePopups(prev => [...prev, lastScoreEvent]);
+    const timer = setTimeout(() => {
+      setScorePopups(prev => prev.filter(e => e.id !== lastScoreEvent.id));
+    }, 1700);
+    return () => clearTimeout(timer);
+  }, [lastScoreEvent]);
 
   // ── Leaderboard state ───────────────────────────────────────────────────
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
@@ -159,7 +260,6 @@ export default function TetrisPage() {
   useEffect(() => {
     const prev = prevStatusRef.current;
     prevStatusRef.current = status;
-    // 'clearing'은 'playing'의 연장 — BGM 제어 불필요
     if (status === 'playing') {
       savedRef.current = false;
       if (prev === 'paused') {
@@ -250,6 +350,11 @@ export default function TetrisPage() {
         {/* Board */}
         <div className="relative shrink-0">
           <TetrisBoard board={board} active={active} ghost={ghostPiece} cellSize={cellSize} clearingLines={clearingLines} />
+
+          {/* Score event popups */}
+          {scorePopups.map(event => (
+            <ScorePopup key={event.id} event={event} />
+          ))}
 
           {/* Overlays */}
           {(isIdle || isOver || isPaused) && (

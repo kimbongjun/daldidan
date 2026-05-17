@@ -1,8 +1,11 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { Board, CellValue, ActivePiece, GameState, TetrominoType } from '@/types/tetris';
-import { BOARD_WIDTH, BOARD_HEIGHT, SHAPES, SCORE_TABLE, SPEED_TABLE } from '@/constants/tetris';
+import type { Board, CellValue, ActivePiece, GameState, TetrominoType, ScoreEvent, ClearAction } from '@/types/tetris';
+import {
+  BOARD_WIDTH, BOARD_HEIGHT, SHAPES, SCORE_TABLE, SPEED_TABLE,
+  BACK_TO_BACK_SCORE, COMBO_BONUS_PER, PERFECT_CLEAR_BASE,
+} from '@/constants/tetris';
 import { useTetrisAudio } from './useTetrisAudio';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -14,6 +17,7 @@ function createEmptyBoard(): Board {
 }
 
 const ALL_TYPES: TetrominoType[] = ['I', 'J', 'L', 'O', 'S', 'T', 'Z'];
+const CLEAR_ACTIONS: ClearAction[] = ['single', 'double', 'triple', 'tetris'];
 
 function randomType(): TetrominoType {
   return ALL_TYPES[Math.floor(Math.random() * ALL_TYPES.length)];
@@ -86,6 +90,10 @@ function dropDistance(board: Board, shape: number[][], pos: { x: number; y: numb
   return dist;
 }
 
+function isBoardEmpty(board: Board): boolean {
+  return board.every(row => row.every(cell => cell === 0));
+}
+
 function createInitialState(): GameState {
   return {
     board: createEmptyBoard(),
@@ -98,6 +106,9 @@ function createInitialState(): GameState {
     level: 1,
     status: 'idle',
     clearingLines: [],
+    combo: 0,
+    lastClearWasTetris: false,
+    lastScoreEvent: null,
   };
 }
 
@@ -112,6 +123,8 @@ interface PendingClear {
   nextType: TetrominoType;
   hold: TetrominoType | null;
   isGameOver: boolean;
+  combo: number;
+  lastClearWasTetris: boolean;
 }
 
 // ── Hook ───────────────────────────────────────────────────────────────────
@@ -121,11 +134,14 @@ export function useTetris({ muted = false }: { muted?: boolean } = {}) {
   const stateRef = useRef<GameState>(gameState);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pendingClearRef = useRef<PendingClear | null>(null);
+  const scoreEventIdRef = useRef(0);
 
   stateRef.current = gameState;
 
-  const { soundPlace, soundClearLine, soundHardDrop, soundHold, soundGameOver } =
-    useTetrisAudio(muted);
+  const {
+    soundPlace, soundClearLine, soundHardDrop, soundHold, soundGameOver,
+    soundBackToBack, soundPerfectClear,
+  } = useTetrisAudio(muted);
 
   const setState = useCallback((updater: (s: GameState) => GameState) => {
     const next = updater(stateRef.current);
@@ -147,12 +163,40 @@ export function useTetris({ muted = false }: { muted?: boolean } = {}) {
 
       if (completedRows.length > 0) {
         const clearedBoard = removeRows(lockedBoard, completedRows);
-        const newLines = s.lines + completedRows.length;
+        const count = completedRows.length;
+        const action: ClearAction = CLEAR_ACTIONS[count - 1]!;
+
+        // Back-to-Back: consecutive Tetris clears only
+        const isBackToBack = action === 'tetris' && s.lastClearWasTetris;
+        const newLastClearWasTetris = action === 'tetris';
+
+        // Base line score (Back-to-Back replaces base for Tetris)
+        const baseScore = isBackToBack ? BACK_TO_BACK_SCORE : (SCORE_TABLE[count] ?? 0);
+        const lineScore = baseScore * s.level;
+
+        // Combo bonus: s.combo is the count before this clear
+        const comboBonus = s.combo * COMBO_BONUS_PER * s.level;
+        const newCombo = s.combo + 1;
+
+        // Perfect Clear
+        const perfectClear = isBoardEmpty(clearedBoard);
+        const perfectClearBonus = perfectClear ? PERFECT_CLEAR_BASE * s.level : 0;
+
+        const newLines = s.lines + count;
         const newLevel = Math.floor(newLines / 10) + 1;
-        const newScore = s.score + dropBonus + (SCORE_TABLE[completedRows.length] ?? 0) * s.level;
+        const newScore = s.score + dropBonus + lineScore + comboBonus + perfectClearBonus;
+
         const nextType = s.next;
         const newPiece = spawnPiece(nextType);
         const newNext = randomType();
+
+        const scoreEvent: ScoreEvent = {
+          id: ++scoreEventIdRef.current,
+          action,
+          combo: s.combo,
+          backToBack: isBackToBack,
+          perfectClear,
+        };
 
         pendingClearRef.current = {
           board: clearedBoard,
@@ -163,9 +207,13 @@ export function useTetris({ muted = false }: { muted?: boolean } = {}) {
           nextType: newNext,
           hold: s.hold,
           isGameOver: !isValid(clearedBoard, newPiece.shape, newPiece.pos),
+          combo: newCombo,
+          lastClearWasTetris: newLastClearWasTetris,
         };
 
-        soundClearLine(completedRows.length);
+        soundClearLine(count, s.combo);
+        if (isBackToBack) soundBackToBack();
+        if (perfectClear) soundPerfectClear();
 
         setState(() => ({
           ...s,
@@ -173,6 +221,7 @@ export function useTetris({ muted = false }: { muted?: boolean } = {}) {
           active: null,
           clearingLines: completedRows,
           status: 'clearing',
+          lastScoreEvent: scoreEvent,
         }));
       } else {
         const nextType = s.next;
@@ -194,6 +243,9 @@ export function useTetris({ muted = false }: { muted?: boolean } = {}) {
             level: s.level,
             status: 'over',
             clearingLines: [],
+            combo: 0,
+            lastClearWasTetris: false,
+            lastScoreEvent: null,
           }));
           soundGameOver();
         } else {
@@ -208,11 +260,14 @@ export function useTetris({ muted = false }: { muted?: boolean } = {}) {
             level: s.level,
             status: 'playing',
             clearingLines: [],
+            combo: 0,
+            lastClearWasTetris: false,
+            lastScoreEvent: null,
           }));
         }
       }
     },
-    [setState, stopLoop, soundPlace, soundClearLine, soundGameOver],
+    [setState, stopLoop, soundPlace, soundClearLine, soundGameOver, soundBackToBack, soundPerfectClear],
   );
 
   // ── Tick ──────────────────────────────────────────────────────────────────
@@ -234,7 +289,6 @@ export function useTetris({ muted = false }: { muted?: boolean } = {}) {
   useEffect(() => {
     if (gameState.status !== 'clearing' || gameState.clearingLines.length === 0) return;
 
-    // 3줄 이상은 더 긴 임팩트 연출
     const delay = gameState.clearingLines.length >= 3 ? 500 : 300;
 
     const timer = setTimeout(() => {
@@ -255,6 +309,9 @@ export function useTetris({ muted = false }: { muted?: boolean } = {}) {
           level: pending.level,
           status: 'over',
           clearingLines: [],
+          combo: pending.combo,
+          lastClearWasTetris: pending.lastClearWasTetris,
+          lastScoreEvent: null,
         }));
         soundGameOver();
       } else {
@@ -269,6 +326,9 @@ export function useTetris({ muted = false }: { muted?: boolean } = {}) {
           level: pending.level,
           status: 'playing',
           clearingLines: [],
+          combo: pending.combo,
+          lastClearWasTetris: pending.lastClearWasTetris,
+          lastScoreEvent: null,
         }));
       }
 
@@ -305,6 +365,9 @@ export function useTetris({ muted = false }: { muted?: boolean } = {}) {
       level: 1,
       status: 'playing',
       clearingLines: [],
+      combo: 0,
+      lastClearWasTetris: false,
+      lastScoreEvent: null,
     }));
   }, [setState]);
 
@@ -416,7 +479,7 @@ export function useTetris({ muted = false }: { muted?: boolean } = {}) {
     };
 
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.repeat) return; // ignore browser key-repeat; we handle it ourselves
+      if (e.repeat) return;
       const status = stateRef.current.status;
       if (status === 'idle' || status === 'over') return;
 

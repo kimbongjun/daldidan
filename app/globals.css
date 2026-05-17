@@ -997,3 +997,16 @@ select option {
   55%  { background: rgba(168, 85, 247, 0.75); box-shadow: 0 0 20px 4px rgba(168,85,247,0.6); }
   100% { background: rgba(255, 255, 255, 0);   box-shadow: none;                              }
 }
+
+@keyframes tetris-score-pop {
+  0%   { opacity: 0; transform: translateY(6px) scale(0.72); }
+  12%  { opacity: 1; transform: translateY(-2px) scale(1.1); }
+  28%  { opacity: 1; transform: translateY(-10px) scale(1);  }
+  72%  { opacity: 1; transform: translateY(-26px) scale(1);  }
+  100% { opacity: 0; transform: translateY(-50px) scale(0.92); }
+}
+
+.tetris-score-popup {
+  animation: tetris-score-pop 1.65s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  pointer-events: none;
+}

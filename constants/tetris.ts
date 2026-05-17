@@ -34,7 +34,17 @@ export const CELL_BG: Record<TetrominoType, string> = {
   Z: 'bg-red-400',
 };
 
+// Base scores by lines cleared: index = line count
 export const SCORE_TABLE: number[] = [0, 100, 300, 500, 800];
+
+// Back-to-Back Tetris score (800 × 1.5)
+export const BACK_TO_BACK_SCORE = 1200;
+
+// Combo bonus: comboCount × COMBO_BONUS_PER × level
+export const COMBO_BONUS_PER = 50;
+
+// Perfect Clear bonus base score
+export const PERFECT_CLEAR_BASE = 3500;
 
 // Speed in ms per level (level 1 = 800ms, decreases to minimum 80ms)
 export const SPEED_TABLE: number[] = Array.from(

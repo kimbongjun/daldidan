@@ -87,25 +87,56 @@ export function useTetrisAudio(muted: boolean) {
     tone(ctx, 110, 'sine', t, 0.09, 0.32);
   }, []);
 
-  // 라인 클리어 (count: 제거 줄 수)
-  const soundClearLine = useCallback((count: number) => {
+  // 라인 클리어 (count: 제거 줄 수, combo: 현재 콤보 카운트)
+  // 콤보 수에 따라 피치를 높여 긴장감 부여
+  const soundClearLine = useCallback((count: number, combo: number = 0) => {
     if (mutedRef.current) return;
     const ctx = getCtx();
     if (!ctx) return;
     const t = ctx.currentTime;
+    // 콤보가 쌓일수록 피치 최대 50% 상승 (combo 5 이상은 고정)
+    const pitchMult = 1 + Math.min(combo, 5) * 0.1;
     if (count >= 3) {
       // 트리플/테트리스: C major 아르페지오 + 노이즈 임팩트
       [523, 659, 784, 1047].forEach((f, i) => {
-        tone(ctx, f, 'square', t + i * 0.055, 0.38, 0.1);
+        tone(ctx, f * pitchMult, 'square', t + i * 0.055, 0.38, 0.1);
       });
       noise(ctx, t, 0.22, 0.13, 900);
     } else if (count === 2) {
-      tone(ctx, 440, 'square', t, 0.14, 0.11);
-      tone(ctx, 660, 'square', t + 0.08, 0.13, 0.09);
+      tone(ctx, 440 * pitchMult, 'square', t, 0.14, 0.11);
+      tone(ctx, 660 * pitchMult, 'square', t + 0.08, 0.13, 0.09);
     } else {
-      tone(ctx, 330, 'square', t, 0.11, 0.11);
-      tone(ctx, 440, 'square', t + 0.07, 0.09, 0.08);
+      tone(ctx, 330 * pitchMult, 'square', t, 0.11, 0.11);
+      tone(ctx, 440 * pitchMult, 'square', t + 0.07, 0.09, 0.08);
     }
+  }, []);
+
+  // 백투백 테트리스: 강렬한 상승 팡파레
+  const soundBackToBack = useCallback(() => {
+    if (mutedRef.current) return;
+    const ctx = getCtx();
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    [784, 988, 1175, 1568].forEach((f, i) => {
+      tone(ctx, f, 'square', t + i * 0.04, 0.28, 0.09);
+    });
+    tone(ctx, 1568, 'sine', t + 0.18, 0.35, 0.12);
+    noise(ctx, t + 0.1, 0.15, 0.07, 1200);
+  }, []);
+
+  // 퍼펙트 클리어: 화려한 상승 아르페지오 + 여운
+  const soundPerfectClear = useCallback(() => {
+    if (mutedRef.current) return;
+    const ctx = getCtx();
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    [523, 659, 784, 1047, 1319, 1568].forEach((f, i) => {
+      tone(ctx, f, 'sine', t + i * 0.06, 0.5, 0.13);
+    });
+    [523, 659, 784].forEach((f, i) => {
+      tone(ctx, f * 2, 'triangle', t + 0.42 + i * 0.07, 0.4, 0.07);
+    });
+    noise(ctx, t, 0.1, 0.08, 1600);
   }, []);
 
   // 하드 드롭: 충격음
@@ -139,5 +170,13 @@ export function useTetrisAudio(muted: boolean) {
     });
   }, []);
 
-  return { soundPlace, soundClearLine, soundHardDrop, soundHold, soundGameOver };
+  return {
+    soundPlace,
+    soundClearLine,
+    soundHardDrop,
+    soundHold,
+    soundGameOver,
+    soundBackToBack,
+    soundPerfectClear,
+  };
 }
