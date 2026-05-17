@@ -154,6 +154,9 @@ function CtrlBtn({
 
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
     e.preventDefault();
+    // setPointerCapture: AOS에서 손가락이 버튼 밖으로 이동해도 pointerup/pointercancel이 이 요소에서 발화됨.
+    // capture 중에는 pointerleave가 발화되지 않으므로 repeat가 중단되지 않음.
+    e.currentTarget.setPointerCapture(e.pointerId);
     if (disabled) return;
     onClickRef.current();
     if (!repeat) return;
@@ -170,6 +173,7 @@ function CtrlBtn({
       onPointerUp={clearRepeat}
       onPointerCancel={clearRepeat}
       onPointerLeave={clearRepeat}
+      onContextMenu={(e) => e.preventDefault()}
       className={`flex items-center justify-center rounded-xl select-none active:scale-90 transition-transform font-bold text-lg ${wide ? 'col-span-2' : ''}`}
       style={{
         background: disabled ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.07)',
@@ -179,6 +183,7 @@ function CtrlBtn({
         height: 52,
         userSelect: 'none',
         WebkitUserSelect: 'none',
+        WebkitTapHighlightColor: 'transparent',
         touchAction: 'none',
       }}
     >

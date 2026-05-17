@@ -42,13 +42,21 @@ export async function GET(request: NextRequest) {
 
   const rows = (data ?? []) as unknown as GameScoreRow[];
 
-  const scores = rows.map((row) => ({
-    id: row.id,
-    userId: row.user_id,
-    nickname: row.profiles?.display_name ?? "익명",
-    score: row.score,
-    createdAt: row.created_at,
-  }));
+  // userId 기준 중복 제거 — rows는 score DESC 정렬이므로 첫 번째가 최고점
+  const seen = new Set<string>();
+  const scores = rows
+    .map((row) => ({
+      id: row.id,
+      userId: row.user_id,
+      nickname: row.profiles?.display_name ?? "익명",
+      score: row.score,
+      createdAt: row.created_at,
+    }))
+    .filter((entry) => {
+      if (seen.has(entry.userId)) return false;
+      seen.add(entry.userId);
+      return true;
+    });
 
   let myBest: number | null = null;
   if (user) {
@@ -97,12 +105,38 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // 기존 기록 조회 — 유저당 게임별 1건만 유지
+  const { data: existing, error: fetchError } = await supabase
+    .from("game_scores")
+    .select("id, score")
+    .eq("user_id", user.id)
+    .eq("game_id", gameId)
+    .maybeSingle();
+
+  if (fetchError) return NextResponse.json({ error: fetchError.message }, { status: 500 });
+
+  if (!existing) {
+    const { data, error } = await supabase
+      .from("game_scores")
+      .insert({ user_id: user.id, game_id: gameId, score })
+      .select()
+      .single();
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(data, { status: 201 });
+  }
+
+  // 기존 최고점보다 낮으면 저장 불필요
+  if (score <= existing.score) {
+    return NextResponse.json({ id: existing.id, score: existing.score }, { status: 200 });
+  }
+
   const { data, error } = await supabase
     .from("game_scores")
-    .insert({ user_id: user.id, game_id: gameId, score })
+    .update({ score })
+    .eq("id", existing.id)
     .select()
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(data, { status: 201 });
+  return NextResponse.json(data, { status: 200 });
 }
