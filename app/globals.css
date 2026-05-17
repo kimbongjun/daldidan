@@ -983,3 +983,17 @@ select option {
   background: #ffffff;
   color: var(--text-primary);
 }
+
+/* ── Tetris line-clear animations ────────────────────────────────────────── */
+@keyframes tetris-row-flash {
+  0%   { background: rgba(255, 255, 255, 0.88); }
+  40%  { background: rgba(255, 255, 255, 0.5);  }
+  100% { background: rgba(255, 255, 255, 0);    }
+}
+
+@keyframes tetris-row-flash-epic {
+  0%   { background: rgba(255, 215, 0, 0.95);  box-shadow: 0 0 24px 4px rgba(255,215,0,0.7);  }
+  18%  { background: rgba(255, 255, 255, 1);   box-shadow: 0 0 40px 8px rgba(255,255,255,0.9); }
+  55%  { background: rgba(168, 85, 247, 0.75); box-shadow: 0 0 20px 4px rgba(168,85,247,0.6); }
+  100% { background: rgba(255, 255, 255, 0);   box-shadow: none;                              }
+}

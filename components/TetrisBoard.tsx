@@ -188,13 +188,24 @@ interface TetrisBoardProps {
   active: ActivePiece | null;
   ghost: ActivePiece | null;
   cellSize?: number;
+  clearingLines?: number[];
 }
 
-export default function TetrisBoard({ board, active, ghost, cellSize = 28 }: TetrisBoardProps) {
+export default function TetrisBoard({
+  board,
+  active,
+  ghost,
+  cellSize = 28,
+  clearingLines = [],
+}: TetrisBoardProps) {
   const displayBoard = useMemo(
     () => buildDisplayBoard(board, active, ghost),
     [board, active, ghost],
   );
+
+  const isEpic = clearingLines.length >= 3;
+  // gap:1 → 각 셀 행 시작 y = padding(4) + r * (cellSize + 1)
+  const rowTop = (r: number) => 4 + r * (cellSize + 1);
 
   return (
     <div
@@ -217,6 +228,26 @@ export default function TetrisBoard({ board, active, ghost, cellSize = 28 }: Tet
           </div>
         )),
       )}
+
+      {/* 라인 클리어 애니메이션 오버레이 */}
+      {clearingLines.map(r => (
+        <div
+          key={`clr-${r}`}
+          style={{
+            position: 'absolute',
+            top: rowTop(r),
+            left: 4,
+            right: 4,
+            height: cellSize,
+            borderRadius: 2,
+            pointerEvents: 'none',
+            zIndex: 10,
+            animation: isEpic
+              ? 'tetris-row-flash-epic 500ms ease-out forwards'
+              : 'tetris-row-flash 300ms ease-out forwards',
+          }}
+        />
+      ))}
     </div>
   );
 }

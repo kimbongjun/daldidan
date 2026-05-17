@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Board, CellValue, ActivePiece, GameState, TetrominoType } from '@/types/tetris';
 import { BOARD_WIDTH, BOARD_HEIGHT, SHAPES, SCORE_TABLE, SPEED_TABLE } from '@/constants/tetris';
+import { useTetrisAudio } from './useTetrisAudio';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -63,13 +64,20 @@ function lockPiece(board: Board, piece: ActivePiece): Board {
   return next;
 }
 
-function clearLines(board: Board): { board: Board; cleared: number } {
-  const remaining = board.filter(row => row.some(cell => cell === 0));
-  const cleared = BOARD_HEIGHT - remaining.length;
-  const empty = Array.from({ length: cleared }, () =>
+function getCompletedRows(board: Board): number[] {
+  return board.reduce<number[]>((acc, row, i) => {
+    if (row.every(cell => cell !== 0)) acc.push(i);
+    return acc;
+  }, []);
+}
+
+function removeRows(board: Board, rowIndices: number[]): Board {
+  const set = new Set(rowIndices);
+  const remaining = board.filter((_, i) => !set.has(i));
+  const empty = Array.from({ length: rowIndices.length }, () =>
     new Array<CellValue>(BOARD_WIDTH).fill(0),
   );
-  return { board: [...empty, ...remaining], cleared };
+  return [...empty, ...remaining];
 }
 
 function dropDistance(board: Board, shape: number[][], pos: { x: number; y: number }): number {
@@ -89,18 +97,35 @@ function createInitialState(): GameState {
     lines: 0,
     level: 1,
     status: 'idle',
+    clearingLines: [],
   };
+}
+
+// ── Pending clear data (stored in ref, not state) ─────────────────────────
+
+interface PendingClear {
+  board: Board;
+  score: number;
+  lines: number;
+  level: number;
+  nextPiece: ActivePiece;
+  nextType: TetrominoType;
+  hold: TetrominoType | null;
+  isGameOver: boolean;
 }
 
 // ── Hook ───────────────────────────────────────────────────────────────────
 
-export function useTetris() {
+export function useTetris({ muted = false }: { muted?: boolean } = {}) {
   const [gameState, setGameState_] = useState<GameState>(createInitialState);
   const stateRef = useRef<GameState>(gameState);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pendingClearRef = useRef<PendingClear | null>(null);
 
-  // Sync ref on every render so interval callbacks always read latest state
   stateRef.current = gameState;
+
+  const { soundPlace, soundClearLine, soundHardDrop, soundHold, soundGameOver } =
+    useTetrisAudio(muted);
 
   const setState = useCallback((updater: (s: GameState) => GameState) => {
     const next = updater(stateRef.current);
@@ -115,7 +140,82 @@ export function useTetris() {
     }
   }, []);
 
-  // ── Tick (called every interval) ─────────────────────────────────────────
+  // ── Lock helper: enters clearing animation or spawns next directly ────────
+  const handleLock = useCallback(
+    (s: GameState, lockedBoard: Board, dropBonus: number) => {
+      const completedRows = getCompletedRows(lockedBoard);
+
+      if (completedRows.length > 0) {
+        const clearedBoard = removeRows(lockedBoard, completedRows);
+        const newLines = s.lines + completedRows.length;
+        const newLevel = Math.floor(newLines / 10) + 1;
+        const newScore = s.score + dropBonus + (SCORE_TABLE[completedRows.length] ?? 0) * s.level;
+        const nextType = s.next;
+        const newPiece = spawnPiece(nextType);
+        const newNext = randomType();
+
+        pendingClearRef.current = {
+          board: clearedBoard,
+          score: newScore,
+          lines: newLines,
+          level: newLevel,
+          nextPiece: newPiece,
+          nextType: newNext,
+          hold: s.hold,
+          isGameOver: !isValid(clearedBoard, newPiece.shape, newPiece.pos),
+        };
+
+        soundClearLine(completedRows.length);
+
+        setState(() => ({
+          ...s,
+          board: lockedBoard,
+          active: null,
+          clearingLines: completedRows,
+          status: 'clearing',
+        }));
+      } else {
+        const nextType = s.next;
+        const newPiece = spawnPiece(nextType);
+        const newNext = randomType();
+
+        soundPlace();
+
+        if (!isValid(lockedBoard, newPiece.shape, newPiece.pos)) {
+          stopLoop();
+          setState(() => ({
+            board: lockedBoard,
+            active: null,
+            next: newNext,
+            hold: s.hold,
+            canHold: true,
+            score: s.score + dropBonus,
+            lines: s.lines,
+            level: s.level,
+            status: 'over',
+            clearingLines: [],
+          }));
+          soundGameOver();
+        } else {
+          setState(() => ({
+            board: lockedBoard,
+            active: newPiece,
+            next: newNext,
+            hold: s.hold,
+            canHold: true,
+            score: s.score + dropBonus,
+            lines: s.lines,
+            level: s.level,
+            status: 'playing',
+            clearingLines: [],
+          }));
+        }
+      }
+    },
+    [setState, stopLoop, soundPlace, soundClearLine, soundGameOver],
+  );
+
+  // ── Tick ──────────────────────────────────────────────────────────────────
   const tick = useCallback(() => {
     const s = stateRef.current;
     if (s.status !== 'playing' || !s.active) return;
@@ -127,44 +227,56 @@ export function useTetris() {
       return;
     }
 
-    // Lock piece and spawn next
-    const lockedBoard = lockPiece(s.board, s.active);
-    const { board: clearedBoard, cleared } = clearLines(lockedBoard);
-    const newLines = s.lines + cleared;
-    const newLevel = Math.floor(newLines / 10) + 1;
-    const newScore = s.score + (SCORE_TABLE[cleared] ?? 0) * s.level;
-    const nextType = s.next;
-    const newPiece = spawnPiece(nextType);
-    const newNext = randomType();
+    handleLock(s, lockPiece(s.board, s.active), 0);
+  }, [setState, handleLock]);
 
-    if (!isValid(clearedBoard, newPiece.shape, newPiece.pos)) {
-      stopLoop();
-      setState(() => ({
-        board: clearedBoard,
-        active: null,
-        next: newNext,
-        hold: s.hold,
-        canHold: true,
-        score: newScore,
-        lines: newLines,
-        level: newLevel,
-        status: 'over',
-      }));
-      return;
-    }
+  // ── Clearing animation effect ─────────────────────────────────────────────
+  useEffect(() => {
+    if (gameState.status !== 'clearing' || gameState.clearingLines.length === 0) return;
 
-    setState(() => ({
-      board: clearedBoard,
-      active: newPiece,
-      next: newNext,
-      hold: s.hold,
-      canHold: true,
-      score: newScore,
-      lines: newLines,
-      level: newLevel,
-      status: 'playing',
-    }));
-  }, [setState, stopLoop]);
+    // 3줄 이상은 더 긴 임팩트 연출
+    const delay = gameState.clearingLines.length >= 3 ? 500 : 300;
+
+    const timer = setTimeout(() => {
+      if (stateRef.current.status !== 'clearing') return;
+      const pending = pendingClearRef.current;
+      if (!pending) return;
+
+      if (pending.isGameOver) {
+        stopLoop();
+        setState(() => ({
+          board: pending.board,
+          active: null,
+          next: pending.nextType,
+          hold: pending.hold,
+          canHold: true,
+          score: pending.score,
+          lines: pending.lines,
+          level: pending.level,
+          status: 'over',
+          clearingLines: [],
+        }));
+        soundGameOver();
+      } else {
+        setState(() => ({
+          board: pending.board,
+          active: pending.nextPiece,
+          next: pending.nextType,
+          hold: pending.hold,
+          canHold: true,
+          score: pending.score,
+          lines: pending.lines,
+          level: pending.level,
+          status: 'playing',
+          clearingLines: [],
+        }));
+      }
+
+      pendingClearRef.current = null;
+    }, delay);
+
+    return () => clearTimeout(timer);
+  }, [gameState.status, gameState.clearingLines, setState, stopLoop, soundGameOver]);
 
   // ── Interval management ───────────────────────────────────────────────────
   useEffect(() => {
@@ -192,6 +304,7 @@ export function useTetris() {
       lines: 0,
       level: 1,
       status: 'playing',
+      clearingLines: [],
     }));
   }, [setState]);
 
@@ -232,7 +345,6 @@ export function useTetris() {
     const s = stateRef.current;
     if (s.status !== 'playing' || !s.active) return;
     const rotated = rotateCW(s.active.shape);
-    // Wall kick: try center, left 1, right 1, left 2, right 2
     for (const kick of [0, -1, 1, -2, 2]) {
       const pos = { x: s.active.pos.x + kick, y: s.active.pos.y };
       if (isValid(s.board, rotated, pos)) {
@@ -247,49 +359,16 @@ export function useTetris() {
     if (s.status !== 'playing' || !s.active) return;
     const dist = dropDistance(s.board, s.active.shape, s.active.pos);
     const dropped: ActivePiece = { ...s.active, pos: { ...s.active.pos, y: s.active.pos.y + dist } };
-    const lockedBoard = lockPiece(s.board, dropped);
-    const { board: clearedBoard, cleared } = clearLines(lockedBoard);
-    const newLines = s.lines + cleared;
-    const newLevel = Math.floor(newLines / 10) + 1;
-    const newScore = s.score + dist * 2 + (SCORE_TABLE[cleared] ?? 0) * s.level;
-    const nextType = s.next;
-    const newPiece = spawnPiece(nextType);
-    const newNext = randomType();
-
-    if (!isValid(clearedBoard, newPiece.shape, newPiece.pos)) {
-      stopLoop();
-      setState(() => ({
-        board: clearedBoard,
-        active: null,
-        next: newNext,
-        hold: s.hold,
-        canHold: true,
-        score: newScore,
-        lines: newLines,
-        level: newLevel,
-        status: 'over',
-      }));
-      return;
-    }
-
-    setState(() => ({
-      board: clearedBoard,
-      active: newPiece,
-      next: newNext,
-      hold: s.hold,
-      canHold: true,
-      score: newScore,
-      lines: newLines,
-      level: newLevel,
-      status: 'playing',
-    }));
-  }, [setState, stopLoop]);
+    soundHardDrop();
+    handleLock(s, lockPiece(s.board, dropped), dist * 2);
+  }, [handleLock, soundHardDrop]);
 
   // ── Hold ──────────────────────────────────────────────────────────────────
   const holdPiece = useCallback(() => {
     const s = stateRef.current;
     if (s.status !== 'playing' || !s.active || !s.canHold) return;
 
+    soundHold();
     const currentType = s.active.type;
 
     if (s.hold === null) {
@@ -313,11 +392,31 @@ export function useTetris() {
         canHold: false,
       }));
     }
-  }, [setState]);
+  }, [setState, soundHold]);
 
-  // ── Keyboard handler ──────────────────────────────────────────────────────
+  // ── Keyboard handler: DAS/ARR ─────────────────────────────────────────────
+  // DAS = 167ms (initial delay), ARR = 33ms (repeat interval) — Tetris guideline standard
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
+    let heldKey: string | null = null;
+    let dasTimer: ReturnType<typeof setTimeout> | null = null;
+    let arrTimer: ReturnType<typeof setInterval> | null = null;
+
+    const clearRepeat = () => {
+      if (dasTimer) { clearTimeout(dasTimer); dasTimer = null; }
+      if (arrTimer) { clearInterval(arrTimer); arrTimer = null; }
+      heldKey = null;
+    };
+
+    const startRepeat = (key: string, action: () => void) => {
+      clearRepeat();
+      heldKey = key;
+      dasTimer = setTimeout(() => {
+        arrTimer = setInterval(action, 33);
+      }, 167);
+    };
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.repeat) return; // ignore browser key-repeat; we handle it ourselves
       const status = stateRef.current.status;
       if (status === 'idle' || status === 'over') return;
 
@@ -325,14 +424,17 @@ export function useTetris() {
         case 'ArrowLeft':
           e.preventDefault();
           moveLeft();
+          startRepeat('ArrowLeft', moveLeft);
           break;
         case 'ArrowRight':
           e.preventDefault();
           moveRight();
+          startRepeat('ArrowRight', moveRight);
           break;
         case 'ArrowDown':
           e.preventDefault();
           softDrop();
+          startRepeat('ArrowDown', softDrop);
           break;
         case 'ArrowUp':
           e.preventDefault();
@@ -356,23 +458,46 @@ export function useTetris() {
       }
     };
 
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key === heldKey) clearRepeat();
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+      clearRepeat();
+    };
   }, [moveLeft, moveRight, softDrop, rotate, hardDrop, holdPiece, pause, resume]);
 
   useEffect(() => () => stopLoop(), [stopLoop]);
 
-  // Ghost piece position
+  // ── Ghost piece ───────────────────────────────────────────────────────────
   const ghostPiece: ActivePiece | null =
     gameState.active && gameState.status === 'playing'
       ? {
           ...gameState.active,
           pos: {
             ...gameState.active.pos,
-            y: gameState.active.pos.y + dropDistance(gameState.board, gameState.active.shape, gameState.active.pos),
+            y:
+              gameState.active.pos.y +
+              dropDistance(gameState.board, gameState.active.shape, gameState.active.pos),
           },
         }
       : null;
 
-  return { gameState, ghostPiece, start, pause, resume, moveLeft, moveRight, softDrop, rotate, hardDrop, holdPiece };
+  return {
+    gameState,
+    ghostPiece,
+    start,
+    pause,
+    resume,
+    moveLeft,
+    moveRight,
+    softDrop,
+    rotate,
+    hardDrop,
+    holdPiece,
+  };
 }

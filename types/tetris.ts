@@ -13,7 +13,7 @@ export interface ActivePiece {
   pos: Position;
 }
 
-export type GameStatus = 'idle' | 'playing' | 'paused' | 'over';
+export type GameStatus = 'idle' | 'playing' | 'paused' | 'over' | 'clearing';
 
 export interface GameState {
   board: Board;
@@ -25,4 +25,5 @@ export interface GameState {
   lines: number;
   level: number;
   status: GameStatus;
+  clearingLines: number[];
 }

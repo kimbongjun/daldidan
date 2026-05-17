@@ -84,22 +84,23 @@ export default function TetrisPage() {
     return () => window.removeEventListener('resize', calculate);
   }, []);
 
-  const { gameState, ghostPiece, start, pause, resume, moveLeft, moveRight, softDrop, rotate, hardDrop, holdPiece } =
-    useTetris();
-
-  const { board, active, next, hold, canHold, score, lines, level, status } = gameState;
-
   const { muted, play: bgmPlay, pause: bgmPause, resume: bgmResume, stop: bgmStop, toggleMute } =
     useChiptuneBGM('tetris');
+
+  const { gameState, ghostPiece, start, pause, resume, moveLeft, moveRight, softDrop, rotate, hardDrop, holdPiece } =
+    useTetris({ muted });
+
+  const { board, active, next, hold, canHold, score, lines, level, status, clearingLines } = gameState;
 
   const prevStatusRef = useRef<typeof status>('idle');
   useEffect(() => {
     const prev = prevStatusRef.current;
     prevStatusRef.current = status;
+    // 'clearing'은 'playing'의 연장 — BGM 제어 불필요
     if (status === 'playing') {
       if (prev === 'paused') {
         void bgmResume();
-      } else if (prev !== 'playing') {
+      } else if (prev !== 'playing' && prev !== 'clearing') {
         void bgmPlay();
       }
     } else if (status === 'paused') {
@@ -170,7 +171,7 @@ export default function TetrisPage() {
 
         {/* Board */}
         <div className="relative shrink-0">
-          <TetrisBoard board={board} active={active} ghost={ghostPiece} cellSize={cellSize} />
+          <TetrisBoard board={board} active={active} ghost={ghostPiece} cellSize={cellSize} clearingLines={clearingLines} />
 
           {/* Overlays */}
           {(isIdle || isOver || isPaused) && (
