@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import type { GameId, GetGameScoresResponse } from "@/types/game";
 
 export const runtime = "nodejs";
@@ -31,7 +31,9 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const { data, error } = await supabase
+  // profiles 테이블 RLS를 우회해 다른 유저 닉네임을 정상 조회하기 위해 admin 클라이언트 사용
+  const admin = createAdminClient();
+  const { data, error } = await admin
     .from("game_scores")
     .select("id, user_id, score, created_at, profiles(display_name)")
     .eq("game_id", gameId)

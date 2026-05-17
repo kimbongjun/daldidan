@@ -216,7 +216,7 @@ function tickGame(state: GameState): Partial<GameState> {
   const { grid, fly, score, shots, status, gridOffset, lastPressure, combo } = state;
 
   // drops 업데이트: .map().filter() 체이닝
-  let drops = state.drops
+  const drops = state.drops
     .map(d => ({ ...d, x: d.x + d.vx, y: d.y + d.vy, vy: d.vy + 0.6, vx: d.vx * 0.95, alpha: d.alpha - 0.015 }))
     .filter(d => d.y < CANVAS_H + 80 && d.alpha > 0);
 
@@ -233,7 +233,7 @@ function tickGame(state: GameState): Partial<GameState> {
     .filter(p => p.life > 0 && p.x > -50 && p.x < CANVAS_W + 50 && p.y > -50 && p.y < CANVAS_H + 50);
 
   // floatingTexts 업데이트
-  let floatingTexts = state.floatingTexts
+  const floatingTexts = state.floatingTexts
     .map(ft => ({ ...ft, y: ft.y + ft.vy, alpha: ft.alpha - 0.018 }))
     .filter(ft => ft.alpha > 0);
 
@@ -768,8 +768,14 @@ export default function PuzzleBobbleGame() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ gameId: 'puzzle-bobble', score: uiScore }),
-    }).then(res => { if (res.status === 401 || !res.ok) throw new Error(); return fetchLeaderboard(); })
-      .catch(err => console.error('saveScore error:', err));
+    }).then(res => {
+      if (res.status === 401) return;
+      if (!res.ok) console.error('saveScore failed:', res.status);
+      return fetchLeaderboard();
+    }).catch(err => {
+      console.error('saveScore error:', err);
+      return fetchLeaderboard();
+    });
   }, [uiStatus, uiScore, fetchLeaderboard]);
 
   // 모바일 감지 + 네이티브 터치 이벤트

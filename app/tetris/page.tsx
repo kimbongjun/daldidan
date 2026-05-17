@@ -285,10 +285,13 @@ export default function TetrisPage() {
         })
           .then(res => {
             if (res.status === 401) return;
-            if (!res.ok) throw new Error('save failed');
+            if (!res.ok) console.error('saveScore failed:', res.status);
             return fetchLeaderboard();
           })
-          .catch(err => console.error('saveScore error:', err));
+          .catch(err => {
+            console.error('saveScore error:', err);
+            return fetchLeaderboard();
+          });
       }
     }
   }, [status, bgmPlay, bgmPause, bgmResume, bgmStop, score, fetchLeaderboard]);
