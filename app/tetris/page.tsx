@@ -12,13 +12,13 @@ import { useChiptuneBGM } from '@/hooks/useChiptuneBGM';
 function ScoreCard({ label, value }: { label: string; value: number | string }) {
   return (
     <div
-      className="rounded-xl p-3 flex flex-col gap-1 items-center w-full overflow-hidden"
+      className="rounded-xl p-2 flex flex-col gap-0.5 items-center w-full overflow-hidden"
       style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
     >
-      <p className="text-xs font-semibold uppercase tracking-wide w-full text-center truncate" style={{ color: 'var(--text-muted)' }}>
+      <p className="text-[10px] font-semibold uppercase tracking-wide w-full text-center truncate" style={{ color: 'var(--text-muted)' }}>
         {label}
       </p>
-      <p className="text-lg font-black tabular-nums w-full text-center leading-tight" style={{ color: 'var(--text-primary)' }}>
+      <p className="text-sm font-black tabular-nums w-full text-center leading-tight" style={{ color: 'var(--text-primary)' }}>
         {value}
       </p>
     </div>
@@ -261,32 +261,32 @@ export default function TetrisPage() {
         </div>
 
         {/* Side Panel */}
-        <div className="flex flex-col gap-3 shrink-0" style={{ width: 130 }}>
+        <div className="flex flex-col gap-2 shrink-0 self-stretch overflow-y-auto scrollbar-hide" style={{ width: 130 }}>
           {/* Hold */}
           <div
-            className="rounded-xl p-3 flex flex-col gap-2"
+            className="rounded-xl p-2 flex flex-col gap-1.5"
             style={{
               background: canHold ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.02)',
               border: `1px solid ${canHold ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.04)'}`,
             }}
           >
-            <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
+            <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
               HOLD
             </p>
-            <div className="flex items-center justify-center py-1" style={{ opacity: canHold ? 1 : 0.4 }}>
+            <div className="flex items-center justify-center" style={{ opacity: canHold ? 1 : 0.4 }}>
               <HoldPiecePreview type={hold} />
             </div>
           </div>
 
           {/* Next */}
           <div
-            className="rounded-xl p-3 flex flex-col gap-2"
+            className="rounded-xl p-2 flex flex-col gap-1.5"
             style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
           >
-            <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
+            <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
               NEXT
             </p>
-            <div className="flex items-center justify-center py-1">
+            <div className="flex items-center justify-center">
               <NextPiecePreview type={next} />
             </div>
           </div>
@@ -297,7 +297,7 @@ export default function TetrisPage() {
 
           {/* Keyboard hint (desktop only) */}
           <div
-            className="rounded-xl p-3 hidden sm:flex flex-col gap-1.5"
+            className="rounded-xl p-2 hidden sm:flex flex-col gap-1"
             style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}
           >
             {[
@@ -308,9 +308,9 @@ export default function TetrisPage() {
               { key: 'C', desc: '홀드' },
               { key: 'P', desc: '일시정지' },
             ].map(({ key, desc }) => (
-              <div key={key} className="flex items-center gap-1.5">
+              <div key={key} className="flex items-center gap-1">
                 <span
-                  className="rounded px-1.5 py-0.5 text-[10px] font-bold font-mono shrink-0"
+                  className="rounded px-1 py-0.5 text-[10px] font-bold font-mono shrink-0"
                   style={{ background: 'rgba(255,255,255,0.08)', color: 'var(--text-primary)' }}
                 >
                   {key}

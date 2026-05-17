@@ -93,7 +93,7 @@ export function HoldPiecePreview({ type }: { type: TetrominoType | null }) {
         {emptyGrid.map((row, r) => (
           <div key={r} className="flex gap-0.5">
             {row.map((_, c) => (
-              <div key={c} className="w-5 h-5 rounded-sm" style={{ background: 'rgba(255,255,255,0.02)' }} />
+              <div key={c} className="w-4 h-4 rounded-sm" style={{ background: 'rgba(255,255,255,0.02)' }} />
             ))}
           </div>
         ))}
@@ -123,7 +123,7 @@ export function HoldPiecePreview({ type }: { type: TetrominoType | null }) {
           {row.map((filled, c) => (
             <div
               key={c}
-              className="w-5 h-5 rounded-sm"
+              className="w-4 h-4 rounded-sm"
               style={
                 filled
                   ? { background: color, boxShadow: `0 0 6px ${color}88`, border: '1px solid rgba(255,255,255,0.3)' }
@@ -165,7 +165,7 @@ export function NextPiecePreview({ type }: { type: TetrominoType }) {
           {row.map((filled, c) => (
             <div
               key={c}
-              className="w-5 h-5 rounded-sm"
+              className="w-4 h-4 rounded-sm"
               style={
                 filled
                   ? { background: color, boxShadow: `0 0 6px ${color}88`, border: '1px solid rgba(255,255,255,0.3)' }
