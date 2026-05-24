@@ -89,7 +89,7 @@ function normalizeTransaction(t: TransactionApiResponse): Transaction {
     location: t.location ?? "",
     receiptImageUrl: t.receipt_image_url ?? null,
     amount: t.amount,
-    note: t.note,
+    note: t.note ?? "",
     date: t.date,
   };
 }
