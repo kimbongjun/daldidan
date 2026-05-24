@@ -6,7 +6,7 @@ import Pagination from "@/components/Pagination";
 import { sendNativeNotification } from "@/lib/notifications";
 import { analyzeReceiptImage } from "@/lib/receipt-ocr";
 import {
-  ArrowLeft, ArrowRight, CheckCircle2, ChevronDown, ChevronUp,
+  ArrowLeft, ArrowRight, CalendarDays, CheckCircle2, ChevronDown, ChevronUp,
   ImagePlus, LoaderCircle, MapPin, Pencil, ReceiptText, Search, Store, Trash2, TrendingDown,
   User, Users, X, XCircle,
 } from "lucide-react";
@@ -124,6 +124,7 @@ export default function BudgetPage() {
   const [period, setPeriod] = useState<"daily" | "monthly" | "yearly">("monthly");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<"date" | "amount" | "name">("date");
+  const [calendarOpen, setCalendarOpen] = useState(false);
 
   // 월 선택
   const [selectedMonth, setSelectedMonth] = useState(currentMonthStr);
@@ -131,6 +132,29 @@ export default function BudgetPage() {
     const [y, m] = selectedMonth.split("-").map(Number);
     return `${y}년 ${m}월`;
   }, [selectedMonth]);
+
+  // 지출 데이터가 있는 달 목록 (chartTransactions 기준)
+  const availableMonths = useMemo(() => {
+    const set = new Set<string>();
+    chartTransactions.forEach((t) => set.add(t.date.slice(0, 7)));
+    return Array.from(set).sort();
+  }, [chartTransactions]);
+
+  // 지출 데이터가 있는 날짜 전체 (달력 dot 표기용)
+  const allDatesWithData = useMemo(() => {
+    const set = new Set<string>();
+    chartTransactions.forEach((t) => set.add(t.date));
+    return set;
+  }, [chartTransactions]);
+
+  const prevAvailableMonth = useMemo(
+    () => (isChartLoading ? null : (availableMonths.filter((m) => m < selectedMonth).at(-1) ?? null)),
+    [availableMonths, selectedMonth, isChartLoading],
+  );
+  const nextAvailableMonth = useMemo(
+    () => (isChartLoading ? null : (availableMonths.find((m) => m > selectedMonth) ?? null)),
+    [availableMonths, selectedMonth, isChartLoading],
+  );
 
   // 월별 거래 내역
   const { data: transactions = [], isLoading } = useQuery({
@@ -145,7 +169,7 @@ export default function BudgetPage() {
   });
 
   // 차트용 전체 거래 내역
-  const { data: chartTransactions = [] } = useQuery({
+  const { data: chartTransactions = [], isLoading: isChartLoading } = useQuery({
     queryKey: queryKeys.budget.allTransactions,
     queryFn: async () => {
       const res = await fetch("/api/transactions?limit=1000");
@@ -205,11 +229,6 @@ export default function BudgetPage() {
   // 내역 상세 뷰어
   const [viewingDetailTx, setViewingDetailTx] = useState<Transaction | null>(null);
 
-  const navigateMonth = (dir: -1 | 1) => {
-    const [y, m] = selectedMonth.split("-").map(Number);
-    const d = new Date(y, m - 1 + dir, 1);
-    setSelectedMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
-  };
 
   // URL 파라미터로 특정 거래 편집 진입
   useEffect(() => {
@@ -486,6 +505,17 @@ export default function BudgetPage() {
         />
       )}
 
+      {calendarOpen && (
+        <MonthCalendarModal
+          initialMonth={selectedMonth}
+          selectedMonth={selectedMonth}
+          availableMonths={availableMonths}
+          allDatesWithData={allDatesWithData}
+          onSelectMonth={setSelectedMonth}
+          onClose={() => setCalendarOpen(false)}
+        />
+      )}
+
       <div className="max-w-[1100px] mx-auto px-4 sm:px-6 pb-16">
         <PageHeader
           title="가계부"
@@ -501,23 +531,32 @@ export default function BudgetPage() {
         />
 
         {/* 월 선택 네비게이터 */}
-        <div className="flex items-center justify-center gap-4 mb-5">
+        <div className="flex items-center justify-center gap-2 mb-5">
           <button
-            onClick={() => navigateMonth(-1)}
+            onClick={() => prevAvailableMonth && setSelectedMonth(prevAvailableMonth)}
+            disabled={!prevAvailableMonth}
             aria-label="이전 달"
-            className="p-1.5 rounded-lg hover:opacity-70 transition-opacity"
+            className="p-1.5 rounded-lg hover:opacity-70 transition-opacity disabled:opacity-20"
             style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
           >
             <ArrowLeft size={14} style={{ color: "var(--text-muted)" }} />
           </button>
-          <p className="text-base font-black" style={{ color: "var(--text-primary)", minWidth: 110, textAlign: "center" }}>
-            {displayMonth}
-          </p>
           <button
-            onClick={() => navigateMonth(1)}
+            onClick={() => setCalendarOpen(true)}
+            aria-label="달력에서 월 선택"
+            className="flex items-center gap-2 px-4 py-1.5 rounded-xl hover:opacity-80 transition-opacity"
+            style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+          >
+            <CalendarDays size={13} style={{ color: "var(--text-muted)" }} />
+            <span className="text-base font-black" style={{ color: "var(--text-primary)" }}>
+              {displayMonth}
+            </span>
+          </button>
+          <button
+            onClick={() => nextAvailableMonth && setSelectedMonth(nextAvailableMonth)}
+            disabled={!nextAvailableMonth}
             aria-label="다음 달"
-            disabled={selectedMonth >= currentMonthStr()}
-            className="p-1.5 rounded-lg hover:opacity-70 transition-opacity disabled:opacity-30"
+            className="p-1.5 rounded-lg hover:opacity-70 transition-opacity disabled:opacity-20"
             style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
           >
             <ArrowRight size={14} style={{ color: "var(--text-muted)" }} />
@@ -1689,6 +1728,195 @@ function DetailRow({
       <span className="text-xs font-semibold text-right truncate" style={{ color: "var(--text-primary)" }}>
         {value}
       </span>
+    </div>
+  );
+}
+
+// ── 월 달력 모달 ────────────────────────────────────────────────
+const DOW_LABELS = ["일", "월", "화", "수", "목", "금", "토"] as const;
+
+function MonthCalendarModal({
+  initialMonth,
+  selectedMonth,
+  availableMonths,
+  allDatesWithData,
+  onSelectMonth,
+  onClose,
+}: {
+  initialMonth: string;
+  selectedMonth: string;
+  availableMonths: string[];
+  allDatesWithData: Set<string>;
+  onSelectMonth: (month: string) => void;
+  onClose: () => void;
+}) {
+  const [viewMonth, setViewMonth] = useState(initialMonth);
+  const [viewYear, viewMonthNum] = viewMonth.split("-").map(Number);
+
+  const prevAvail = [...availableMonths].filter((m) => m < viewMonth).at(-1) ?? null;
+  const nextAvail = availableMonths.find((m) => m > viewMonth) ?? null;
+
+  const firstDOW = new Date(viewYear, viewMonthNum - 1, 1).getDay();
+  const daysInMonth = new Date(viewYear, viewMonthNum, 0).getDate();
+  const today = new Date().toISOString().slice(0, 10);
+  const hasThisMonthData = availableMonths.includes(viewMonth);
+  const isCurrentlySelected = viewMonth === selectedMonth;
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      style={{ background: "rgba(0,0,0,0.78)", backdropFilter: "blur(10px)" }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        className="relative flex flex-col rounded-2xl"
+        style={{
+          width: "min(320px, 94vw)",
+          background: "var(--bg-card)",
+          border: "1px solid var(--border)",
+          boxShadow: "0 24px 80px rgba(0,0,0,0.65)",
+        }}
+      >
+        {/* 헤더 */}
+        <div
+          className="flex items-center justify-between gap-2 px-4 py-3"
+          style={{ borderBottom: "1px solid var(--border)" }}
+        >
+          <button
+            onClick={() => prevAvail && setViewMonth(prevAvail)}
+            disabled={!prevAvail}
+            aria-label="이전 달"
+            className="p-1.5 rounded-lg transition-opacity disabled:opacity-20 hover:opacity-70"
+            style={{ background: "var(--bg-input)", border: "1px solid var(--border)" }}
+          >
+            <ArrowLeft size={13} style={{ color: "var(--text-muted)" }} />
+          </button>
+
+          <div className="flex-1 text-center">
+            <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
+              {viewYear}년 {viewMonthNum}월
+            </p>
+            <p
+              className="text-[10px] font-semibold mt-0.5"
+              style={{ color: hasThisMonthData ? ACCENT : "var(--text-muted)" }}
+            >
+              {hasThisMonthData ? "지출 내역 있음" : "지출 내역 없음"}
+            </p>
+          </div>
+
+          <button
+            onClick={() => nextAvail && setViewMonth(nextAvail)}
+            disabled={!nextAvail}
+            aria-label="다음 달"
+            className="p-1.5 rounded-lg transition-opacity disabled:opacity-20 hover:opacity-70"
+            style={{ background: "var(--bg-input)", border: "1px solid var(--border)" }}
+          >
+            <ArrowRight size={13} style={{ color: "var(--text-muted)" }} />
+          </button>
+        </div>
+
+        {/* 달력 그리드 */}
+        <div className="px-4 pt-3 pb-2">
+          {/* 요일 헤더 */}
+          <div className="grid grid-cols-7 mb-1">
+            {DOW_LABELS.map((d, i) => (
+              <div
+                key={d}
+                className="text-center text-[11px] font-semibold py-1"
+                style={{
+                  color: i === 0 ? "rgba(244,63,94,0.7)" : i === 6 ? "rgba(99,102,241,0.7)" : "var(--text-muted)",
+                }}
+              >
+                {d}
+              </div>
+            ))}
+          </div>
+
+          {/* 날짜 셀 */}
+          <div className="grid grid-cols-7">
+            {Array.from({ length: firstDOW }, (_, i) => <div key={`e-${i}`} />)}
+            {Array.from({ length: daysInMonth }, (_, i) => {
+              const day = i + 1;
+              const dateStr = `${viewMonth}-${String(day).padStart(2, "0")}`;
+              const hasData = allDatesWithData.has(dateStr);
+              const isToday = dateStr === today;
+              const dow = (firstDOW + i) % 7;
+
+              return (
+                <div key={day} className="flex flex-col items-center py-1">
+                  <div
+                    className="w-7 h-7 flex items-center justify-center rounded-full text-xs font-semibold"
+                    style={{
+                      background: isToday ? ACCENT : "transparent",
+                      color: isToday
+                        ? "#fff"
+                        : dow === 0
+                        ? "#F43F5E"
+                        : dow === 6
+                        ? "#6366F1"
+                        : "var(--text-primary)",
+                    }}
+                  >
+                    {day}
+                  </div>
+                  {hasData ? (
+                    <div
+                      className="w-1 h-1 rounded-full mt-0.5"
+                      style={{ background: isToday ? "rgba(255,255,255,0.75)" : ACCENT }}
+                    />
+                  ) : (
+                    <div className="w-1 h-1 mt-0.5" />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* 범례 */}
+        <div className="flex items-center gap-3 px-4 pb-3">
+          <div className="flex items-center gap-1.5">
+            <div className="w-1.5 h-1.5 rounded-full" style={{ background: ACCENT }} />
+            <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>지출 있는 날</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div
+              className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white"
+              style={{ background: ACCENT }}
+            >
+              오
+            </div>
+            <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>오늘</span>
+          </div>
+        </div>
+
+        {/* 액션 버튼 */}
+        <div
+          className="flex gap-2 px-4 pb-4"
+          style={{ borderTop: "1px solid var(--border)", paddingTop: "0.75rem" }}
+        >
+          <button
+            onClick={onClose}
+            className="flex-1 py-2 rounded-xl text-xs font-semibold transition-opacity hover:opacity-80"
+            style={{ background: "var(--bg-input)", color: "var(--text-muted)", border: "1px solid var(--border)" }}
+          >
+            취소
+          </button>
+          <button
+            onClick={() => { onSelectMonth(viewMonth); onClose(); }}
+            className="flex-1 py-2 rounded-xl text-xs font-bold text-white transition-opacity hover:opacity-80"
+            style={{ background: isCurrentlySelected ? "var(--text-muted)" : ACCENT }}
+          >
+            {isCurrentlySelected ? "현재 선택됨" : "이 달 보기"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
