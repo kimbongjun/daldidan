@@ -133,29 +133,6 @@ export default function BudgetPage() {
     return `${y}년 ${m}월`;
   }, [selectedMonth]);
 
-  // 지출 데이터가 있는 달 목록 (chartTransactions 기준)
-  const availableMonths = useMemo(() => {
-    const set = new Set<string>();
-    chartTransactions.forEach((t) => set.add(t.date.slice(0, 7)));
-    return Array.from(set).sort();
-  }, [chartTransactions]);
-
-  // 지출 데이터가 있는 날짜 전체 (달력 dot 표기용)
-  const allDatesWithData = useMemo(() => {
-    const set = new Set<string>();
-    chartTransactions.forEach((t) => set.add(t.date));
-    return set;
-  }, [chartTransactions]);
-
-  const prevAvailableMonth = useMemo(
-    () => (isChartLoading ? null : (availableMonths.filter((m) => m < selectedMonth).at(-1) ?? null)),
-    [availableMonths, selectedMonth, isChartLoading],
-  );
-  const nextAvailableMonth = useMemo(
-    () => (isChartLoading ? null : (availableMonths.find((m) => m > selectedMonth) ?? null)),
-    [availableMonths, selectedMonth, isChartLoading],
-  );
-
   // 월별 거래 내역
   const { data: transactions = [], isLoading } = useQuery({
     queryKey: queryKeys.budget.byMonth(selectedMonth),
@@ -179,6 +156,29 @@ export default function BudgetPage() {
     },
     staleTime: 5 * 60 * 1000,
   });
+
+  // 지출 데이터가 있는 달 목록 (chartTransactions 기준)
+  const availableMonths = useMemo(() => {
+    const set = new Set<string>();
+    chartTransactions.forEach((t) => set.add(t.date.slice(0, 7)));
+    return Array.from(set).sort();
+  }, [chartTransactions]);
+
+  // 지출 데이터가 있는 날짜 전체 (달력 dot 표기용)
+  const allDatesWithData = useMemo(() => {
+    const set = new Set<string>();
+    chartTransactions.forEach((t) => set.add(t.date));
+    return set;
+  }, [chartTransactions]);
+
+  const prevAvailableMonth = useMemo(
+    () => (isChartLoading ? null : (availableMonths.filter((m) => m < selectedMonth).at(-1) ?? null)),
+    [availableMonths, selectedMonth, isChartLoading],
+  );
+  const nextAvailableMonth = useMemo(
+    () => (isChartLoading ? null : (availableMonths.find((m) => m > selectedMonth) ?? null)),
+    [availableMonths, selectedMonth, isChartLoading],
+  );
 
   // 현재 사용자 ID
   const { data: currentUserData } = useQuery({
