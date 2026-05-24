@@ -83,7 +83,7 @@ function normalizeTransaction(t: TransactionApiResponse): Transaction {
     userId: t.user_id,
     authorName: t.author_display ?? "사용자",
     type: "expense",
-    category: t.category,
+    category: t.category ?? "",
     buyer: t.buyer ?? "공동",
     merchantName: t.merchant_name ?? "",
     location: t.location ?? "",
@@ -271,20 +271,20 @@ export default function BudgetPage() {
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase();
       result = result.filter((tx) =>
-        tx.merchantName.toLowerCase().includes(q) ||
-        tx.note.toLowerCase().includes(q) ||
-        tx.category.toLowerCase().includes(q) ||
-        tx.buyer.toLowerCase().includes(q) ||
-        tx.location.toLowerCase().includes(q) ||
-        tx.authorName.toLowerCase().includes(q)
+        (tx.merchantName || "").toLowerCase().includes(q) ||
+        (tx.note || "").toLowerCase().includes(q) ||
+        (tx.category || "").toLowerCase().includes(q) ||
+        (tx.buyer || "").toLowerCase().includes(q) ||
+        (tx.location || "").toLowerCase().includes(q) ||
+        (tx.authorName || "").toLowerCase().includes(q)
       );
     }
     if (sortBy === "amount") {
       result.sort((a, b) => b.amount - a.amount);
     } else if (sortBy === "name") {
       result.sort((a, b) => {
-        const aName = (a.merchantName || a.note || a.category).toLowerCase();
-        const bName = (b.merchantName || b.note || b.category).toLowerCase();
+        const aName = (a.merchantName || a.note || a.category || "").toLowerCase();
+        const bName = (b.merchantName || b.note || b.category || "").toLowerCase();
         return aName.localeCompare(bName, "ko");
       });
     } else {
