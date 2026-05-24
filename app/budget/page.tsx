@@ -7,7 +7,7 @@ import { sendNativeNotification } from "@/lib/notifications";
 import { analyzeReceiptImage } from "@/lib/receipt-ocr";
 import {
   ArrowLeft, ArrowRight, CheckCircle2, ChevronDown, ChevronUp,
-  ImagePlus, LoaderCircle, MapPin, Pencil, ReceiptText, Store, Trash2, TrendingDown,
+  ImagePlus, LoaderCircle, MapPin, Pencil, ReceiptText, Search, Store, Trash2, TrendingDown,
   User, Users, X, XCircle,
 } from "lucide-react";
 import OcrScanModal from "@/components/OcrScanModal";
@@ -122,6 +122,8 @@ export default function BudgetPage() {
   const [chartsOpen, setChartsOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [period, setPeriod] = useState<"daily" | "monthly" | "yearly">("monthly");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortBy, setSortBy] = useState<"date" | "amount" | "name">("date");
 
   // 월 선택
   const [selectedMonth, setSelectedMonth] = useState(currentMonthStr);
@@ -245,15 +247,46 @@ export default function BudgetPage() {
       share: expense > 0 ? Math.round((amount / expense) * 100) : 0,
     };
   }, [expense, transactions]);
-  const totalPages = Math.max(1, Math.ceil(transactions.length / TRANSACTIONS_PER_PAGE));
+  const displayedTransactions = useMemo(() => {
+    let result = [...transactions];
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      result = result.filter((tx) =>
+        tx.merchantName.toLowerCase().includes(q) ||
+        tx.note.toLowerCase().includes(q) ||
+        tx.category.toLowerCase().includes(q) ||
+        tx.buyer.toLowerCase().includes(q) ||
+        tx.location.toLowerCase().includes(q) ||
+        tx.authorName.toLowerCase().includes(q)
+      );
+    }
+    if (sortBy === "amount") {
+      result.sort((a, b) => b.amount - a.amount);
+    } else if (sortBy === "name") {
+      result.sort((a, b) => {
+        const aName = (a.merchantName || a.note || a.category).toLowerCase();
+        const bName = (b.merchantName || b.note || b.category).toLowerCase();
+        return aName.localeCompare(bName, "ko");
+      });
+    } else {
+      result.sort((a, b) => b.date.localeCompare(a.date));
+    }
+    return result;
+  }, [transactions, searchQuery, sortBy]);
+
+  const totalPages = Math.max(1, Math.ceil(displayedTransactions.length / TRANSACTIONS_PER_PAGE));
   const paginatedTransactions = useMemo(() => {
     const start = (currentPage - 1) * TRANSACTIONS_PER_PAGE;
-    return transactions.slice(start, start + TRANSACTIONS_PER_PAGE);
-  }, [currentPage, transactions]);
+    return displayedTransactions.slice(start, start + TRANSACTIONS_PER_PAGE);
+  }, [currentPage, displayedTransactions]);
 
   useEffect(() => {
     setCurrentPage(1);
   }, [selectedMonth]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, sortBy]);
 
   useEffect(() => {
     setCurrentPage((prev) => Math.min(prev, totalPages));
@@ -611,8 +644,63 @@ export default function BudgetPage() {
             {/* 거래 내역 목록 */}
             <div className="bento-card p-4 flex flex-col gap-2">
               <p className="text-sm font-bold mb-1" style={{ color: "var(--text-primary)" }}>
-                {displayMonth} 지출 내역 <span className="font-normal text-xs" style={{ color: "var(--text-muted)" }}>({transactions.length}건)</span>
+                {displayMonth} 지출 내역{" "}
+                <span className="font-normal text-xs" style={{ color: "var(--text-muted)" }}>
+                  ({searchQuery ? `${displayedTransactions.length}/${transactions.length}` : transactions.length}건)
+                </span>
               </p>
+
+              {/* 검색 + 정렬 */}
+              <div className="flex flex-col gap-1.5">
+                <div className="relative">
+                  <Search
+                    size={13}
+                    className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none"
+                    style={{ color: "var(--text-muted)" }}
+                  />
+                  <input
+                    type="text"
+                    placeholder="매장명, 메모, 카테고리, 구매자 검색…"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    style={{
+                      background: "var(--bg-input)",
+                      border: "1px solid var(--border)",
+                      borderRadius: "0.5rem",
+                      padding: "0.4rem 2rem 0.4rem 2rem",
+                      fontSize: "0.8rem",
+                      color: "var(--text-primary)",
+                      outline: "none",
+                      width: "100%",
+                    }}
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery("")}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2"
+                      aria-label="검색어 지우기"
+                    >
+                      <X size={11} style={{ color: "var(--text-muted)" }} />
+                    </button>
+                  )}
+                </div>
+                <div className="flex gap-1.5">
+                  {(["date", "amount", "name"] as const).map((key) => (
+                    <button
+                      key={key}
+                      onClick={() => setSortBy(key)}
+                      className="px-2.5 py-1 rounded-lg text-xs font-semibold transition-all"
+                      style={{
+                        background: sortBy === key ? ACCENT : "rgba(255,255,255,0.04)",
+                        color: sortBy === key ? "#fff" : "var(--text-muted)",
+                        border: `1px solid ${sortBy === key ? ACCENT : "var(--border)"}`,
+                      }}
+                    >
+                      {key === "date" ? "최신순" : key === "amount" ? "금액순" : "이름순"}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
               {isLoading ? (
                 <div className="flex items-center justify-center py-10">
@@ -621,6 +709,10 @@ export default function BudgetPage() {
               ) : transactions.length === 0 ? (
                 <p className="text-sm text-center py-8" style={{ color: "var(--text-muted)" }}>
                   아직 지출 내역이 없습니다.<br />위 폼에서 첫 지출을 추가해 보세요.
+                </p>
+              ) : displayedTransactions.length === 0 ? (
+                <p className="text-sm text-center py-8" style={{ color: "var(--text-muted)" }}>
+                  검색 결과가 없습니다.
                 </p>
               ) : (
                 <>
