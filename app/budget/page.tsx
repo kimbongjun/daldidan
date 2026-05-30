@@ -501,6 +501,7 @@ export default function BudgetPage() {
           isOwner={currentUserId === viewingDetailTx.userId}
           onClose={() => setViewingDetailTx(null)}
           onEdit={() => { setViewingDetailTx(null); startEdit(viewingDetailTx); }}
+          onDelete={() => { handleDelete(viewingDetailTx.id); setViewingDetailTx(null); }}
           onViewReceipt={viewingDetailTx.receiptImageUrl ? () => { setViewingDetailTx(null); setViewingReceiptTx(viewingDetailTx); } : undefined}
         />
       )}
@@ -1587,14 +1588,18 @@ function TransactionDetailModal({
   isOwner,
   onClose,
   onEdit,
+  onDelete,
   onViewReceipt,
 }: {
   tx: Transaction;
   isOwner: boolean;
   onClose: () => void;
   onEdit?: () => void;
+  onDelete?: () => void;
   onViewReceipt?: () => void;
 }) {
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", handler);
@@ -1703,6 +1708,32 @@ function TransactionDetailModal({
               >
                 <Pencil size={13} />
                 수정하기
+              </button>
+            )}
+            {isOwner && onDelete && (
+              <button
+                onClick={() => {
+                  if (confirmDelete) {
+                    onDelete();
+                  } else {
+                    setConfirmDelete(true);
+                    setTimeout(() => setConfirmDelete(false), 3000);
+                  }
+                }}
+                className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all hover:opacity-80"
+                style={{
+                  paddingLeft: "0.75rem",
+                  paddingRight: "0.75rem",
+                  background: confirmDelete ? "rgba(244,63,94,0.15)" : "rgba(255,255,255,0.06)",
+                  color: confirmDelete ? "#F43F5E" : "var(--text-muted)",
+                  border: `1px solid ${confirmDelete ? "rgba(244,63,94,0.3)" : "var(--border)"}`,
+                }}
+              >
+                {confirmDelete ? (
+                  <span>삭제 확인</span>
+                ) : (
+                  <Trash2 size={13} />
+                )}
               </button>
             )}
           </div>
