@@ -28,6 +28,7 @@ interface Transaction {
   date: string;
   merchant_name?: string;
   buyer?: string;
+  authorName?: string;
 }
 
 interface TransactionDetailModalProps {
@@ -141,6 +142,9 @@ export default function TransactionDetailModal({
 
         {/* 상세 정보 */}
         <div className="px-4 py-3 flex flex-col gap-3">
+          {transaction.authorName && (
+            <DetailRow label="등록자" value={transaction.authorName} />
+          )}
           {transaction.buyer && (
             <DetailRow label="구매자" value={transaction.buyer} />
           )}

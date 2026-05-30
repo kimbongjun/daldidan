@@ -761,7 +761,7 @@ export default function BudgetPage() {
                       key={tx.id}
                       tx={tx}
                       isEditing={editingId === tx.id}
-                      isOwner={currentUserId === tx.userId}
+                      isOwner={true}
                       onDelete={() => handleDelete(tx.id)}
                       onViewReceipt={tx.receiptImageUrl ? () => setViewingReceiptTx(tx) : undefined}
                       onView={() => setViewingDetailTx(tx)}

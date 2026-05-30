@@ -19,6 +19,8 @@ interface Transaction {
   date: string;
   merchant_name?: string;
   buyer?: string;
+  author_display?: string;
+  authorName?: string;
 }
 
 const ACCENT = "#3DD9C0";
@@ -98,7 +100,11 @@ export default function BudgetWidget() {
       const res = await fetch(`/api/transactions?month=${month}`, { signal });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json() as unknown;
-      return Array.isArray(data) ? (data as Transaction[]) : [];
+      if (!Array.isArray(data)) return [];
+      return (data as Transaction[]).map((tx) => ({
+        ...tx,
+        authorName: tx.author_display ?? tx.authorName,
+      }));
     },
     enabled: !!user,
     staleTime: 5 * 60 * 1000,

@@ -36,21 +36,20 @@ export async function PATCH(
     ...(body.date !== undefined ? { date: body.date } : {}),
   };
 
-  const { data, error } = await supabase
+  const admin = createAdminClient();
+  const { data, error } = await admin
     .from("transactions")
     .update(patch)
     .eq("id", id)
-    .eq("user_id", user.id)
     .select("id, user_id, type, category, buyer, merchant_name, location, receipt_image_url, amount, note, date")
     .single();
 
   if (error) {
-    if (error.code === "PGRST116") return NextResponse.json({ error: "수정 권한이 없습니다." }, { status: 403 });
+    if (error.code === "PGRST116") return NextResponse.json({ error: "존재하지 않는 거래입니다." }, { status: 404 });
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
   // POST / GET 과 동일하게 author_display 를 flat 필드로 포함해 반환
-  const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("display_name").eq("id", user.id).single();
   let authorDisplay = profile?.display_name ?? "";
   if (!authorDisplay) {
@@ -71,14 +70,14 @@ export async function DELETE(
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
+  const admin = createAdminClient();
 
-  const { error, count } = await supabase
+  const { error, count } = await admin
     .from("transactions")
     .delete({ count: "exact" })
-    .eq("id", id)
-    .eq("user_id", user.id);
+    .eq("id", id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  if (count === 0) return NextResponse.json({ error: "삭제 권한이 없습니다." }, { status: 403 });
+  if (count === 0) return NextResponse.json({ error: "존재하지 않는 거래입니다." }, { status: 404 });
   return new NextResponse(null, { status: 204 });
 }
