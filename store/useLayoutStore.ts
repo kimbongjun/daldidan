@@ -2,18 +2,15 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 export type WidgetId =
-  | "fortune"
   | "lotto"
   | "blog"
   | "budget"
   | "calendar"
   | "stock"
   | "travel"
-  | "realestate"
-  | "playground";
+  | "realestate";
 
 const DEFAULT_WIDGET_ORDER: WidgetId[] = [
-  "fortune",
   "lotto",
   "blog",
   "budget",
@@ -21,7 +18,6 @@ const DEFAULT_WIDGET_ORDER: WidgetId[] = [
   "stock",
   "travel",
   "realestate",
-  "playground",
 ];
 
 export const MOBILE_WIDGET_ORDER: WidgetId[] = [
@@ -31,9 +27,7 @@ export const MOBILE_WIDGET_ORDER: WidgetId[] = [
   "lotto",
   "stock",
   "travel",
-  "fortune",
   "realestate",
-  "playground",
 ];
 
 const WIDGET_IDS = new Set<WidgetId>(DEFAULT_WIDGET_ORDER);

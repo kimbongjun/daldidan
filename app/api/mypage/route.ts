@@ -19,14 +19,14 @@ export async function GET() {
 
   let { data: profile, error } = await supabase
     .from("profiles")
-    .select("display_name, avatar_url, birth_year, gender, birth_hour, birth_month, birth_day")
+    .select("display_name, avatar_url, birth_month, birth_day")
     .eq("id", user.id)
     .maybeSingle();
 
   if (isMissingColumnError(error, "avatar_url")) {
     const fallback = await supabase
       .from("profiles")
-      .select("display_name, birth_year, gender, birth_hour, birth_month, birth_day")
+      .select("display_name, birth_month, birth_day")
       .eq("id", user.id)
       .maybeSingle();
     profile = fallback.data ? { ...fallback.data, avatar_url: null } : fallback.data;
@@ -41,9 +41,6 @@ export async function GET() {
     email: user.email ?? "",
     display_name: profile?.display_name ?? "",
     avatar_url: profile?.avatar_url ?? null,
-    birth_year: profile?.birth_year ?? null,
-    gender: profile?.gender ?? null,
-    birth_hour: profile?.birth_hour ?? null,
     birth_month: profile?.birth_month ?? null,
     birth_day: profile?.birth_day ?? null,
   });
@@ -60,9 +57,6 @@ export async function PATCH(request: NextRequest) {
   const body = await request.json() as {
     display_name?: string;
     avatar_url?: string | null;
-    birth_year?: number | null;
-    gender?: string | null;
-    birth_hour?: number | null;
     birth_month?: number | null;
     birth_day?: number | null;
   };
@@ -78,27 +72,6 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "닉네임은 30자 이하로 입력해주세요." }, { status: 400 });
     }
     updates.display_name = displayName;
-  }
-
-  if (body.birth_year !== undefined) {
-    if (body.birth_year !== null && (body.birth_year < 1900 || body.birth_year > 2100)) {
-      return NextResponse.json({ error: "올바른 출생 연도를 입력해주세요." }, { status: 400 });
-    }
-    updates.birth_year = body.birth_year;
-  }
-
-  if (body.gender !== undefined) {
-    if (body.gender !== null && !["남성", "여성", "기타"].includes(body.gender)) {
-      return NextResponse.json({ error: "올바른 성별을 선택해주세요." }, { status: 400 });
-    }
-    updates.gender = body.gender;
-  }
-
-  if (body.birth_hour !== undefined) {
-    if (body.birth_hour !== null && (body.birth_hour < 0 || body.birth_hour > 23)) {
-      return NextResponse.json({ error: "올바른 태어난 시를 입력해주세요." }, { status: 400 });
-    }
-    updates.birth_hour = body.birth_hour;
   }
 
   if (body.birth_month !== undefined) {

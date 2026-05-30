@@ -8,7 +8,6 @@ import {
   LoaderCircle,
   Save,
   Settings,
-  Sparkles,
   Trash2,
   Upload,
 } from "lucide-react";
@@ -32,9 +31,6 @@ const inputStyle: React.CSSProperties = {
 interface MyPageProfile {
   display_name: string;
   avatar_url: string | null;
-  birth_year: number | null;
-  gender: string | null;
-  birth_hour: number | null;
   birth_month: number | null;
   birth_day: number | null;
 }
@@ -45,9 +41,6 @@ export default function MyPage() {
   const avatarFileRef = useRef<HTMLInputElement>(null);
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
-  const [birthYear, setBirthYear] = useState("");
-  const [gender, setGender] = useState("");
-  const [birthHour, setBirthHour] = useState("");
   const [birthMonth, setBirthMonth] = useState("");
   const [birthDay, setBirthDay] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
@@ -88,9 +81,6 @@ export default function MyPage() {
     if (!profileData) return;
     setDisplayName(profileData.display_name);
     setAvatarUrl(profileData.avatar_url ?? "");
-    if (profileData.birth_year) setBirthYear(String(profileData.birth_year));
-    if (profileData.gender) setGender(profileData.gender);
-    if (profileData.birth_hour != null) setBirthHour(String(profileData.birth_hour));
     if (profileData.birth_month) setBirthMonth(String(profileData.birth_month));
     if (profileData.birth_day) setBirthDay(String(profileData.birth_day));
   }, [profileData]);
@@ -122,9 +112,6 @@ export default function MyPage() {
     updateMutation.mutate({
       display_name: displayName,
       avatar_url: avatarUrl.trim() || null,
-      birth_year: birthYear ? Number(birthYear) : null,
-      gender: gender || null,
-      birth_hour: birthHour !== "" ? Number(birthHour) : null,
       birth_month: birthMonth ? Number(birthMonth) : null,
       birth_day: birthDay ? Number(birthDay) : null,
     });
@@ -304,58 +291,6 @@ export default function MyPage() {
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>이메일</label>
             <input value={email} disabled style={{ ...inputStyle, opacity: 0.5, cursor: "not-allowed" }} />
-          </div>
-
-          <hr style={{ border: "none", borderTop: "1px solid var(--border)" }} />
-
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-1.5">
-              <Sparkles size={14} style={{ color: ACCENT }} />
-              <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>운세 정보</p>
-            </div>
-            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-              AI 운세 분석에 사용됩니다. 입력하지 않으면 운세 위젯을 사용할 수 없어요.
-            </p>
-            <div className="flex gap-2">
-              <div className="flex flex-col gap-1.5 flex-1">
-                <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>출생 연도</label>
-                <input
-                  type="number"
-                  value={birthYear}
-                  onChange={(e) => setBirthYear(e.target.value)}
-                  placeholder="예: 1993"
-                  min={1900}
-                  max={2100}
-                  style={inputStyle}
-                />
-              </div>
-              <div className="flex flex-col gap-1.5 flex-1">
-                <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>성별</label>
-                <select
-                  value={gender}
-                  onChange={(e) => setGender(e.target.value)}
-                  style={{ ...inputStyle, appearance: "none" }}
-                >
-                  <option value="">선택</option>
-                  <option value="남성">남성</option>
-                  <option value="여성">여성</option>
-                  <option value="기타">기타</option>
-                </select>
-              </div>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>태어난 시 (0~23시)</label>
-              <input
-                type="number"
-                value={birthHour}
-                onChange={(e) => setBirthHour(e.target.value)}
-                placeholder="예: 14 (오후 2시)"
-                min={0}
-                max={23}
-                style={inputStyle}
-              />
-              <p className="text-xs" style={{ color: "var(--text-muted)" }}>24시간제 기준. 모르는 경우 비워두세요.</p>
-            </div>
           </div>
 
           <hr style={{ border: "none", borderTop: "1px solid var(--border)" }} />

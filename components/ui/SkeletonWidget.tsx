@@ -27,7 +27,6 @@ export function SkeletonWidget({
 
 // 실제 DashboardShell의 7개 위젯 + 반응형 span과 동일한 구조
 const WIDGET_SKELETONS = [
-  { id: "fortune",    mobile: 1, tablet: 1, desktop: 1, height: 220 },
   { id: "lotto",      mobile: 1, tablet: 1, desktop: 1, height: 220 },
   { id: "blog",       mobile: 1, tablet: 1, desktop: 2, height: 260 },
   { id: "budget",     mobile: 1, tablet: 1, desktop: 1, height: 260 },
