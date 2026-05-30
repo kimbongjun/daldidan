@@ -1004,7 +1004,7 @@ function TransactionRow({
 
   return (
     <div
-      className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 transition-colors"
+      className="flex items-center gap-2.5 rounded-xl px-3 py-3 transition-colors"
       style={{
         background: isEditing ? `${ACCENT}11` : "rgba(255,255,255,0.025)",
         border: `1px solid ${isEditing ? `${ACCENT}44` : "transparent"}`,
@@ -1047,34 +1047,43 @@ function TransactionRow({
         <button
           onClick={(e) => { e.stopPropagation(); onViewReceipt(); }}
           aria-label="영수증 보기"
-          className="opacity-50 hover:opacity-90 transition-opacity shrink-0"
+          className="flex items-center justify-center rounded-lg hover:opacity-80 transition-opacity shrink-0"
+          style={{ minWidth: 36, minHeight: 36, background: `${ACCENT}18` }}
         >
-          <ReceiptText size={13} style={{ color: ACCENT }} />
+          <ReceiptText size={15} style={{ color: ACCENT }} />
         </button>
       )}
       {isOwner && onEdit && (
         <button
           onClick={(e) => { e.stopPropagation(); onEdit(); }}
           aria-label="거래 수정"
-          className="opacity-50 hover:opacity-90 transition-opacity shrink-0"
+          className="flex items-center justify-center rounded-lg hover:opacity-80 transition-opacity shrink-0"
+          style={{ minWidth: 40, minHeight: 40, background: `${ACCENT}18`, border: `1px solid ${ACCENT}22` }}
         >
-          <Pencil size={13} style={{ color: ACCENT }} />
+          <Pencil size={15} style={{ color: ACCENT }} />
         </button>
       )}
       {isOwner && (
         <button
           onClick={handleDeleteClick}
           aria-label={confirmDelete ? "삭제 확인" : "거래 삭제"}
-          className="transition-all shrink-0 rounded-md"
+          className="flex items-center justify-center gap-1 rounded-lg transition-all shrink-0"
           style={{
-            padding: confirmDelete ? "2px 6px" : "2px",
-            background: confirmDelete ? "rgba(244,63,94,0.15)" : "transparent",
-            border: confirmDelete ? "1px solid rgba(244,63,94,0.3)" : "1px solid transparent",
+            minWidth: confirmDelete ? undefined : 40,
+            minHeight: 40,
+            padding: confirmDelete ? "0 12px" : undefined,
+            background: confirmDelete ? "rgba(244,63,94,0.15)" : "rgba(255,255,255,0.06)",
+            border: `1px solid ${confirmDelete ? "rgba(244,63,94,0.3)" : "var(--border)"}`,
           }}
         >
-          {confirmDelete
-            ? <span className="text-[10px] font-bold" style={{ color: "#F43F5E" }}>삭제?</span>
-            : <Trash2 size={12} className="opacity-40 hover:opacity-80 transition-opacity" style={{ color: "var(--text-muted)" }} />}
+          {confirmDelete ? (
+            <>
+              <Trash2 size={13} style={{ color: "#F43F5E" }} />
+              <span className="text-xs font-bold" style={{ color: "#F43F5E" }}>확인</span>
+            </>
+          ) : (
+            <Trash2 size={15} style={{ color: "var(--text-muted)" }} />
+          )}
         </button>
       )}
     </div>
@@ -1703,7 +1712,7 @@ function TransactionDetailModal({
             {isOwner && onEdit && (
               <button
                 onClick={onEdit}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-opacity hover:opacity-80"
+                className="flex-1 flex items-center justify-center gap-1.5 py-3 rounded-lg text-xs font-semibold transition-opacity hover:opacity-80"
                 style={{ background: ACCENT, color: "#fff" }}
               >
                 <Pencil size={13} />
@@ -1720,20 +1729,15 @@ function TransactionDetailModal({
                     setTimeout(() => setConfirmDelete(false), 3000);
                   }
                 }}
-                className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all hover:opacity-80"
+                className="flex-1 flex items-center justify-center gap-1.5 py-3 rounded-lg text-xs font-semibold transition-all hover:opacity-80"
                 style={{
-                  paddingLeft: "0.75rem",
-                  paddingRight: "0.75rem",
                   background: confirmDelete ? "rgba(244,63,94,0.15)" : "rgba(255,255,255,0.06)",
                   color: confirmDelete ? "#F43F5E" : "var(--text-muted)",
                   border: `1px solid ${confirmDelete ? "rgba(244,63,94,0.3)" : "var(--border)"}`,
                 }}
               >
-                {confirmDelete ? (
-                  <span>삭제 확인</span>
-                ) : (
-                  <Trash2 size={13} />
-                )}
+                <Trash2 size={13} />
+                {confirmDelete ? <span>삭제 확인</span> : <span>삭제</span>}
               </button>
             )}
           </div>
