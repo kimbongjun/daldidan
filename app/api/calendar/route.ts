@@ -26,6 +26,7 @@ type CalendarEventRow = {
   recurrence: string | null;
   is_shared?: boolean;
   reminder_minutes?: number | null;
+  color?: string | null;
   created_at: string;
 };
 
@@ -39,7 +40,7 @@ export async function GET(request: NextRequest) {
   const year = searchParams.get("year");
   const month = searchParams.get("month");
 
-  const buildQuery = (includeIsShared: boolean) => {
+  const buildQuery = (includeIsShared: boolean, includeColor = true) => {
     const select = [
       "id",
       "user_id",
@@ -55,6 +56,7 @@ export async function GET(request: NextRequest) {
       "recurrence",
       includeIsShared ? "is_shared" : null,
       "reminder_minutes",
+      includeColor ? "color" : null,
       "created_at",
     ].filter(Boolean).join(", ");
 
@@ -76,12 +78,20 @@ export async function GET(request: NextRequest) {
     return query;
   };
 
-  let { data, error } = await buildQuery(true);
+  let { data, error } = await buildQuery(true, true);
   let supportsIsShared = true;
+  let supportsColor = true;
 
   if (isMissingColumnError(error, "is_shared")) {
     supportsIsShared = false;
-    const fallback = await buildQuery(false);
+    const fallback = await buildQuery(false, true);
+    data = fallback.data;
+    error = fallback.error;
+  }
+
+  if (error && isMissingColumnError(error, "color")) {
+    supportsColor = false;
+    const fallback = await buildQuery(supportsIsShared, false);
     data = fallback.data;
     error = fallback.error;
   }
@@ -110,6 +120,7 @@ export async function GET(request: NextRequest) {
     author_name: nameMap[e.user_id] ?? "익명",
     is_mine: e.user_id === user.id,
     is_shared: supportsIsShared ? (e.is_shared ?? false) : false,
+    color: supportsColor ? (e.color ?? null) : null,
   }));
 
   return NextResponse.json(events);
@@ -134,6 +145,7 @@ export async function POST(request: NextRequest) {
     recurrence?: string;
     is_shared?: boolean;
     reminder_minutes?: number | null;
+    color?: string | null;
   };
 
   const title = body.title?.trim();
@@ -164,6 +176,7 @@ export async function POST(request: NextRequest) {
     recurrence,
     is_shared: body.is_shared ?? false,
     reminder_minutes: body.reminder_minutes ?? null,
+    color: body.color ?? null,
   };
 
   let { data, error } = await supabase
@@ -188,6 +201,7 @@ export async function POST(request: NextRequest) {
         is_recurring: insertPayload.is_recurring,
         recurrence: insertPayload.recurrence,
         reminder_minutes: insertPayload.reminder_minutes,
+        color: insertPayload.color,
       })
       .select()
       .single();

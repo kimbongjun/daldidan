@@ -47,7 +47,7 @@ export async function PATCH(
     return NextResponse.json({ error: "수정할 일정을 찾지 못했습니다." }, { status: 404 });
   }
 
-  const allowed = ["title", "event_type", "start_date", "start_time", "end_date", "end_time", "location", "description", "is_recurring", "recurrence", "reminder_minutes"];
+  const allowed = ["title", "event_type", "start_date", "start_time", "end_date", "end_time", "location", "description", "is_recurring", "recurrence", "reminder_minutes", "color"];
   const patch: Record<string, unknown> = {};
   for (const key of allowed) {
     if (key in body) patch[key] = body[key];

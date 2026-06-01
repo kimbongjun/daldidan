@@ -67,7 +67,9 @@ function normalizeNaverDate(value: string): string {
 }
 
 function parseNaverLottoHtml(html: string, expectedRound: number): LottoFetchResult {
-  const roundMatch = html.match(/class="text _select_trigger _text"[^>]*>(\d+)회차 \((\d{4}\.\d{2}\.\d{2}\.)\)<\/a>/);
+  const roundMatch =
+    html.match(/class="text _select_trigger _text"[^>]*>(\d+)회차 \((\d{4}\.\d{2}\.\d{2}\.)\)<\/a>/) ??
+    html.match(/(\d+)회차\s*\((\d{4}\.\d{2}\.\d{2}\.?)\)/);
   if (!roundMatch) return { ok: false, reason: "네이버 로또 위젯을 찾지 못했습니다." };
 
   const round = Number(roundMatch[1]);
@@ -75,7 +77,9 @@ function parseNaverLottoHtml(html: string, expectedRound: number): LottoFetchRes
     return { ok: false, reason: `네이버 검색 결과 회차 불일치: 요청 ${expectedRound}회 / 응답 ${round}회` };
   }
 
-  const winningBlockMatch = html.match(/<div class="winning_number">([\s\S]*?)<\/div>\s*<div class="bonus_number">\s*<span class="ball [^"]+">(\d+)<\/span>/);
+  const winningBlockMatch =
+    html.match(/<div class="winning_number">([\s\S]*?)<\/div>\s*<div class="bonus_number">\s*<span class="ball [^"]+">(\d+)<\/span>/) ??
+    html.match(/<div[^>]*class="[^"]*winning_number[^"]*"[^>]*>([\s\S]*?)<\/div>[\s\S]{0,300}<div[^>]*class="[^"]*bonus_number[^"]*"[^>]*>[\s\S]{0,100}<span[^>]*class="[^"]*ball[^"]*"[^>]*>(\d+)<\/span>/);
   if (!winningBlockMatch) return { ok: false, reason: "네이버 당첨번호 영역 파싱 실패" };
 
   const winningNumbers = Array.from(
@@ -172,11 +176,11 @@ export async function fetchFromNaverSearch(drwNo: number): Promise<LottoFetchRes
 }
 
 export async function fetchLotto(drwNo: number): Promise<LottoFetchResult> {
-  const naver = await fetchFromNaverSearch(drwNo);
-  if (naver.ok) return naver;
   const dhl = await fetchFromDhlottery(drwNo);
   if (dhl.ok) return dhl;
-  return { ok: false, reason: `네이버 크롤링: ${naver.reason} / dhlottery: ${dhl.reason}` };
+  const naver = await fetchFromNaverSearch(drwNo);
+  if (naver.ok) return naver;
+  return { ok: false, reason: `dhlottery: ${dhl.reason} / 네이버 크롤링: ${naver.reason}` };
 }
 
 export async function upsertLottoResult(data: LottoData) {

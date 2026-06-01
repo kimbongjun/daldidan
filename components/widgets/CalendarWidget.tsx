@@ -43,6 +43,7 @@ interface CalendarEvent {
   is_mine: boolean;
   is_shared: boolean;
   reminder_minutes: number | null;
+  color: string | null;
 }
 
 type NewEvent = {
@@ -58,6 +59,7 @@ type NewEvent = {
   recurrence: Recurrence | "";
   is_shared: boolean;
   reminder_minutes: number | null;
+  color: string;
 };
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -65,6 +67,11 @@ const EVENT_TYPE_META: Record<EventType, { label: string; color: string; bg: str
   schedule:    { label: "일정",   color: "#5CABF2", bg: "rgba(92,171,242,0.15)" },
   anniversary: { label: "기념일", color: "#F43F5E", bg: "rgba(244,63,94,0.15)" },
 };
+
+const COLOR_PRESETS = [
+  "#5CABF2", "#F43F5E", "#F97316", "#EAB308",
+  "#22C55E", "#14B8A6", "#8B5CF6", "#EC4899",
+];
 
 const RECURRENCE_LABELS: Record<Recurrence | "", string> = {
   "":       "반복 없음",
@@ -97,6 +104,7 @@ const DEFAULT_NEW_EVENT: NewEvent = {
   recurrence: "",
   is_shared: false,
   reminder_minutes: null,
+  color: "#5CABF2",
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -255,6 +263,35 @@ function EventFormFields({
         </select>
       </div>
 
+      <div className="flex flex-col gap-1">
+        <label className="text-xs" style={{ color: "var(--text-muted)" }}>색상</label>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {COLOR_PRESETS.map((c) => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => set("color", c)}
+              className="w-6 h-6 rounded-full transition-all"
+              style={{
+                background: c,
+                outline: form.color === c ? `2px solid ${c}` : "none",
+                outlineOffset: "2px",
+                boxShadow: form.color === c ? "0 0 0 1px var(--bg-card)" : "none",
+              }}
+              aria-label={`색상 ${c}`}
+            />
+          ))}
+          <input
+            type="color"
+            value={form.color}
+            onChange={(e) => set("color", e.target.value)}
+            className="w-6 h-6 rounded-full cursor-pointer overflow-hidden"
+            style={{ border: "1px solid var(--border)", padding: 0 }}
+            title="직접 선택"
+          />
+        </div>
+      </div>
+
       <div className="flex flex-col gap-2">
         <label className="flex items-center gap-2 cursor-pointer">
           <input
@@ -307,6 +344,7 @@ function EventEditModal({
     recurrence: event.recurrence ?? "",
     is_shared: event.is_shared,
     reminder_minutes: event.reminder_minutes ?? null,
+    color: event.color ?? "#5CABF2",
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -341,6 +379,7 @@ function EventEditModal({
           is_recurring: form.is_recurring,
           recurrence: form.is_recurring && form.recurrence ? form.recurrence : null,
           reminder_minutes: form.reminder_minutes,
+          color: form.color,
         }),
       });
       if (!res.ok) {
@@ -439,6 +478,7 @@ function EventFormModal({
           recurrence: form.is_recurring && form.recurrence ? form.recurrence : null,
           is_shared: form.is_shared,
           reminder_minutes: form.reminder_minutes,
+          color: form.color,
         }),
       });
       if (!res.ok) {
@@ -613,14 +653,14 @@ function EventDetailModal({
                         <span
                           className="text-xs px-1.5 py-0.5 rounded font-medium flex items-center gap-1"
                           style={{
-                            background: `${getAuthorColor(ev.user_id)}18`,
-                            color: getAuthorColor(ev.user_id),
-                            border: `1px solid ${getAuthorColor(ev.user_id)}35`,
+                            background: `${ev.color ?? getAuthorColor(ev.user_id)}18`,
+                            color: ev.color ?? getAuthorColor(ev.user_id),
+                            border: `1px solid ${ev.color ?? getAuthorColor(ev.user_id)}35`,
                           }}
                         >
                           <span
                             className="w-1.5 h-1.5 rounded-full inline-block"
-                            style={{ background: getAuthorColor(ev.user_id) }}
+                            style={{ background: ev.color ?? getAuthorColor(ev.user_id) }}
                           />
                           {ev.author_name}
                         </span>
@@ -792,7 +832,7 @@ export default function CalendarWidget() {
     const map: Record<string, { isStart: boolean; isEnd: boolean; color: string }[]> = {};
     for (const ev of events) {
       if (!ev.end_date || ev.end_date === ev.start_date) continue;
-      const color = ev.is_shared ? SHARED_COLOR : getAuthorColor(ev.user_id);
+      const color = ev.color ?? (ev.is_shared ? SHARED_COLOR : getAuthorColor(ev.user_id));
       const cur = new Date(ev.start_date);
       const endDate = new Date(ev.end_date);
       while (cur <= endDate) {
@@ -1018,7 +1058,7 @@ export default function CalendarWidget() {
                       <span
                         key={ev.id}
                         className="w-1.5 h-1.5 rounded-full"
-                        style={{ background: ev.is_shared ? SHARED_COLOR : getAuthorColor(ev.user_id) }}
+                        style={{ background: ev.color ?? (ev.is_shared ? SHARED_COLOR : getAuthorColor(ev.user_id)) }}
                       />
                     ))}
                   </div>
@@ -1037,7 +1077,7 @@ export default function CalendarWidget() {
             <div className="flex flex-col gap-2 overflow-y-auto scrollbar-hide">
               {upcoming.map((ev) => {
                 const meta = EVENT_TYPE_META[ev.event_type];
-                const authorColor = ev.is_shared ? SHARED_COLOR : getAuthorColor(ev.user_id);
+                const authorColor = ev.color ?? (ev.is_shared ? SHARED_COLOR : getAuthorColor(ev.user_id));
                 const [, em, ed] = ev.start_date.split("-").map(Number);
                 const dateLabel = `${em}/${ed}`;
                 const dday = dDayLabel(ev.start_date);
