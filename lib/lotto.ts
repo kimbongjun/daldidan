@@ -2,14 +2,15 @@ import { createAdminClient } from "@/lib/supabase/server";
 
 const DHLOTTERY_URL = "https://www.dhlottery.co.kr/common.do?method=getLottoNumber&drwNo=";
 const NAVER_SEARCH_URL = "https://search.naver.com/search.naver?where=nexearch&query=";
+const USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 const DHLOTTERY_HEADERS = {
-  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+  "User-Agent": USER_AGENT,
   "Accept": "application/json, text/plain, */*",
   "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
   "Referer": "https://www.dhlottery.co.kr/gameResult.do?method=byWin",
 };
 const NAVER_HEADERS = {
-  "User-Agent": DHLOTTERY_HEADERS["User-Agent"],
+  "User-Agent": USER_AGENT,
   "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
   "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
   "Referer": "https://search.naver.com/",
@@ -77,21 +78,56 @@ function parseNaverLottoHtml(html: string, expectedRound: number): LottoFetchRes
     return { ok: false, reason: `네이버 검색 결과 회차 불일치: 요청 ${expectedRound}회 / 응답 ${round}회` };
   }
 
+  // 전략 1: winning_number / bonus_number 컨테이너 div로 파싱
+  let winningNumbers: number[] = [];
+  let bonusNo: number | null = null;
+
   const winningBlockMatch =
     html.match(/<div class="winning_number">([\s\S]*?)<\/div>\s*<div class="bonus_number">\s*<span class="ball [^"]+">(\d+)<\/span>/) ??
     html.match(/<div[^>]*class="[^"]*winning_number[^"]*"[^>]*>([\s\S]*?)<\/div>[\s\S]{0,300}<div[^>]*class="[^"]*bonus_number[^"]*"[^>]*>[\s\S]{0,100}<span[^>]*class="[^"]*ball[^"]*"[^>]*>(\d+)<\/span>/);
-  if (!winningBlockMatch) return { ok: false, reason: "네이버 당첨번호 영역 파싱 실패" };
 
-  const winningNumbers = Array.from(
-    winningBlockMatch[1].matchAll(/<span class="ball [^"]+">(\d+)<\/span>/g),
-    (match) => Number(match[1]),
-  );
+  if (winningBlockMatch) {
+    winningNumbers = Array.from(
+      winningBlockMatch[1].matchAll(/<span[^>]*class="[^"]*ball[^"]*"[^>]*>(\d+)<\/span>/g),
+      (m) => Number(m[1]),
+    ).filter((n) => n >= 1 && n <= 45);
+    if (winningBlockMatch[2]) bonusNo = Number(winningBlockMatch[2]);
+  }
+
+  // 전략 2: 회차 언급 위치 근방에서 ball span 탐색 (클래스 구조 변경 대응)
+  if (winningNumbers.length !== 6) {
+    const roundPos = html.indexOf(roundMatch[0]);
+    const section = roundPos >= 0 ? html.slice(roundPos, roundPos + 5000) : html;
+    const balls = Array.from(
+      section.matchAll(/<span[^>]*class="[^"]*ball[^"]*"[^>]*>(\d+)<\/span>/g),
+      (m) => Number(m[1]),
+    ).filter((n) => n >= 1 && n <= 45);
+    if (balls.length >= 6) {
+      winningNumbers = balls.slice(0, 6);
+      if (balls.length >= 7) bonusNo ??= balls[6];
+    }
+  }
+
   if (winningNumbers.length !== 6) {
     return { ok: false, reason: `네이버 당첨번호 개수 오류: ${winningNumbers.length}` };
   }
 
-  const firstPrizeMatch = html.match(/<th scope="row" rowspan="4">1등<\/th>\s*<td class="sub_title">총 당첨금<\/td>\s*<td>([\d,]+)원<\/td>\s*<\/tr>\s*<tr>\s*<td class="sub_title">당첨 복권수<\/td>\s*<td>([\d,]+)개<\/td>\s*<\/tr>\s*<tr class="emphasis">\s*<td class="sub_title">1개당 당첨금<\/td>\s*<td>([\d,]+)원<\/td>/);
-  if (!firstPrizeMatch) return { ok: false, reason: "네이버 1등 당첨금 영역 파싱 실패" };
+  // 보너스 번호 별도 탐색
+  if (bonusNo === null) {
+    const bonusMatch =
+      html.match(/<div[^>]*class="[^"]*bonus_number[^"]*"[^>]*>[\s\S]{0,200}<span[^>]*class="[^"]*ball[^"]*"[^>]*>(\d+)<\/span>/) ??
+      html.match(/bonus[^>]*>[\s\S]{0,100}<span[^>]*>(\d+)<\/span>/i);
+    if (bonusMatch) bonusNo = Number(bonusMatch[1]);
+  }
+
+  if (bonusNo === null) {
+    return { ok: false, reason: "네이버 보너스 번호 파싱 실패" };
+  }
+
+  // 1등 당첨금 — 유연한 패턴으로 파싱, 없어도 0으로 대체해 성공 반환
+  const prizeMatch =
+    html.match(/1등[\s\S]{0,800}?총 당첨금[\s\S]{0,200}?([\d,]+)원[\s\S]{0,200}?당첨 복권수[\s\S]{0,200}?([\d,]+)개[\s\S]{0,200}?1개당 당첨금[\s\S]{0,200}?([\d,]+)원/) ??
+    html.match(/<th scope="row" rowspan="4">1등<\/th>\s*<td class="sub_title">총 당첨금<\/td>\s*<td>([\d,]+)원<\/td>\s*<\/tr>\s*<tr>\s*<td class="sub_title">당첨 복권수<\/td>\s*<td>([\d,]+)개<\/td>\s*<\/tr>\s*<tr class="emphasis">\s*<td class="sub_title">1개당 당첨금<\/td>\s*<td>([\d,]+)원<\/td>/);
 
   return {
     ok: true,
@@ -104,58 +140,69 @@ function parseNaverLottoHtml(html: string, expectedRound: number): LottoFetchRes
       drwtNo4: winningNumbers[3],
       drwtNo5: winningNumbers[4],
       drwtNo6: winningNumbers[5],
-      bnusNo: Number(winningBlockMatch[2]),
-      firstWinamnt: toNumber(firstPrizeMatch[3]),
-      firstPrzwnerCo: toNumber(firstPrizeMatch[2]),
-      firstAccumAmnt: toNumber(firstPrizeMatch[1]),
+      bnusNo: bonusNo,
+      firstWinamnt: prizeMatch ? toNumber(prizeMatch[3]) : 0,
+      firstPrzwnerCo: prizeMatch ? toNumber(prizeMatch[2]) : 0,
+      firstAccumAmnt: prizeMatch ? toNumber(prizeMatch[1]) : 0,
     },
   };
 }
 
 export async function fetchFromDhlottery(drwNo: number): Promise<LottoFetchResult> {
-  try {
-    const res = await fetch(DHLOTTERY_URL + drwNo, {
-      signal: AbortSignal.timeout(10000),
-      cache: "no-store",
-      headers: DHLOTTERY_HEADERS,
-    });
-    if (!res.ok) return { ok: false, reason: `dhlottery HTTP ${res.status}` };
+  // HTML(봇 차단) 응답 시 헤더 없이 재시도
+  const headerVariants: Array<Record<string, string> | undefined> = [DHLOTTERY_HEADERS, undefined];
+  let lastReason = "dhlottery IP 차단 또는 봇 차단 HTML 응답";
 
-    const text = await res.text();
-    let data: unknown;
+  for (const headers of headerVariants) {
     try {
-      data = JSON.parse(text);
-    } catch {
-      const isHtml = text.trimStart().startsWith("<");
-      return { ok: false, reason: isHtml ? "dhlottery IP 차단 또는 봇 차단 HTML 응답" : "dhlottery JSON 파싱 실패" };
-    }
+      const init: RequestInit = { signal: AbortSignal.timeout(10000), cache: "no-store" };
+      if (headers) init.headers = headers;
 
-    const r = data as Record<string, unknown>;
-    if (r.returnValue === "fail") return { ok: false, reason: "추첨 전 또는 존재하지 않는 회차" };
-    if (r.returnValue !== "success" || typeof r.drwNo !== "number") {
-      return { ok: false, reason: "dhlottery 응답 형식 불일치" };
-    }
+      const res = await fetch(DHLOTTERY_URL + drwNo, init);
+      if (!res.ok) return { ok: false, reason: `dhlottery HTTP ${res.status}` };
 
-    return {
-      ok: true,
-      data: {
-        drwNo: r.drwNo as number,
-        drwNoDate: r.drwNoDate as string,
-        drwtNo1: r.drwtNo1 as number,
-        drwtNo2: r.drwtNo2 as number,
-        drwtNo3: r.drwtNo3 as number,
-        drwtNo4: r.drwtNo4 as number,
-        drwtNo5: r.drwtNo5 as number,
-        drwtNo6: r.drwtNo6 as number,
-        bnusNo: r.bnusNo as number,
-        firstWinamnt: (r.firstWinamnt as number) ?? 0,
-        firstPrzwnerCo: (r.firstPrzwnerCo as number) ?? 0,
-        firstAccumAmnt: (r.firstAccumAmnt as number) ?? 0,
-      },
-    };
-  } catch (e) {
-    return { ok: false, reason: `dhlottery 네트워크 오류: ${e instanceof Error ? e.message : String(e)}` };
+      const text = await res.text();
+      if (text.trimStart().startsWith("<")) {
+        lastReason = "dhlottery IP 차단 또는 봇 차단 HTML 응답";
+        continue;
+      }
+
+      let data: unknown;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        return { ok: false, reason: "dhlottery JSON 파싱 실패" };
+      }
+
+      const r = data as Record<string, unknown>;
+      if (r.returnValue === "fail") return { ok: false, reason: "추첨 전 또는 존재하지 않는 회차" };
+      if (r.returnValue !== "success" || typeof r.drwNo !== "number") {
+        return { ok: false, reason: "dhlottery 응답 형식 불일치" };
+      }
+
+      return {
+        ok: true,
+        data: {
+          drwNo: r.drwNo as number,
+          drwNoDate: r.drwNoDate as string,
+          drwtNo1: r.drwtNo1 as number,
+          drwtNo2: r.drwtNo2 as number,
+          drwtNo3: r.drwtNo3 as number,
+          drwtNo4: r.drwtNo4 as number,
+          drwtNo5: r.drwtNo5 as number,
+          drwtNo6: r.drwtNo6 as number,
+          bnusNo: r.bnusNo as number,
+          firstWinamnt: (r.firstWinamnt as number) ?? 0,
+          firstPrzwnerCo: (r.firstPrzwnerCo as number) ?? 0,
+          firstAccumAmnt: (r.firstAccumAmnt as number) ?? 0,
+        },
+      };
+    } catch (e) {
+      lastReason = `dhlottery 네트워크 오류: ${e instanceof Error ? e.message : String(e)}`;
+    }
   }
+
+  return { ok: false, reason: lastReason };
 }
 
 export async function fetchFromNaverSearch(drwNo: number): Promise<LottoFetchResult> {
