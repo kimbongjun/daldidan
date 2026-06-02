@@ -553,6 +553,7 @@ input[type="reset"]:not(:disabled):active,
 .blog-editor-content img,
 .blog-prose img {
   width: 100%;
+  max-width: 100%;
   height: auto;
   border-radius: 1rem;
   margin: 1rem 0;
@@ -856,6 +857,9 @@ input[type="reset"]:not(:disabled):active,
   color: var(--text-primary);
   line-height: 1.85;
   font-size: 1rem;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  overflow-x: hidden;
 }
 
 .blog-prose h1,
