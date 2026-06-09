@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -28,6 +28,8 @@ import { StreamVideoBlock } from "@/lib/blog-stream-video";
 import { MapInputBlock } from "@/components/blog/MapInputBlock";
 import CloudflareVideoUploader from "@/components/blog/CloudflareVideoUploader";
 import { uploadImagesToStorage } from "@/lib/image-upload";
+import { ImageGalleryExtension } from "@/lib/blog-image-gallery";
+import type { GalleryImage } from "@/lib/blog-image-gallery";
 
 export const DEFAULT_EDITOR_HTML = "";
 
@@ -48,6 +50,69 @@ export default function BlogEditor({
   const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null);
   const [uploadError, setUploadError] = useState("");
   const [videoUploaderOpen, setVideoUploaderOpen] = useState(false);
+  const activeDragRef = useRef<{ src: string; alt: string } | null>(null);
+  const lastDragOverRef = useRef<HTMLImageElement | null>(null);
+
+  const handleDropGallery = useCallback((
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    view: any,
+    event: DragEvent,
+    _slice: unknown,
+    moved: boolean,
+  ): boolean => {
+    if (!moved || !activeDragRef.current) return false;
+    const target = event.target as HTMLElement;
+    const targetImg = target.tagName === "IMG" ? (target as HTMLImageElement) : null;
+    if (!targetImg?.src) return false;
+    if (targetImg.src === activeDragRef.current.src) return false;
+    if (targetImg.closest('[data-type="image-gallery"]')) return false;
+
+    const draggedSrc = activeDragRef.current.src;
+    const draggedAlt = activeDragRef.current.alt;
+    const targetSrc = targetImg.src;
+    const targetAlt = targetImg.alt ?? "";
+
+    let targetFrom = -1, targetTo = -1;
+    let draggedFrom = -1, draggedTo = -1;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    view.state.doc.descendants((node: any, pos: number) => {
+      if (node.type.name === "image") {
+        if (node.attrs.src === targetSrc && targetFrom === -1) {
+          targetFrom = pos; targetTo = pos + node.nodeSize;
+        }
+        if (node.attrs.src === draggedSrc && draggedFrom === -1) {
+          draggedFrom = pos; draggedTo = pos + node.nodeSize;
+        }
+      }
+      return targetFrom === -1 || draggedFrom === -1;
+    });
+
+    if (targetFrom === -1 || draggedFrom === -1) return false;
+
+    const galleryType = view.state.schema.nodes.imageGallery;
+    if (!galleryType) return false;
+
+    const galleryImages: GalleryImage[] = [
+      { src: targetSrc, alt: targetAlt },
+      { src: draggedSrc, alt: draggedAlt },
+    ];
+    const galleryNode = galleryType.create({ images: galleryImages });
+    const tr = view.state.tr;
+
+    if (draggedFrom > targetFrom) {
+      tr.delete(draggedFrom, draggedTo);
+      tr.replaceWith(targetFrom, targetTo, galleryNode);
+    } else {
+      tr.delete(draggedFrom, draggedTo);
+      const shift = -(draggedTo - draggedFrom);
+      tr.replaceWith(targetFrom + shift, targetTo + shift, galleryNode);
+    }
+
+    view.dispatch(tr);
+    activeDragRef.current = null;
+    return true;
+  }, []);
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -70,12 +135,15 @@ export default function BlogEditor({
         inline: false,
         allowBase64: true,
       }),
+      ImageGalleryExtension,
     ],
     content: value.html,
     editorProps: {
       attributes: {
         class: "blog-editor-content",
       },
+      handleDrop: (view, event, slice, moved) =>
+        handleDropGallery(view, event as DragEvent, slice, moved),
     },
     onUpdate: ({ editor: currentEditor }) => {
       onChange({
@@ -93,6 +161,53 @@ export default function BlogEditor({
       json: editor.getJSON(),
     });
   }, [editor, onChange, value.html]);
+
+  useEffect(() => {
+    if (!editor) return;
+    const dom = editor.view.dom;
+
+    const onDragStart = (e: Event) => {
+      const target = (e as DragEvent).target as HTMLElement;
+      if (target.tagName === "IMG") {
+        const img = target as HTMLImageElement;
+        activeDragRef.current = { src: img.src, alt: img.alt };
+      } else {
+        activeDragRef.current = null;
+      }
+    };
+    const onDragEnd = () => {
+      lastDragOverRef.current?.classList.remove("blog-image-drop-target");
+      lastDragOverRef.current = null;
+      activeDragRef.current = null;
+    };
+    const onDragOver = (e: Event) => {
+      if (!activeDragRef.current) return;
+      const target = (e as DragEvent).target as HTMLElement;
+      if (target.tagName === "IMG" && target !== lastDragOverRef.current) {
+        lastDragOverRef.current?.classList.remove("blog-image-drop-target");
+        target.classList.add("blog-image-drop-target");
+        lastDragOverRef.current = target as HTMLImageElement;
+      }
+    };
+    const onDragLeave = (e: Event) => {
+      const target = (e as DragEvent).target as HTMLElement;
+      if (target.tagName === "IMG") {
+        target.classList.remove("blog-image-drop-target");
+        if (lastDragOverRef.current === target) lastDragOverRef.current = null;
+      }
+    };
+
+    dom.addEventListener("dragstart", onDragStart);
+    dom.addEventListener("dragend", onDragEnd);
+    dom.addEventListener("dragover", onDragOver);
+    dom.addEventListener("dragleave", onDragLeave);
+    return () => {
+      dom.removeEventListener("dragstart", onDragStart);
+      dom.removeEventListener("dragend", onDragEnd);
+      dom.removeEventListener("dragover", onDragOver);
+      dom.removeEventListener("dragleave", onDragLeave);
+    };
+  }, [editor]);
 
   const insertFiles = async (files: FileList | File[]) => {
     if (!editor) return;

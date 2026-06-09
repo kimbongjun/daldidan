@@ -398,35 +398,39 @@ function EventEditModal({
   if (!mounted) return null;
   return createPortal(
     <div
-      style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)", overflowY: "auto" }}
     >
       <div
-        className="bento-card w-full max-w-md overflow-y-auto"
-        style={{ maxHeight: "90vh", background: "var(--bg-card)", border: "1px solid var(--border)" }}
+        style={{ minHeight: "100%", display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}
+        onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       >
-        <div className="flex items-center justify-between p-5 pb-0">
-          <div className="flex items-center gap-2">
-            <Pencil size={18} style={{ color: "#5CABF2" }} />
-            <span className="font-semibold" style={{ color: "var(--text-primary)" }}>일정 편집</span>
+        <div
+          className="bento-card w-full max-w-md"
+          style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+        >
+          <div className="flex items-center justify-between p-5 pb-0">
+            <div className="flex items-center gap-2">
+              <Pencil size={18} style={{ color: "#5CABF2" }} />
+              <span className="font-semibold" style={{ color: "var(--text-primary)" }}>일정 편집</span>
+            </div>
+            <button onClick={onClose} aria-label="닫기" className="p-1 rounded-lg" style={{ color: "var(--text-muted)" }}>
+              <X size={18} />
+            </button>
           </div>
-          <button onClick={onClose} aria-label="닫기" className="p-1 rounded-lg" style={{ color: "var(--text-muted)" }}>
-            <X size={18} />
-          </button>
-        </div>
 
-        <form onSubmit={handleSubmit} className="p-5 flex flex-col gap-4">
-          <EventFormFields form={form} set={set} />
-          {error && <p className="text-xs" style={{ color: "#F43F5E" }}>{error}</p>}
-          <button
-            type="submit"
-            disabled={saving}
-            className="w-full py-2.5 rounded-xl text-sm font-semibold transition-opacity"
-            style={{ background: "#5CABF2", color: "#fff", opacity: saving ? 0.6 : 1 }}
-          >
-            {saving ? "저장 중…" : "변경 사항 저장"}
-          </button>
-        </form>
+          <form onSubmit={handleSubmit} className="p-5 flex flex-col gap-4">
+            <EventFormFields form={form} set={set} />
+            {error && <p className="text-xs" style={{ color: "#F43F5E" }}>{error}</p>}
+            <button
+              type="submit"
+              disabled={saving}
+              className="w-full py-2.5 rounded-xl text-sm font-semibold transition-opacity"
+              style={{ background: "#5CABF2", color: "#fff", opacity: saving ? 0.6 : 1 }}
+            >
+              {saving ? "저장 중…" : "변경 사항 저장"}
+            </button>
+          </form>
+        </div>
       </div>
     </div>,
     document.body
@@ -497,13 +501,16 @@ function EventFormModal({
   if (!mounted) return null;
   return createPortal(
     <div
-      style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)", overflowY: "auto" }}
     >
       <div
-        className="bento-card w-full max-w-md overflow-y-auto"
-        style={{ maxHeight: "90vh", background: "var(--bg-card)", border: "1px solid var(--border)" }}
+        style={{ minHeight: "100%", display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}
+        onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       >
+        <div
+          className="bento-card w-full max-w-md"
+          style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
+        >
         {/* Header */}
         <div className="flex items-center justify-between p-5 pb-0">
           <div className="flex items-center gap-2">
@@ -561,6 +568,7 @@ function EventFormModal({
             {saving ? "저장 중…" : "일정 저장"}
           </button>
         </form>
+        </div>
       </div>
     </div>,
     document.body
@@ -611,12 +619,15 @@ function EventDetailModal({
   if (!mounted) return null;
   return createPortal(
     <div
-      style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)", overflowY: "auto" }}
     >
       <div
-        className="bento-card w-full max-w-sm overflow-y-auto"
-        style={{ maxHeight: "80vh", background: "var(--bg-card)", border: "1px solid var(--border)" }}
+        style={{ minHeight: "100%", display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}
+        onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      >
+      <div
+        className="bento-card w-full max-w-sm"
+        style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
       >
         <div className="flex items-center justify-between p-5 pb-3">
           <span className="font-semibold text-sm" style={{ color: "var(--text-primary)" }}>{dateLabel}</span>
@@ -748,6 +759,7 @@ function EventDetailModal({
             );
           })}
         </div>
+      </div>
       </div>
     </div>,
     document.body

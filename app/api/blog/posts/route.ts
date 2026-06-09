@@ -29,13 +29,15 @@ export async function POST(request: NextRequest) {
     contentHtml?: string;
     category?: string;
     publishedAt?: string;
+    thumbnailUrl?: string;
   };
 
   const title = body.title?.trim() ?? "";
   const contentHtml = body.contentHtml?.trim() ?? "";
   const category = body.category?.trim() || null;
+  const manualThumbnail = body.thumbnailUrl?.trim() || null;
   const fallbackDescription = extractDescriptionFromHtml(contentHtml);
-  const resolvedThumbnail = extractFirstVideoThumbnailFromHtml(contentHtml) ?? extractFirstImageFromHtml(contentHtml);
+  const resolvedThumbnail = manualThumbnail ?? extractFirstVideoThumbnailFromHtml(contentHtml) ?? extractFirstImageFromHtml(contentHtml);
 
   if (!title || !contentHtml) {
     return NextResponse.json({ error: "제목과 본문을 입력해주세요." }, { status: 400 });
@@ -71,6 +73,7 @@ export async function POST(request: NextRequest) {
       title,
       description,
       thumbnail_url: resolvedThumbnail || null,
+      thumbnail_source: manualThumbnail ? "manual" : null,
       content_html: contentHtml,
       is_published: true,
       published_at: publishedAt,
@@ -86,7 +89,7 @@ export async function POST(request: NextRequest) {
   revalidatePath(`/blog/${slug}`);
 
   after(async () => {
-    // 썸네일 없으면 자동 생성 후 DB 업데이트
+    // 수동 썸네일이 없고 본문 이미지도 없을 때만 자동 생성
     let finalThumbnail = resolvedThumbnail;
     if (!resolvedThumbnail) {
       const result = await generateAutoThumbnail(title, contentHtml, slug, category, {
@@ -133,12 +136,14 @@ export async function PATCH(request: NextRequest) {
     contentHtml?: string;
     category?: string;
     publishedAt?: string;
+    thumbnailUrl?: string;
   };
 
   const id = body.id?.trim() ?? "";
   const title = body.title?.trim() ?? "";
   const contentHtml = body.contentHtml?.trim() ?? "";
   const category = body.category?.trim() || null;
+  const manualThumbnail = body.thumbnailUrl?.trim() || null;
   const candidateDate = body.publishedAt ? new Date(body.publishedAt) : null;
   if (candidateDate && !isNaN(candidateDate.getTime()) && candidateDate.getTime() > Date.now()) {
     return NextResponse.json({ error: "미래 시각으로는 발행일을 변경할 수 없습니다." }, { status: 400 });
@@ -147,7 +152,7 @@ export async function PATCH(request: NextRequest) {
     ? candidateDate.toISOString()
     : null;
   const fallbackDescription = extractDescriptionFromHtml(contentHtml);
-  const resolvedThumbnail = extractFirstVideoThumbnailFromHtml(contentHtml) ?? extractFirstImageFromHtml(contentHtml);
+  const resolvedThumbnail = manualThumbnail ?? extractFirstVideoThumbnailFromHtml(contentHtml) ?? extractFirstImageFromHtml(contentHtml);
 
   if (!id || !title || !contentHtml) {
     return NextResponse.json({ error: "수정에 필요한 정보가 부족합니다." }, { status: 400 });
@@ -176,6 +181,7 @@ export async function PATCH(request: NextRequest) {
       title,
       description,
       thumbnail_url: resolvedThumbnail || null,
+      thumbnail_source: manualThumbnail ? "manual" : null,
       content_html: contentHtml,
       category,
       updated_at: new Date().toISOString(),
@@ -193,7 +199,7 @@ export async function PATCH(request: NextRequest) {
   revalidatePath(`/blog/${existing.slug}`);
   revalidatePath(`/blog/${slug}`);
 
-  // 본문에 이미지 없으면 자동 썸네일 생성 (비동기)
+  // 수동 썸네일이 없고 본문 이미지도 없을 때만 자동 생성
   if (!resolvedThumbnail) {
     const capturedId = id;
     const capturedSlug = slug;

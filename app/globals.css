@@ -579,6 +579,86 @@ input[type="reset"]:not(:disabled):active,
   opacity: 0.88;
 }
 
+/* ── Image Gallery (masonry) ────────────────────────────────────────── */
+.blog-image-gallery {
+  columns: 2;
+  column-gap: 0.5rem;
+  margin: 1rem 0;
+}
+
+.blog-image-gallery img {
+  width: 100%;
+  break-inside: avoid;
+  margin-bottom: 0.5rem;
+  border-radius: 0.75rem;
+  display: block;
+  cursor: zoom-in;
+  transition: opacity 0.15s ease;
+}
+
+.blog-image-gallery img:hover {
+  opacity: 0.88;
+}
+
+/* Editor gallery view */
+.blog-image-gallery-editor {
+  border: 1px dashed var(--border);
+  border-radius: 1rem;
+  padding: 0.75rem;
+  margin: 0.5rem 0;
+  background: var(--bg-input);
+}
+
+.blog-image-gallery-grid {
+  columns: 2;
+  column-gap: 0.5rem;
+}
+
+.blog-image-gallery-item {
+  position: relative;
+  break-inside: avoid;
+  margin-bottom: 0.5rem;
+}
+
+.blog-image-gallery-item img {
+  width: 100%;
+  border-radius: 0.5rem;
+  display: block;
+}
+
+.blog-image-gallery-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(244, 63, 94, 0.9);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.blog-image-gallery-label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin: 0.4rem 0 0;
+  text-align: center;
+}
+
+/* Drop target highlight when dragging image over another image */
+.blog-image-drop-target {
+  outline: 3px solid #EA580C !important;
+  outline-offset: 2px;
+  opacity: 0.75 !important;
+  border-radius: 0.75rem;
+}
+
 .blog-embed-block {
   position: relative;
   overflow: hidden;

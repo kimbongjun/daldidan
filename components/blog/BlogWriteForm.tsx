@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { BookmarkCheck, Calendar, Clock, LoaderCircle, PenLine, Trash2, X } from "lucide-react";
+import { BookmarkCheck, Calendar, Clock, ImageIcon, LoaderCircle, PenLine, Trash2, X } from "lucide-react";
 import type { EditableBlogPost } from "@/lib/blog-shared";
-import { BLOG_CATEGORIES } from "@/lib/blog-shared";
+import { BLOG_CATEGORIES, extractAllImagesFromHtml } from "@/lib/blog-shared";
 import BlogEditorLoading from "@/components/blog/BlogEditorLoading";
 
 // 에디터는 클라이언트 전용 무거운 번들이므로 dynamic import로 분리
@@ -72,11 +72,14 @@ export default function BlogWriteForm({
     html: initialPost?.contentHtml ?? DEFAULT_HTML,
     json: null, // content_json은 저장하지 않음 (렌더링엔 html만 사용)
   });
+  const [selectedThumbnail, setSelectedThumbnail] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
   const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [editorKey, setEditorKey] = useState(0);
+
+  const contentImages = useMemo(() => extractAllImagesFromHtml(content.html), [content.html]);
 
   // 임시저장 관련 상태
   const [pendingDraft, setPendingDraft] = useState<DraftData | null>(null);
@@ -212,6 +215,7 @@ export default function BlogWriteForm({
           contentHtml: content.html,
           category: category || null,
           publishedAt: resolvedPublishedAt,
+          ...(selectedThumbnail ? { thumbnailUrl: selectedThumbnail } : {}),
         }),
       });
 
@@ -451,6 +455,64 @@ export default function BlogWriteForm({
             지정하지 않으면 오늘 날짜로 발행됩니다.
           </p>
         </div>
+
+        {/* ── 썸네일 지정 ── */}
+        {contentImages.length > 0 && (
+          <div className="bento-card p-5 flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <ImageIcon size={14} style={{ color: "#EA580C" }} />
+              <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>썸네일 지정</p>
+            </div>
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+              선택 안 하면 자동으로 결정됩니다.
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              {/* 자동 옵션 */}
+              <button
+                type="button"
+                onClick={() => setSelectedThumbnail(null)}
+                className="pressable rounded-xl overflow-hidden flex flex-col items-center justify-center gap-1 py-3 text-xs font-semibold transition-colors"
+                style={{
+                  background: !selectedThumbnail ? "rgba(234,88,12,0.15)" : "var(--bg-input)",
+                  color: !selectedThumbnail ? "#EA580C" : "var(--text-muted)",
+                  border: !selectedThumbnail ? "2px solid rgba(234,88,12,0.5)" : "1px solid var(--border)",
+                  minHeight: 64,
+                }}
+              >
+                <ImageIcon size={18} />
+                자동
+              </button>
+              {contentImages.map((src) => (
+                <button
+                  key={src}
+                  type="button"
+                  onClick={() => setSelectedThumbnail(src === selectedThumbnail ? null : src)}
+                  className="pressable rounded-xl overflow-hidden relative"
+                  style={{
+                    border: src === selectedThumbnail ? "2px solid #EA580C" : "1px solid var(--border)",
+                    aspectRatio: "1/1",
+                  }}
+                  title="이 이미지를 썸네일로 지정"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={src}
+                    alt="썸네일 후보"
+                    style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                  />
+                  {src === selectedThumbnail && (
+                    <div
+                      className="absolute inset-0 flex items-center justify-center"
+                      style={{ background: "rgba(234,88,12,0.35)" }}
+                    >
+                      <span className="text-xs font-bold text-white">선택됨</span>
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="bento-card p-5 flex flex-col gap-3">
           <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>발행 체크</p>

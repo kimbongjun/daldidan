@@ -82,8 +82,8 @@ export default async function BlogDetailPage({ params }: { params: Promise<{ slu
         <article className="grid lg:grid-cols-[minmax(0,1fr)_280px] gap-6">
           <div className="flex flex-col gap-6">
             <section className="bento-card overflow-hidden">
-              {/* 자동 생성 무료이미지: 본문에 없는 경우에만 상단 배치 */}
-              {post.thumbnailUrl && !post.contentHtml.includes(post.thumbnailUrl) && (
+              {/* 수동 지정 썸네일: 본문에 없는 경우에만 상단 배치. 자동생성 썸네일은 상단 배치 안함 */}
+              {post.thumbnailUrl && !post.thumbnailSource?.startsWith("auto_") && !post.contentHtml.includes(post.thumbnailUrl) && (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={post.thumbnailUrl}

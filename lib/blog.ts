@@ -8,6 +8,7 @@ function mapSummary(post: {
   title: string;
   description: string | null;
   thumbnail_url: string | null;
+  thumbnail_source?: string | null;
   content_html?: string | null;
   author_name: string | null;
   published_at: string | null;
@@ -39,6 +40,7 @@ function mapSummary(post: {
     title: post.title,
     description: post.description ?? "",
     thumbnailUrl: post.thumbnail_url ?? fallbackThumbnail ?? "",
+    thumbnailSource: post.thumbnail_source ?? null,
     authorName: post.author_name?.trim() || "달디단 에디터",
     createdAt,
     publishedAt,
@@ -119,7 +121,7 @@ export async function getPublishedBlogPosts(limit = 9, category?: string | null,
   const nowIso = new Date().toISOString();
   let query = supabase
     .from("blog_posts")
-    .select("id, slug, title, description, thumbnail_url, content_html, author_name, published_at, updated_at, created_at, view_count, category, blog_comments(created_at)")
+    .select("id, slug, title, description, thumbnail_url, thumbnail_source, content_html, author_name, published_at, updated_at, created_at, view_count, category, blog_comments(created_at)")
     .eq("is_published", true)
     .or(`published_at.is.null,published_at.lte.${nowIso}`);
 
@@ -142,7 +144,7 @@ export async function getBlogPostBySlug(slug: string) {
   const nowIso = new Date().toISOString();
   const { data, error } = await supabase
     .from("blog_posts")
-    .select("id, slug, title, description, thumbnail_url, author_name, published_at, updated_at, created_at, content_html, view_count, category, blog_comments(created_at)")
+    .select("id, slug, title, description, thumbnail_url, thumbnail_source, author_name, published_at, updated_at, created_at, content_html, view_count, category, blog_comments(created_at)")
     .in("slug", candidates)
     .eq("is_published", true)
     .or(`published_at.is.null,published_at.lte.${nowIso}`)

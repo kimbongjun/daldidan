@@ -7,6 +7,7 @@ export interface BlogPostSummary {
   title: string;
   description: string;
   thumbnailUrl: string;
+  thumbnailSource: string | null;
   authorName: string;
   createdAt: string;
   publishedAt: string;
@@ -23,6 +24,13 @@ export interface BlogPostDetail extends BlogPostSummary {
 
 export interface EditableBlogPost extends BlogPostDetail {
   contentJson: unknown;
+}
+
+export function extractAllImagesFromHtml(html: string): string[] {
+  const matches = [...html.matchAll(/<img[^>]+src=["']([^"']+)["'][^>]*/gi)];
+  return matches
+    .map((m) => m[1]?.trim())
+    .filter((src): src is string => Boolean(src) && /^https?:\/\//i.test(src));
 }
 
 export function extractDescriptionFromHtml(html: string, maxLen = 160): string {
