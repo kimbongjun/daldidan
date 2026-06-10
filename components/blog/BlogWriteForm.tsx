@@ -466,17 +466,18 @@ export default function BlogWriteForm({
             <p className="text-xs" style={{ color: "var(--text-muted)" }}>
               선택 안 하면 자동으로 결정됩니다.
             </p>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="flex flex-wrap gap-2">
               {/* 자동 옵션 */}
               <button
                 type="button"
                 onClick={() => setSelectedThumbnail(null)}
-                className="pressable rounded-xl overflow-hidden flex flex-col items-center justify-center gap-1 py-3 text-xs font-semibold transition-colors"
+                className="pressable rounded-xl overflow-hidden flex flex-col items-center justify-center gap-1 text-xs font-semibold transition-colors"
                 style={{
                   background: !selectedThumbnail ? "rgba(234,88,12,0.15)" : "var(--bg-input)",
                   color: !selectedThumbnail ? "#EA580C" : "var(--text-muted)",
                   border: !selectedThumbnail ? "2px solid rgba(234,88,12,0.5)" : "1px solid var(--border)",
-                  minHeight: 64,
+                  width: 100,
+                  height: 100,
                 }}
               >
                 <ImageIcon size={18} />
@@ -490,7 +491,9 @@ export default function BlogWriteForm({
                   className="pressable rounded-xl overflow-hidden relative"
                   style={{
                     border: src === selectedThumbnail ? "2px solid #EA580C" : "1px solid var(--border)",
-                    aspectRatio: "1/1",
+                    width: 100,
+                    height: 100,
+                    flexShrink: 0,
                   }}
                   title="이 이미지를 썸네일로 지정"
                 >
