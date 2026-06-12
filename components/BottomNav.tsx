@@ -1,13 +1,27 @@
 "use client";
 
 import type { LucideIcon } from "lucide-react";
-import { BookOpen, Home, MapPinned, Wallet } from "lucide-react";
+import {
+  BookOpen,
+  Building2,
+  CalendarDays,
+  Home,
+  MapPinned,
+  Ticket,
+  TrendingUp,
+  Wallet,
+} from "lucide-react";
 
+// 노출 순서: 홈 + 블로그·캘린더·가계부·로또·증권·여행지도·부동산
 const NAV_ITEMS: { id: string; label: string; Icon: LucideIcon }[] = [
-  { id: "top",    label: "홈",    Icon: Home },
-  { id: "blog",   label: "블로그", Icon: BookOpen },
-  { id: "budget", label: "가계부", Icon: Wallet },
-  { id: "travel", label: "여행",  Icon: MapPinned },
+  { id: "top",        label: "홈",     Icon: Home },
+  { id: "blog",       label: "블로그", Icon: BookOpen },
+  { id: "calendar",   label: "캘린더", Icon: CalendarDays },
+  { id: "budget",     label: "가계부", Icon: Wallet },
+  { id: "lotto",      label: "로또",   Icon: Ticket },
+  { id: "stock",      label: "증권",   Icon: TrendingUp },
+  { id: "travel",     label: "여행",   Icon: MapPinned },
+  { id: "realestate", label: "부동산", Icon: Building2 },
 ];
 
 export default function BottomNav() {
@@ -44,11 +58,14 @@ export default function BottomNav() {
             key={id}
             type="button"
             onClick={() => scrollTo(id)}
-            className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 transition-opacity hover:opacity-70 active:opacity-50"
+            className="flex-1 min-w-0 flex flex-col items-center justify-center gap-0.5 py-2 transition-opacity hover:opacity-70 active:opacity-50"
             aria-label={`${label}으로 이동`}
           >
-            <Icon size={20} style={{ color: "var(--text-muted)" }} />
-            <span className="text-[10px] font-semibold" style={{ color: "var(--text-muted)" }}>
+            <Icon size={18} style={{ color: "var(--text-muted)" }} />
+            <span
+              className="text-[10px] font-semibold whitespace-nowrap"
+              style={{ color: "var(--text-muted)" }}
+            >
               {label}
             </span>
           </button>

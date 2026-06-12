@@ -22,7 +22,6 @@ import TravelWidget from "@/components/widgets/TravelWidget";
 import LottoWidget from "@/components/widgets/LottoWidget";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import BottomNav from "@/components/BottomNav";
-import QuickNav from "@/components/home/QuickNav";
 import { SortableWidgetItem } from "@/components/home/SortableWidgetItem";
 import type { BlogPostSummary } from "@/lib/blog-shared";
 import { useLayoutStore, MOBILE_WIDGET_ORDER, type WidgetId } from "@/store/useLayoutStore";
@@ -107,7 +106,6 @@ export default function DashboardShell({ initialBlogPosts }: DashboardShellProps
       >
         <Header />
         <BiometricSetupBanner />
-        <QuickNav />
         <BentoGrid initialBlogPosts={initialBlogPosts} />
         <BottomNav />
         <Footer />
