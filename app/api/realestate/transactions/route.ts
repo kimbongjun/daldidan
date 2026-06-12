@@ -202,6 +202,17 @@ function parseLawd(regionCode: string): string {
   return regionCode.slice(0, 5).padEnd(5, "0");
 }
 
+/** 현재월 기준 0,1,2개월 전의 YYYYMM 배열 (총 3개월) */
+function recentYearMonths(monthsBack = 3): string[] {
+  const now = new Date();
+  const list: string[] = [];
+  for (let i = 0; i < monthsBack; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    list.push(`${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}`);
+  }
+  return list;
+}
+
 async function fetchDistrictTransactions(
   apiKey: string,
   lawd: string,
@@ -241,7 +252,7 @@ async function fetchDistrictTransactions(
       const regionName = item.estateAgentSggNm ?? item.umdNm ?? item.법정동 ?? "";
       const complexName = item.aptNm ?? item.아파트 ?? "아파트";
       return {
-        id: `tx-live-${lawd}-${i}`,
+        id: `tx-live-${lawd}-${ym}-${i}`,
         complexName,
         region: regionName.startsWith("서울") ? regionName : `서울 ${regionName}`,
         area,
@@ -253,30 +264,55 @@ async function fetchDistrictTransactions(
         detailUrl: hogangnono(complexName),
       };
     })
-    .filter(
-      (tx) =>
-        tx.area >= 45 &&
-        tx.area <= 75 &&
-        tx.price >= 80000 &&
-        tx.price <= 130000,
-    );
+    // 필터 완화: 유효성 + 비아파트성 이상치 방지 상한만 유지 (면적/가격대 좁히기는 프론트 담당)
+    .filter((tx) => tx.area > 0 && tx.price > 0 && tx.area <= 245);
+}
+
+/**
+ * 같은 단지 + 전용면적 버킷(반올림) 그룹 내에서
+ * 각 거래의 prevPrice를 "자신보다 이전 날짜의 가장 최근 거래가"로 채운다.
+ */
+function fillPrevPrice(transactions: TransactionItem[]): TransactionItem[] {
+  const groups = new Map<string, TransactionItem[]>();
+  for (const tx of transactions) {
+    const key = `${tx.complexName}__${Math.round(tx.area)}`;
+    const bucket = groups.get(key);
+    if (bucket) bucket.push(tx);
+    else groups.set(key, [tx]);
+  }
+
+  for (const bucket of groups.values()) {
+    // tradeDate 오름차순 정렬
+    bucket.sort((a, b) => a.tradeDate.localeCompare(b.tradeDate));
+    for (let i = 0; i < bucket.length; i++) {
+      // 자신보다 이전 날짜의 가장 최근 거래가
+      let prev: number | null = null;
+      for (let j = i - 1; j >= 0; j--) {
+        if (bucket[j].tradeDate < bucket[i].tradeDate) {
+          prev = bucket[j].price;
+          break;
+        }
+      }
+      bucket[i].prevPrice = prev;
+    }
+  }
+
+  return transactions;
 }
 
 async function fetchRealTransactions(
   apiKey: string,
   regionCode?: string,
 ): Promise<TransactionItem[]> {
-  const now = new Date();
-  const ym = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const yms = recentYearMonths(3); // 현재월 + 직전 2개월
 
-  // 단일 구 지정 시 기존 방식
-  if (regionCode) {
-    return fetchDistrictTransactions(apiKey, parseLawd(regionCode), ym);
-  }
+  // (구, 월) 조합을 병렬 조회
+  const targets: { lawd: string; ym: string }[] = regionCode
+    ? yms.map((ym) => ({ lawd: parseLawd(regionCode), ym }))
+    : SEOUL_DISTRICTS.flatMap((d) => yms.map((ym) => ({ lawd: d.code, ym })));
 
-  // 서울 10개 구 병렬 조회
   const results = await Promise.allSettled(
-    SEOUL_DISTRICTS.map((d) => fetchDistrictTransactions(apiKey, d.code, ym)),
+    targets.map((t) => fetchDistrictTransactions(apiKey, t.lawd, t.ym)),
   );
 
   const all: TransactionItem[] = [];
@@ -284,10 +320,13 @@ async function fetchRealTransactions(
     if (r.status === "fulfilled") all.push(...r.value);
   }
 
-  // 최신 거래일순 정렬, 최대 15개
+  // prevPrice 채우기 (단지+면적 버킷 그룹 내 직전 거래가)
+  fillPrevPrice(all);
+
+  // 최신 거래일순 정렬, 최대 40개
   return all
     .sort((a, b) => b.tradeDate.localeCompare(a.tradeDate))
-    .slice(0, 15);
+    .slice(0, 40);
 }
 
 export async function GET(request: NextRequest) {

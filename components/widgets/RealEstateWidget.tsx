@@ -266,7 +266,31 @@ function SubscriptionTab() {
 
 // ── 시세 탭 ──────────────────────────────────────────────────────────────────
 
+type AreaFilter = "전체" | "소형" | "중형" | "대형";
+type PriceFilter = "전체" | "~5억" | "5~10억" | "10억~";
+
+const AREA_FILTERS: AreaFilter[] = ["전체", "소형", "중형", "대형"];
+const PRICE_FILTERS: PriceFilter[] = ["전체", "~5억", "5~10억", "10억~"];
+
+function matchArea(area: number, filter: AreaFilter): boolean {
+  if (filter === "전체") return true;
+  if (filter === "소형") return area < 60;
+  if (filter === "중형") return area >= 60 && area < 85;
+  return area >= 85; // 대형
+}
+
+function matchPrice(price: number, filter: PriceFilter): boolean {
+  if (filter === "전체") return true;
+  if (filter === "~5억") return price < 50000;
+  if (filter === "5~10억") return price >= 50000 && price < 100000;
+  return price >= 100000; // 10억~
+}
+
 function TransactionTab() {
+  const [activeDistrict, setActiveDistrict] = useState<string>("전체");
+  const [activeArea, setActiveArea] = useState<AreaFilter>("전체");
+  const [activePrice, setActivePrice] = useState<PriceFilter>("전체");
+
   const { data, isLoading: loading } = useQuery({
     queryKey: queryKeys.realEstate.transactions,
     queryFn: async ({ signal }) => {
@@ -280,6 +304,22 @@ function TransactionTab() {
   const isMock = data?.isMock ?? false;
 
   if (loading) return <div className="flex flex-col gap-2">{[1, 2, 3].map((i) => <SkeletonRow key={i} />)}</div>;
+
+  // 데이터에 존재하는 "○○구" 토큰을 동적으로 추출 (유니크)
+  const districts: string[] = ["전체"];
+  for (const tx of transactions) {
+    const match = tx.region.match(/(\S+구)/);
+    if (match && !districts.includes(match[1])) districts.push(match[1]);
+  }
+
+  // 클라이언트 측 AND 필터링
+  const filtered = transactions.filter((tx) => {
+    const districtMatch =
+      activeDistrict === "전체" || (tx.region.match(/(\S+구)/)?.[1] === activeDistrict);
+    return districtMatch && matchArea(tx.area, activeArea) && matchPrice(tx.price, activePrice);
+  });
+
+  const chipBase = "shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold transition-all";
 
   return (
     <div className="flex flex-col gap-2">
@@ -298,19 +338,77 @@ function TransactionTab() {
         </div>
       )}
 
-      {/* 필터 조건 칩 */}
-      <div className="flex gap-1.5 flex-wrap">
-        {["서울", "아파트", "59형", "매매 10억대"].map((chip) => (
-          <span key={chip} className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
-            style={{ background: `${ACCENT}18`, color: ACCENT, border: `1px solid ${ACCENT}30` }}>
-            {chip}
-          </span>
-        ))}
+      {/* 지역(구 단위) 필터 — 가로 스크롤 */}
+      <div className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-0.5">
+        {districts.map((district) => {
+          const active = activeDistrict === district;
+          return (
+            <button
+              key={district}
+              type="button"
+              onClick={() => setActiveDistrict(district)}
+              className="shrink-0 rounded-full px-3 py-1.5 text-[11px] font-semibold transition-all"
+              style={{
+                background: active ? ACCENT : "rgba(255,255,255,0.06)",
+                color: active ? "#fff" : "var(--text-muted)",
+                border: active ? `1px solid ${ACCENT}` : "1px solid rgba(255,255,255,0.08)",
+              }}
+            >
+              {district}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* 면적 + 가격대 필터 — 한 줄, 라벨로 구분 */}
+      <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide pb-0.5">
+        <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+          면적
+        </span>
+        {AREA_FILTERS.map((area) => {
+          const active = activeArea === area;
+          return (
+            <button
+              key={area}
+              type="button"
+              onClick={() => setActiveArea(area)}
+              className={chipBase}
+              style={{
+                background: active ? `${ACCENT}22` : "rgba(255,255,255,0.06)",
+                color: active ? ACCENT : "var(--text-muted)",
+                border: active ? `1px solid ${ACCENT}` : "1px solid rgba(255,255,255,0.08)",
+              }}
+            >
+              {area}
+            </button>
+          );
+        })}
+        <span className="shrink-0 ml-1 text-[9px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+          가격
+        </span>
+        {PRICE_FILTERS.map((price) => {
+          const active = activePrice === price;
+          return (
+            <button
+              key={price}
+              type="button"
+              onClick={() => setActivePrice(price)}
+              className={chipBase}
+              style={{
+                background: active ? `${ACCENT}22` : "rgba(255,255,255,0.06)",
+                color: active ? ACCENT : "var(--text-muted)",
+                border: active ? `1px solid ${ACCENT}` : "1px solid rgba(255,255,255,0.08)",
+              }}
+            >
+              {price}
+            </button>
+          );
+        })}
       </div>
 
       {/* 매물 리스트 */}
-      <div className="flex flex-col gap-1.5 overflow-y-auto scrollbar-hide" style={{ maxHeight: isMock ? 190 : 220 }}>
-        {transactions.map((tx) => (
+      <div className="flex flex-col gap-1.5 overflow-y-auto scrollbar-hide" style={{ maxHeight: isMock ? 160 : 190 }}>
+        {filtered.map((tx) => (
           <a key={tx.id}
             href={tx.detailUrl}
             target="_blank"
@@ -341,7 +439,7 @@ function TransactionTab() {
           </a>
         ))}
 
-        {transactions.length === 0 && (
+        {filtered.length === 0 && (
           <div className="rounded-xl px-3 py-6 text-center text-xs"
             style={{ background: "rgba(255,255,255,0.04)", color: "var(--text-muted)" }}>
             조건에 맞는 실거래 내역이 없습니다.
