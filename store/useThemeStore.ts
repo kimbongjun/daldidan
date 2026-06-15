@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { safeJSONStorage } from "@/lib/safe-storage";
 
 interface ThemeState {
   theme: "dark" | "light";
@@ -13,6 +14,6 @@ export const useThemeStore = create<ThemeState>()(
       toggle: () =>
         set((s) => ({ theme: s.theme === "dark" ? "light" : "dark" })),
     }),
-    { name: "daldidan-theme" }
+    { name: "daldidan-theme", storage: safeJSONStorage }
   )
 );

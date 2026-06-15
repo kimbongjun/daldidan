@@ -118,8 +118,12 @@ export default function BiometricLoginButton({ next = "/" }: Props) {
 
 // 등록 완료 후 호출: credential ID를 localStorage에 저장
 export function saveCredentialId(credentialId: string) {
-  const ids = getStoredCredentialIds();
-  if (!ids.includes(credentialId)) {
-    localStorage.setItem(LS_KEY, JSON.stringify([...ids, credentialId]));
+  try {
+    const ids = getStoredCredentialIds();
+    if (!ids.includes(credentialId)) {
+      localStorage.setItem(LS_KEY, JSON.stringify([...ids, credentialId]));
+    }
+  } catch {
+    /* Edge InPrivate·쿠키 차단 등 storage 비활성 환경에서는 무시 */
   }
 }

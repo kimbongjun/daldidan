@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { safeJSONStorage } from "@/lib/safe-storage";
 
 export interface InboxNotification {
   id: string;
@@ -60,6 +61,6 @@ export const useNotificationStore = create<NotificationState>()(
         inbox: state.inbox.map((item) => item.id === id ? { ...item, read: true } : item),
       })),
     }),
-    { name: "daldidan-notifications" },
+    { name: "daldidan-notifications", storage: safeJSONStorage },
   ),
 );

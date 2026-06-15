@@ -19,6 +19,23 @@ function readStoredCredentialIds(): string[] {
   }
 }
 
+// localStorage 접근을 안전하게 감싼다.
+// Edge InPrivate·쿠키 차단 모드에서는 getItem/setItem이 SecurityError를 throw한다.
+function safeGetItem(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+function safeSetItem(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* storage 비활성 환경에서는 조용히 무시 */
+  }
+}
+
 export default function BiometricSetupBanner() {
   const [visible, setVisible] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -26,7 +43,7 @@ export default function BiometricSetupBanner() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const isDismissed = localStorage.getItem(LS_DISMISSED) === "1";
+    const isDismissed = safeGetItem(LS_DISMISSED) === "1";
     const isSupported = typeof window !== "undefined" && !!window.PublicKeyCredential;
     // 이미 credential이 등록된 경우 배너 숨김
     // localStorage 값이 손상(legacy "undefined" 등)돼도 throw하지 않도록 방어
@@ -35,7 +52,7 @@ export default function BiometricSetupBanner() {
   }, []);
 
   const dismiss = () => {
-    localStorage.setItem(LS_DISMISSED, "1");
+    safeSetItem(LS_DISMISSED, "1");
     setVisible(false);
   };
 

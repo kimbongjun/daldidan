@@ -41,15 +41,21 @@ const PUSH_INSTALLATION_KEY = "daldidan-push-installation-id";
 
 function getPushInstallationId() {
   if (typeof window === "undefined") return "";
-  const existing = window.localStorage.getItem(PUSH_INSTALLATION_KEY);
-  if (existing) return existing;
 
   const generated =
     typeof crypto !== "undefined" && "randomUUID" in crypto
       ? crypto.randomUUID()
       : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
-  window.localStorage.setItem(PUSH_INSTALLATION_KEY, generated);
+  // Edge InPrivate·쿠키 차단 모드에서는 localStorage 접근이 SecurityError를
+  // throw할 수 있다. 접근 실패 시 새로 생성한 id로 조용히 폴백한다.
+  try {
+    const existing = window.localStorage.getItem(PUSH_INSTALLATION_KEY);
+    if (existing) return existing;
+    window.localStorage.setItem(PUSH_INSTALLATION_KEY, generated);
+  } catch {
+    return generated;
+  }
   return generated;
 }
 
