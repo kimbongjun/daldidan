@@ -8,13 +8,12 @@ export async function middleware(request: NextRequest) {
 
   const supabase = createMiddlewareClient(request, response);
 
-  // 페이지 진입(및 soft-nav RSC 요청)마다 세션을 한 번 갱신한다.
-  // getUser()는 access token이 만료됐으면 refresh를 수행하고, 갱신된 쿠키는
-  // createMiddlewareClient.setAll 을 통해 response 에 기록된다.
-  // 이렇게 페이지 시점에 토큰을 미리 갱신해두면, 홈에서 동시에 발생하는 여러
-  // 인증 API 요청(/api/me·/api/watchlist·/api/travel 등)이 만료된 토큰으로
-  // 동시에 refresh를 시도하다 일부가 401(refresh token 회전 경쟁)을 받는
-  // 문제를 예방한다. 인증 서버 장애가 페이지를 막지 않도록 fail-open.
+  // 페이지 진입 시 세션을 한 번 갱신한다. getUser()는 access token이 만료됐으면
+  // refresh를 수행하고, 갱신된 쿠키는 createMiddlewareClient.setAll 을 통해
+  // response 에 기록된다. 이렇게 미리 갱신해두면 홈(/)이 동시에 쏘는 인증 API
+  // (/api/me·/api/watchlist·/api/travel 등)가 만료 토큰으로 동시에 refresh를
+  // 시도하다 일부가 401(refresh token 회전 경쟁)을 받는 문제를 예방한다.
+  // 인증 서버 장애가 페이지를 막지 않도록 fail-open.
   let user: { id: string } | null = null;
   try {
     const { data } = await supabase.auth.getUser();
@@ -50,9 +49,24 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  // /api/* 와 정적 자산을 제외한 모든 페이지 라우트에서 세션을 갱신한다.
-  // (/api 는 제외 — 페이지 진입 시 이미 갱신되므로 API마다 getUser 왕복을 피한다.)
+  // 세션 갱신이 실제로 필요한 라우트로만 한정한다.
+  //  - "/"      : 홈 진입 시 토큰 선갱신(동시 인증 API의 401 회전 경쟁 예방)
+  //  - "/login" : 로그인 유저를 홈으로 리다이렉트
+  //  - 보호 페이지(/budget·/mypage·/blog/write·/blog/*/edit): 비로그인 차단
+  // 그 외 페이지(travel·stock·blog 목록/상세·inspection·settings 등)와 그
+  // 프리페치 요청에는 미들웨어를 태우지 않아, Next.js <Link> 프리페치마다
+  // Supabase Auth 왕복이 발생하던 전역 속도 저하를 제거한다. (각 페이지/Route
+  // Handler는 자체 getUser로 보안을 검증하므로 라우팅 미들웨어 축소는 안전하다.)
   matcher: [
-    "/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|json|js|txt|xml|webmanifest)$).*)",
+    "/",
+    "/login",
+    "/budget",
+    "/budget/:path*",
+    "/mypage",
+    "/mypage/:path*",
+    "/blog/write",
+    "/blog/write/:path*",
+    "/blog/:path*/edit",
+    "/blog/:path*/edit/:path*",
   ],
 };

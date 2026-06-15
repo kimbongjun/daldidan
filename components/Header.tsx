@@ -8,8 +8,7 @@ import { useThemeStore } from "@/store/useThemeStore";
 import { useNotificationStore } from "@/store/useNotificationStore";
 import { createClient } from "@/lib/supabase/client";
 import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
-import { getFirebaseMessaging } from "@/lib/firebase-client";
-import { deleteToken, getToken, onMessage } from "firebase/messaging";
+import { getFirebaseMessaging, onForegroundMessage, getFcmToken, deleteFcmToken } from "@/lib/firebase-client";
 import { signOut } from "@/lib/supabase/actions/auth";
 import type { AuthUser as SupabaseUser } from "@supabase/supabase-js";
 import Link from "next/link";
@@ -273,9 +272,12 @@ export default function Header() {
       const messaging = await getFirebaseMessaging();
       if (!messaging || !active) return;
 
-      unsubscribe = onMessage(messaging, (payload) => {
+      const unsub = await onForegroundMessage(messaging, (payload) => {
         addInboxNotification(extractNotificationPreview(payload));
       });
+      // 비동기 구독 도중 cleanup 이 먼저 돌았으면 즉시 해제
+      if (!active) unsub();
+      else unsubscribe = unsub;
     })();
 
     return () => {
@@ -322,11 +324,11 @@ export default function Header() {
 
       // stale 구독 제거 — Android Chrome에서 이전 구독과 FCM 기록이 불일치하면
       // getToken이 무한 hang 하는 원인이 됨. 항상 먼저 정리하고 새 토큰 발급.
-      try { await deleteToken(messaging); } catch { /* 기존 토큰 없으면 무시 */ }
+      try { await deleteFcmToken(messaging); } catch { /* 기존 토큰 없으면 무시 */ }
 
       // 타임아웃: iOS APNS 연결 지연 대비 (Android는 보통 2~3초 내 완료)
       const token = await Promise.race<string | null>([
-        getToken(messaging, {
+        getFcmToken(messaging, {
           vapidKey: process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY,
           serviceWorkerRegistration: swReg,
         }),
@@ -367,7 +369,7 @@ export default function Header() {
   const handlePushUnsubscribe = async () => {
     try {
       const messaging = await getFirebaseMessaging();
-      if (messaging) await deleteToken(messaging).catch(() => {});
+      if (messaging) await deleteFcmToken(messaging).catch(() => {});
     } catch { /* ignore */ }
     if (pushToken) {
       fetch("/api/push/subscribe", {
