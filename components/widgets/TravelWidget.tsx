@@ -7,14 +7,34 @@ import Link from "next/link";
 import type { TravelPlace } from "@/lib/travel-shared";
 import TravelDetailModal from "@/components/travel/TravelDetailModal";
 import { useTravelStore } from "@/store/useTravelStore";
+import { createClient } from "@/lib/supabase/client";
+import type { AuthUser as User } from "@supabase/supabase-js";
 
 export default function TravelWidget() {
   const { places, setPlaces } = useTravelStore();
   const [loading, setLoading] = useState(true);
   const [selectedPlace, setSelectedPlace] = useState<TravelPlace | null>(null);
   const [activeTab, setActiveTab] = useState<"all" | "world" | "domestic">("all");
+  // undefined = 인증 상태 미확인, null = 비로그인
+  const [user, setUser] = useState<User | null | undefined>(undefined);
 
   useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => setUser(data.user ?? null));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
+      setUser(session?.user ?? null);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (user === undefined) return; // 인증 상태 확인 전 대기
+    // 비로그인: 인증이 필요한 /api/travel 호출 없이 빈 상태로 둔다 (401 콘솔 오류 방지)
+    if (!user) {
+      setPlaces([]);
+      setLoading(false);
+      return;
+    }
     void (async () => {
       try {
         const res = await fetch("/api/travel");
@@ -26,7 +46,7 @@ export default function TravelWidget() {
         setLoading(false);
       }
     })();
-  }, [setPlaces]);
+  }, [user, setPlaces]);
 
   const displayPlaces = useMemo(() => {
     if (activeTab === "world") return places.filter((p) => !p.is_domestic);

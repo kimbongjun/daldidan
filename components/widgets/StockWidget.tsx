@@ -20,6 +20,8 @@ import {
 import { sanitizeSymbol, sanitizeIndexSymbol, formatPrice } from "@/lib/stocks/utils";
 import { getKrxMarketWindow } from "@/lib/stocks/cache-policy";
 import { queryKeys } from "@/lib/queryKeys";
+import { createClient } from "@/lib/supabase/client";
+import type { AuthUser as User } from "@supabase/supabase-js";
 
 const ACCENT = "#F05C6E";
 const RISE = "var(--stock-rise)";
@@ -142,50 +144,59 @@ function parseAndSetWatchlist(raw: string): WatchlistItem[] | null {
 export default function StockWidget() {
   const queryClient = useQueryClient();
   const [marketStatus, setMarketStatus] = useState(() => getKrxMarketWindow());
+  // undefined = 인증 상태 미확인, null = 비로그인
+  const [user, setUser] = useState<User | null | undefined>(undefined);
 
   useEffect(() => {
     const timer = window.setInterval(() => setMarketStatus(getKrxMarketWindow()), 60_000);
     return () => window.clearInterval(timer);
   }, []);
 
-  // 관심종목 로드 (Supabase 우선, localStorage fallback)
+  // 인증 상태 감지 — 비로그인 시 인증 API(/api/me·/api/watchlist) 호출을 막아
+  // 콘솔 401 노이즈를 방지한다.
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => setUser(data.user ?? null));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
+      setUser(session?.user ?? null);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // 관심종목 로드 (로그인 시 Supabase 우선, 그 외 localStorage fallback)
   const { data: watchlist = DEFAULT_WATCHLIST } = useQuery({
-    queryKey: queryKeys.watchlist.all,
+    queryKey: [...queryKeys.watchlist.all, user?.id ?? "anon"],
     queryFn: async (): Promise<WatchlistItem[]> => {
-      try {
-        const res = await fetch("/api/me");
-        if (res.ok) {
-          const { id: uid } = await res.json() as { id: string };
-          if (uid) {
-            try {
-              const wRes = await fetch("/api/watchlist");
-              if (wRes.ok) {
-                const { items } = await wRes.json() as { items: unknown[] };
-                if (Array.isArray(items) && items.length > 0) {
-                  const next = items
-                    .map((item): WatchlistItem | null => {
-                      if (typeof item !== "object" || item === null || !("symbol" in item)) return null;
-                      const raw = item as Record<string, unknown>;
-                      const sym = sanitizeSymbol(String(raw.symbol ?? "")) ?? sanitizeIndexSymbol(String(raw.symbol ?? "")) ?? null;
-                      if (!sym) return null;
-                      const at = raw.assetType;
-                      const validAt: AssetType = at === "etf" || at === "index" ? at : "stock";
-                      return { symbol: sym, assetType: validAt };
-                    })
-                    .filter((x): x is WatchlistItem => x !== null);
-                  if (next.length > 0) return next.slice(0, 10);
-                }
-              }
-            } catch { /* fallthrough to localStorage */ }
-            const saved = localStorage.getItem(`${STORAGE_KEY}-${uid}`) ?? localStorage.getItem(STORAGE_KEY);
-            if (saved) {
-              const parsed = parseAndSetWatchlist(saved);
-              if (parsed) return parsed;
+      const uid = user?.id;
+      if (uid) {
+        try {
+          const wRes = await fetch("/api/watchlist");
+          if (wRes.ok) {
+            const { items } = await wRes.json() as { items: unknown[] };
+            if (Array.isArray(items) && items.length > 0) {
+              const next = items
+                .map((item): WatchlistItem | null => {
+                  if (typeof item !== "object" || item === null || !("symbol" in item)) return null;
+                  const raw = item as Record<string, unknown>;
+                  const sym = sanitizeSymbol(String(raw.symbol ?? "")) ?? sanitizeIndexSymbol(String(raw.symbol ?? "")) ?? null;
+                  if (!sym) return null;
+                  const at = raw.assetType;
+                  const validAt: AssetType = at === "etf" || at === "index" ? at : "stock";
+                  return { symbol: sym, assetType: validAt };
+                })
+                .filter((x): x is WatchlistItem => x !== null);
+              if (next.length > 0) return next.slice(0, 10);
             }
-            return DEFAULT_WATCHLIST;
           }
+        } catch { /* fallthrough to localStorage */ }
+        const saved = localStorage.getItem(`${STORAGE_KEY}-${uid}`) ?? localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          const parsed = parseAndSetWatchlist(saved);
+          if (parsed) return parsed;
         }
-      } catch { /* fallthrough */ }
+        return DEFAULT_WATCHLIST;
+      }
+      // 비로그인: 인증 API 호출 없이 localStorage 만 사용
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed = parseAndSetWatchlist(saved);
@@ -193,6 +204,7 @@ export default function StockWidget() {
       }
       return DEFAULT_WATCHLIST;
     },
+    enabled: user !== undefined,
     staleTime: 5 * 60 * 1000,
   });
 
