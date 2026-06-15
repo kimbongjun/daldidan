@@ -8,6 +8,17 @@ import { Fingerprint, X, Loader2, CheckCircle } from "lucide-react";
 
 const LS_DISMISSED = "webauthn_setup_dismissed";
 
+// localStorage의 credential ID 목록을 안전하게 읽는다.
+// 손상된 값(legacy "undefined" 문자열, 빈 문자열 등)이 있어도 throw하지 않는다.
+function readStoredCredentialIds(): string[] {
+  try {
+    const parsed = JSON.parse(localStorage.getItem("webauthn_credential_ids") ?? "[]");
+    return Array.isArray(parsed) ? (parsed as string[]) : [];
+  } catch {
+    return [];
+  }
+}
+
 export default function BiometricSetupBanner() {
   const [visible, setVisible] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -18,7 +29,8 @@ export default function BiometricSetupBanner() {
     const isDismissed = localStorage.getItem(LS_DISMISSED) === "1";
     const isSupported = typeof window !== "undefined" && !!window.PublicKeyCredential;
     // 이미 credential이 등록된 경우 배너 숨김
-    const hasCredentials = (JSON.parse(localStorage.getItem("webauthn_credential_ids") ?? "[]") as string[]).length > 0;
+    // localStorage 값이 손상(legacy "undefined" 등)돼도 throw하지 않도록 방어
+    const hasCredentials = readStoredCredentialIds().length > 0;
     setVisible(isSupported && !isDismissed && !hasCredentials);
   }, []);
 
