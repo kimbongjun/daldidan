@@ -2,8 +2,15 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import dynamic from "next/dynamic";
 import ImageLightbox from "@/components/blog/ImageLightbox";
-import CloudflareStreamPlayer from "@/components/blog/CloudflareStreamPlayer";
+
+// vidstack 기반 플레이어는 본문에 스트림 영상 블록이 있을 때만 로드한다.
+// 정적 import를 제거해 /blog/[slug] First Load JS에서 vidstack을 분리한다.
+const CloudflareStreamPlayer = dynamic(
+  () => import("@/components/blog/CloudflareStreamPlayer"),
+  { ssr: false },
+);
 
 interface Props {
   html: string;
