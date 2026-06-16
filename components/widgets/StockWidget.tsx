@@ -18,6 +18,7 @@ import {
 } from "@/lib/stocks/types";
 import { sanitizeSymbol, formatPrice } from "@/lib/stocks/utils";
 import { getKrxMarketWindow } from "@/lib/stocks/cache-policy";
+import Sparkline from "@/components/Sparkline";
 import { queryKeys } from "@/lib/queryKeys";
 import { createClient } from "@/lib/supabase/client";
 import type { AuthUser as User } from "@supabase/supabase-js";
@@ -67,12 +68,17 @@ function WatchRow({ quote }: { quote: StockQuote }) {
   const Icon = quote.changePct > 0 ? ArrowUp : quote.changePct < 0 ? ArrowDown : null;
   return (
     <div
-      className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-xl px-3 py-2"
+      className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2.5 rounded-xl px-3 py-2"
       style={{ background: "rgba(255,255,255,0.045)", border: "1px solid var(--border)" }}
     >
       <div className="min-w-0">
         <p className="truncate text-xs font-black" style={{ color: "var(--text-primary)" }}>{quote.name}</p>
         <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>{quote.symbol}</p>
+      </div>
+      <div className="flex h-7 w-[52px] shrink-0 items-center justify-center">
+        {quote.sparkline.length >= 2
+          ? <Sparkline data={quote.sparkline} color={color} width={52} height={28} />
+          : <span className="h-px w-6 rounded-full" style={{ background: "var(--border)" }} />}
       </div>
       <div className="text-right">
         <p className="text-xs font-black tabular-nums" style={{ color: "var(--text-primary)" }}>{formatPrice(quote.price)}</p>
@@ -182,7 +188,6 @@ export default function StockWidget() {
     queryFn: async ({ signal }): Promise<StockOverviewResponse> => {
       const params = new URLSearchParams({
         items: watchlistKey,
-        noSparkline: "true",
         ts: String(Date.now()),
       });
       const res = await fetch(`/api/stocks?${params.toString()}`, {
