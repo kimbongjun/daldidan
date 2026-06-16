@@ -1,15 +1,28 @@
 import "server-only";
 
-import type {
-  Candle,
-  CandleInterval,
-  Orderbook,
-  PriceLimit,
-  StockQuote,
-  StockWarning,
-  TradeTick,
+import {
+  type AssetType,
+  type Candle,
+  type CandleInterval,
+  type Orderbook,
+  type PriceLimit,
+  type StockOverviewResponse,
+  type StockQuote,
+  type StockRankingItem,
+  type StockRankingKind,
+  type StockWarning,
+  type TradeTick,
+  type WatchlistItem,
 } from "@/lib/stocks/types";
 import { getKrxMarketWindow } from "@/lib/stocks/cache-policy";
+import { sanitizeSymbol } from "@/lib/stocks/utils";
+
+const DEFAULT_SYMBOLS: WatchlistItem[] = [
+  { symbol: "005930", assetType: "stock" },
+  { symbol: "000660", assetType: "stock" },
+  { symbol: "035420", assetType: "stock" },
+  { symbol: "005380", assetType: "stock" },
+];
 
 const DEFAULT_TOSS_BASE_URL = "https://openapi.tossinvest.com";
 
@@ -39,12 +52,15 @@ export type TossStockMaster = {
   symbol: string;
   name: string;
   englishName: string;
+  isinCode: string;
   market: string;
   securityType: string;
   status: string;
   currency: string;
   listDate: string;
+  delistDate: string | null;
   sharesOutstanding: number;
+  leverageFactor: number | null;
   koreanMarketDetail: Record<string, unknown> | null;
 };
 
@@ -276,12 +292,15 @@ type RawStockMaster = {
   symbol: string;
   name: string;
   englishName?: string;
+  isinCode?: string;
   market?: string;
   securityType?: string;
   status?: string;
   currency?: string;
   listDate?: string;
+  delistDate?: string | null;
   sharesOutstanding?: string;
+  leverageFactor?: number | string | null;
   koreanMarketDetail?: Record<string, unknown> | null;
 };
 
@@ -345,27 +364,54 @@ export function deriveTossMetrics(
   };
 }
 
+/** 토스 securityType → 앱 AssetType. ETF/ETN은 etf, 그 외 stock. */
+export function assetTypeFromMaster(securityType?: string): AssetType {
+  const st = (securityType ?? "").toUpperCase();
+  return st.includes("ETF") || st.includes("ETN") ? "etf" : "stock";
+}
+
 /**
- * KRX base quote 없이 토스 데이터만으로 StockQuote를 구성한다 (단일 종목 상세용).
- * 마스터(name/market/assetType)는 토스 시세/캔들에 없으므로 best-effort(symbol/기본값).
- * tradingValue·시총 등은 토스 시세 엔드포인트에 없어 0.
+ * 토스 데이터만으로 StockQuote를 구성한다 (관심종목 오버뷰 + 단일 상세 공용).
+ * - 시세/등락/OHLCV/스파크라인/52주: 캔들 기반 deriveTossMetrics.
+ * - 시가총액 = 상장주식수(master.sharesOutstanding) × 현재가 (토스 마스터로 파생).
+ * - 거래대금 = 현재가 × 당일 거래량 (토스 시세 엔드포인트에 없어 근사).
+ * master가 없으면 name/market은 best-effort(symbol/빈값).
  */
 export function buildTossQuote(
   symbol: string,
   lastPrice: number,
   candlesResult: TossCandlesResult | null,
-  master?: { name?: string; market?: string },
+  master?: Partial<TossStockMaster>,
+  assetTypeOverride?: AssetType,
 ): StockQuote {
   const sessionDay = getKrxMarketWindow().mostRecentTradingDay;
   const now = new Date().toISOString();
   const metrics = deriveTossMetrics(candlesResult?.candles ?? [], lastPrice, sessionDay, true);
+  const assetType = assetTypeOverride ?? (master ? assetTypeFromMaster(master.securityType) : "stock");
+  const shares = master?.sharesOutstanding && master.sharesOutstanding > 0 ? master.sharesOutstanding : 0;
+
+  const masterFields = {
+    englishName: master?.englishName || undefined,
+    isinCode: master?.isinCode || undefined,
+    securityType: master?.securityType || undefined,
+    listDate: master?.listDate || undefined,
+    delistDate: master?.delistDate ?? undefined,
+    nxtSupported:
+      master?.koreanMarketDetail && typeof master.koreanMarketDetail.nxtSupported === "boolean"
+        ? (master.koreanMarketDetail.nxtSupported as boolean)
+        : undefined,
+    leverageFactor: master?.leverageFactor ?? undefined,
+    ...(shares > 0 ? { listedShares: shares } : {}),
+  };
+
+  const price = lastPrice > 0 ? lastPrice : (metrics?.price ?? 0);
 
   const base: StockQuote = {
     symbol,
     name: master?.name?.trim() || symbol,
     market: master?.market?.trim() || "",
-    assetType: "stock",
-    price: lastPrice > 0 ? lastPrice : 0,
+    assetType,
+    price,
     change: 0,
     changePct: 0,
     volume: 0,
@@ -373,8 +419,10 @@ export function buildTossQuote(
     open: 0,
     high: 0,
     low: 0,
-    previousClose: lastPrice > 0 ? lastPrice : 0,
+    previousClose: price,
     sparkline: [],
+    ...(shares > 0 && price > 0 ? { marketCap: shares * price } : {}),
+    ...masterFields,
     fetchedAt: now,
     baseDate: sessionDay,
     source: "TOSS",
@@ -382,20 +430,23 @@ export function buildTossQuote(
 
   if (!metrics) return base;
 
+  const finalPrice = metrics.price;
   return {
     ...base,
-    price: metrics.price,
+    price: finalPrice,
     change: metrics.change,
     changePct: metrics.changePct,
     open: metrics.open,
     high: metrics.high,
     low: metrics.low,
     volume: metrics.volume,
+    tradingValue: finalPrice > 0 && metrics.volume > 0 ? finalPrice * metrics.volume : 0,
     previousClose: metrics.previousClose,
     sparkline: metrics.sparkline,
     fiftyTwoWeekHigh: metrics.fiftyTwoWeekHigh,
     fiftyTwoWeekLow: metrics.fiftyTwoWeekLow,
     baseDate: metrics.baseDate,
+    ...(shares > 0 && finalPrice > 0 ? { marketCap: shares * finalPrice } : {}),
   };
 }
 
@@ -407,12 +458,164 @@ export async function fetchTossStockMaster(symbols: string[]): Promise<TossStock
     symbol: s.symbol,
     name: s.name,
     englishName: s.englishName ?? "",
+    isinCode: s.isinCode ?? "",
     market: s.market ?? "",
     securityType: s.securityType ?? "",
     status: s.status ?? "",
     currency: s.currency ?? "KRW",
     listDate: s.listDate ?? "",
+    delistDate: s.delistDate ?? null,
     sharesOutstanding: toNumber(s.sharesOutstanding),
+    leverageFactor:
+      s.leverageFactor === null || s.leverageFactor === undefined ? null : toNumber(s.leverageFactor),
     koreanMarketDetail: s.koreanMarketDetail ?? null,
   }));
+}
+
+// ── 관심종목 오버뷰 (토스 단독) ───────────────────────────────
+function compactSymbols(items: WatchlistItem[]): WatchlistItem[] {
+  const seen = new Set<string>();
+  const out: WatchlistItem[] = [];
+  for (const item of items) {
+    // 지수(IDX_*)는 토스가 제공하지 않으므로 제외. 주식/ETF 6자리 코드만 허용.
+    const symbol = sanitizeSymbol(item.symbol);
+    if (!symbol || seen.has(symbol)) continue;
+    seen.add(symbol);
+    out.push({ symbol, assetType: item.assetType === "etf" ? "etf" : "stock" });
+    if (out.length >= 20) break;
+  }
+  return out;
+}
+
+export function defaultStockWatchlist(): WatchlistItem[] {
+  const raw = process.env.KRX_DEFAULT_SYMBOLS ?? "";
+  const symbols = raw
+    .split(",")
+    .map((value) => sanitizeSymbol(value))
+    .filter((value): value is string => Boolean(value));
+  if (symbols.length === 0) return DEFAULT_SYMBOLS;
+  return symbols.slice(0, 12).map((symbol) => ({ symbol, assetType: "stock" as AssetType }));
+}
+
+function emptyRankings(): Record<StockRankingKind, StockRankingItem[]> {
+  return { amount: [], volume: [], rise: [], fall: [], popular: [] };
+}
+
+// 마켓윈도우 단위 오버뷰 캐시
+const _overviewCache = new Map<string, { data: StockOverviewResponse; expiry: number }>();
+
+function makeOverviewCacheKey(items: WatchlistItem[], noSparkline: boolean): string {
+  return `${items.map((i) => `${i.symbol}:${i.assetType}`).join(",")}_ns${noSparkline ? 1 : 0}`;
+}
+
+function notConfiguredOverview(fetchedAt: string): StockOverviewResponse {
+  return {
+    status: "not_configured",
+    provider: "토스증권",
+    fetchedAt,
+    marketDivCode: "TOSS",
+    quotes: [],
+    marketIndices: [],
+    rankings: emptyRankings(),
+    themes: [],
+    ipos: [],
+    message: "TOSS_OPENAPI_CLIENT_ID / TOSS_OPENAPI_CLIENT_SECRET를 설정해야 토스증권 시세를 조회할 수 있습니다.",
+  };
+}
+
+/**
+ * 토스증권 Open API만으로 관심종목 오버뷰를 구성한다 (KRX 미사용).
+ * - 시세(배치) + 종목별 일봉 + 마스터(배치)로 StockQuote 구성.
+ * - 랭킹/테마/지수/IPO는 토스가 제공하지 않아 빈 값으로 반환한다.
+ */
+export async function fetchStockOverview(
+  watchlistItems: WatchlistItem[],
+  options: { noSparkline?: boolean; force?: boolean } = {},
+): Promise<StockOverviewResponse> {
+  const fetchedAt = new Date().toISOString();
+  if (!isTossConfigured()) return notConfiguredOverview(fetchedAt);
+
+  const resolvedItems = compactSymbols(watchlistItems.length > 0 ? watchlistItems : defaultStockWatchlist());
+  const noSparkline = options.noSparkline ?? false;
+
+  if (resolvedItems.length === 0) {
+    return {
+      status: "live",
+      provider: "토스증권",
+      fetchedAt,
+      marketDivCode: "TOSS",
+      quotes: [],
+      marketIndices: [],
+      rankings: emptyRankings(),
+      themes: [],
+      ipos: [],
+    };
+  }
+
+  const windowInfo = getKrxMarketWindow();
+  const cacheKey = makeOverviewCacheKey(resolvedItems, noSparkline);
+  const cached = _overviewCache.get(cacheKey);
+  if (!options.force && cached && cached.expiry > Date.now()) return cached.data;
+
+  const symbols = resolvedItems.map((item) => item.symbol);
+  const assetTypeBySymbol = new Map(resolvedItems.map((item) => [item.symbol, item.assetType]));
+  const candleCount = noSparkline ? 2 : 60;
+  const errors: string[] = [];
+
+  // 시세(배치) + 마스터(배치) 병렬
+  const [pricesR, masterR] = await Promise.allSettled([
+    fetchTossPrices(symbols),
+    fetchTossStockMaster(symbols),
+  ]);
+
+  const priceMap = new Map<string, number>(
+    pricesR.status === "fulfilled" ? pricesR.value.map((p) => [p.symbol, p.lastPrice]) : [],
+  );
+  if (pricesR.status === "rejected") {
+    errors.push(`prices: ${pricesR.reason instanceof Error ? pricesR.reason.message : "토스 시세 조회 실패"}`);
+  }
+  const masterMap = new Map<string, TossStockMaster>(
+    masterR.status === "fulfilled" ? masterR.value.map((m) => [m.symbol, m]) : [],
+  );
+
+  // 종목별 일봉 (등락/OHLCV/스파크라인 산출)
+  const candleResults = await Promise.allSettled(
+    symbols.map((symbol) => fetchTossCandles(symbol, "1d", candleCount)),
+  );
+
+  const quotes: StockQuote[] = symbols.map((symbol, index) => {
+    const candleResult = candleResults[index];
+    const candles = candleResult?.status === "fulfilled" ? candleResult.value : null;
+    if (candleResult?.status === "rejected") {
+      errors.push(`${symbol}: ${candleResult.reason instanceof Error ? candleResult.reason.message : "토스 캔들 조회 실패"}`);
+    }
+    return buildTossQuote(
+      symbol,
+      priceMap.get(symbol) ?? 0,
+      candles,
+      masterMap.get(symbol),
+      assetTypeBySymbol.get(symbol),
+    );
+  });
+
+  // 관심종목 순서 유지
+  const order = new Map(resolvedItems.map((item, i) => [item.symbol, i]));
+  quotes.sort((a, b) => (order.get(a.symbol) ?? 999) - (order.get(b.symbol) ?? 999));
+
+  const overview: StockOverviewResponse = {
+    status: "live",
+    provider: "토스증권",
+    fetchedAt: new Date().toISOString(),
+    baseDate: windowInfo.mostRecentTradingDay,
+    marketDivCode: "TOSS",
+    quotes,
+    marketIndices: [],
+    rankings: emptyRankings(),
+    themes: [],
+    ipos: [],
+    ...(errors.length > 0 ? { errors, message: errors[0] } : {}),
+  };
+
+  _overviewCache.set(cacheKey, { data: overview, expiry: Date.now() + windowInfo.cacheTtlMs });
+  return overview;
 }

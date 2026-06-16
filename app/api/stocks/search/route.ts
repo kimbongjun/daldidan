@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { searchStocks } from "@/lib/stocks/krx";
+import { searchStocks } from "@/lib/stocks/symbols";
 
 export const dynamic = "force-dynamic";
 

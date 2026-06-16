@@ -7,6 +7,7 @@ import {
   fetchTossTrades,
   fetchTossPriceLimit,
   fetchTossWarnings,
+  fetchTossStockMaster,
   buildTossQuote,
 } from "@/lib/stocks/toss";
 import type {
@@ -70,13 +71,14 @@ export async function GET(
   const interval = parseInterval(searchParams.get("interval"));
   const count = parseCount(searchParams.get("count"));
 
-  const [pricesR, candlesR, orderbookR, tradesR, priceLimitR, warningsR] = await Promise.allSettled([
+  const [pricesR, candlesR, orderbookR, tradesR, priceLimitR, warningsR, masterR] = await Promise.allSettled([
     fetchTossPrices([symbol]),
     fetchTossCandles(symbol, interval, count),
     fetchTossOrderbook(symbol),
     fetchTossTrades(symbol, 30),
     fetchTossPriceLimit(symbol),
     fetchTossWarnings(symbol),
+    fetchTossStockMaster([symbol]),
   ]);
 
   const errors: string[] = [];
@@ -99,8 +101,9 @@ export async function GET(
   const trades: TradeTick[] = tradesR.status === "fulfilled" ? tradesR.value : [];
   const priceLimit: PriceLimit | null = priceLimitR.status === "fulfilled" ? priceLimitR.value : null;
   const warnings: StockWarning[] = warningsR.status === "fulfilled" ? warningsR.value : [];
+  const master = masterR.status === "fulfilled" ? masterR.value[0] : undefined;
 
-  const quote = lastPrice > 0 || candles.length > 0 ? buildTossQuote(symbol, lastPrice, candlesResult) : null;
+  const quote = lastPrice > 0 || candles.length > 0 ? buildTossQuote(symbol, lastPrice, candlesResult, master) : null;
 
   const body: StockDetailResponse = {
     status: "live",

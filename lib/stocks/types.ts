@@ -33,6 +33,16 @@ export interface StockQuote {
   nav?: number;
   aum?: number;
   underlyingIndex?: string;
+  // ── 토스 마스터(/api/v1/stocks) 파생 필드 ──
+  englishName?: string;
+  isinCode?: string;
+  securityType?: string;
+  listDate?: string;
+  delistDate?: string | null;
+  /** NXT(대체거래소) 거래 지원 여부 */
+  nxtSupported?: boolean;
+  /** 레버리지/인버스 배수 (해당 시) */
+  leverageFactor?: number | null;
   fetchedAt: string;
   baseDate: string;
   source: "KRX" | "TOSS";
