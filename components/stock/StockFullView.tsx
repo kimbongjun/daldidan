@@ -64,7 +64,8 @@ const DEFAULT_WATCHLIST: WatchlistItem[] = [
 type LoadPhase = "idle" | "quotes" | "charts" | "done" | "error";
 type WatchSort = "manual" | "change" | "value" | "name";
 type FlashDirection = "up" | "down";
-type PortfolioMap = Record<string, { avgPrice: number }>;
+type PortfolioEntry = { avgPrice: number; qty?: number };
+type PortfolioMap = Record<string, PortfolioEntry>;
 type StockCacheSnapshot = {
   data: StockOverviewResponse;
   bucketKey: string | null;
@@ -322,16 +323,18 @@ function QuoteRow({
   flash?: FlashDirection;
   dragHandle?: React.ReactNode;
   portfolioMode: boolean;
-  portfolio?: { avgPrice: number };
-  onPortfolioChange: (symbol: string, avgPrice: number) => void;
+  portfolio?: PortfolioEntry;
+  onPortfolioChange: (symbol: string, field: "avgPrice" | "qty", value: number) => void;
 }) {
   const color = changeColor(quote.changePct);
   const isIndex = quote.assetType === "index";
   const range = getRangePosition(quote);
   const avgPrice = portfolio?.avgPrice ?? 0;
+  const qty = portfolio?.qty ?? 0;
   const profit = avgPrice > 0 ? quote.price - avgPrice : 0;
   const profitPct = avgPrice > 0 ? (profit / avgPrice) * 100 : 0;
   const profitColor = changeColor(profitPct);
+  const evalProfit = avgPrice > 0 && qty > 0 ? profit * qty : 0;
   const rowColumns = dragHandle
     ? "grid-cols-[auto_minmax(0,1.3fr)_auto_auto_auto]"
     : "grid-cols-[minmax(0,1.3fr)_auto_auto_auto]";
@@ -382,21 +385,39 @@ function QuoteRow({
           </div>
         )}
         {portfolioMode && !isIndex && (
-          <div className="mt-2 grid grid-cols-[86px_minmax(0,1fr)] items-center gap-2">
-            <input
-              value={avgPrice > 0 ? String(avgPrice) : ""}
-              onClick={(event) => event.stopPropagation()}
-              onKeyDown={(event) => event.stopPropagation()}
-              onChange={(event) => onPortfolioChange(quote.symbol, Number(event.target.value.replace(/[^\d.]/g, "")))}
-              inputMode="decimal"
-              placeholder="매입가"
-              className="h-7 rounded-md border bg-transparent px-2 text-[11px] outline-none"
-              style={{ borderColor: "var(--border)", color: "var(--text-primary)" }}
-            />
-            <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-[10px] font-bold">
-              <span style={{ color: "var(--text-muted)" }}>평단 {avgPrice > 0 ? formatPrice(avgPrice) : "-"}</span>
-              <span className="tabular-nums" style={{ color: profitColor }}>{avgPrice > 0 ? `${profitPct > 0 ? "+" : ""}${profitPct.toFixed(2)}%` : "-%"}</span>
-              <span className="tabular-nums" style={{ color: profitColor }}>{avgPrice > 0 ? formatSignedPrice(profit) : "-"}</span>
+          <div className="mt-2 flex flex-col gap-1.5">
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                value={avgPrice > 0 ? String(avgPrice) : ""}
+                onClick={(event) => event.stopPropagation()}
+                onKeyDown={(event) => event.stopPropagation()}
+                onChange={(event) => onPortfolioChange(quote.symbol, "avgPrice", Number(event.target.value.replace(/[^\d.]/g, "")))}
+                inputMode="decimal"
+                placeholder="매입가"
+                className="h-7 rounded-md border bg-transparent px-2 text-[11px] outline-none"
+                style={{ borderColor: "var(--border)", color: "var(--text-primary)" }}
+              />
+              <input
+                value={qty > 0 ? String(qty) : ""}
+                onClick={(event) => event.stopPropagation()}
+                onKeyDown={(event) => event.stopPropagation()}
+                onChange={(event) => onPortfolioChange(quote.symbol, "qty", Number(event.target.value.replace(/[^\d.]/g, "")))}
+                inputMode="decimal"
+                placeholder="수량"
+                className="h-7 rounded-md border bg-transparent px-2 text-[11px] outline-none"
+                style={{ borderColor: "var(--border)", color: "var(--text-primary)" }}
+              />
+            </div>
+            <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] font-bold">
+              <span style={{ color: "var(--text-muted)" }}>수익률</span>
+              <span className="tabular-nums" style={{ color: profitColor }}>{avgPrice > 0 ? `${profitPct > 0 ? "+" : ""}${profitPct.toFixed(2)}%` : "-"}</span>
+              <span className="tabular-nums" style={{ color: profitColor }}>{avgPrice > 0 ? formatSignedPrice(profit) : ""}</span>
+              {avgPrice > 0 && qty > 0 && (
+                <>
+                  <span style={{ color: "var(--text-muted)" }}>· 평가손익</span>
+                  <span className="tabular-nums" style={{ color: profitColor }}>{formatSignedPrice(evalProfit)}</span>
+                </>
+              )}
             </div>
           </div>
         )}
@@ -826,12 +847,14 @@ export default function StockFullView() {
           const parsedPortfolio = JSON.parse(savedPortfolio) as unknown;
           if (parsedPortfolio && typeof parsedPortfolio === "object") {
             const nextPortfolio = Object.entries(parsedPortfolio as Record<string, unknown>).reduce<PortfolioMap>((acc, [symbol, value]) => {
-              const avgPrice =
-                typeof value === "object" && value !== null && "avgPrice" in value
-                  ? Number((value as { avgPrice?: unknown }).avgPrice)
-                  : Number(value);
+              const isObj = typeof value === "object" && value !== null;
+              const avgPrice = isObj
+                ? Number((value as { avgPrice?: unknown }).avgPrice)
+                : Number(value);
+              const qtyRaw = isObj ? Number((value as { qty?: unknown }).qty) : NaN;
+              const qty = Number.isFinite(qtyRaw) && qtyRaw > 0 ? qtyRaw : undefined;
               if (sanitizeSymbol(symbol) && Number.isFinite(avgPrice) && avgPrice > 0) {
-                acc[symbol] = { avgPrice };
+                acc[symbol] = qty ? { avgPrice, qty } : { avgPrice };
               }
               return acc;
             }, {});
@@ -1175,17 +1198,44 @@ export default function StockFullView() {
     });
   }, [watchSort]);
 
-  const updatePortfolioPrice = useCallback((symbol: string, avgPrice: number) => {
+  const updatePortfolioEntry = useCallback((symbol: string, field: "avgPrice" | "qty", value: number) => {
     setPortfolio((prev) => {
       const next = { ...prev };
-      if (!Number.isFinite(avgPrice) || avgPrice <= 0) {
+      const current = next[symbol] ?? { avgPrice: 0 };
+      const avgPrice = field === "avgPrice"
+        ? (Number.isFinite(value) && value > 0 ? value : 0)
+        : current.avgPrice;
+      const qty = field === "qty"
+        ? (Number.isFinite(value) && value > 0 ? value : undefined)
+        : current.qty;
+      // 매입가가 없으면 항목 자체 제거 (수량만 남는 무의미한 상태 방지)
+      if (!avgPrice || avgPrice <= 0) {
         delete next[symbol];
       } else {
-        next[symbol] = { avgPrice };
+        next[symbol] = qty ? { avgPrice, qty } : { avgPrice };
       }
       return next;
     });
   }, []);
+
+  // 포트폴리오 총괄 — 매입가·수량이 모두 있는 보유 종목 전체(quotes) 기준 집계
+  const portfolioSummary = useMemo(() => {
+    let cost = 0;
+    let value = 0;
+    let count = 0;
+    for (const quote of quotes) {
+      const entry = portfolio[quote.symbol];
+      const avg = entry?.avgPrice ?? 0;
+      const qty = entry?.qty ?? 0;
+      if (avg <= 0 || qty <= 0 || quote.price <= 0) continue;
+      cost += avg * qty;
+      value += quote.price * qty;
+      count += 1;
+    }
+    const profit = value - cost;
+    const profitPct = cost > 0 ? (profit / cost) * 100 : 0;
+    return { cost, value, profit, profitPct, count };
+  }, [quotes, portfolio]);
 
   return (
     <div className="flex flex-col gap-3">
@@ -1335,6 +1385,29 @@ export default function StockFullView() {
                 </button>
               </div>
 
+              {portfolioMode && portfolioSummary.count > 0 && (
+                <div
+                  className="grid grid-cols-3 gap-2 rounded-xl px-3 py-2.5"
+                  style={{ background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.25)" }}
+                >
+                  <div className="min-w-0">
+                    <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>평가금액</p>
+                    <p className="mt-0.5 truncate text-sm font-black tabular-nums" style={{ color: "var(--text-primary)" }}>{formatMoney(portfolioSummary.value)}</p>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>매입금액</p>
+                    <p className="mt-0.5 truncate text-sm font-black tabular-nums" style={{ color: "var(--text-primary)" }}>{formatMoney(portfolioSummary.cost)}</p>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>총 손익</p>
+                    <p className="mt-0.5 truncate text-sm font-black tabular-nums" style={{ color: changeColor(portfolioSummary.profit) }}>
+                      {formatSignedPrice(portfolioSummary.profit)}
+                      <span className="ml-1 text-[11px]">({portfolioSummary.profitPct > 0 ? "+" : ""}{portfolioSummary.profitPct.toFixed(2)}%)</span>
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {isLoading && !data ? (
                 <SkeletonRows count={watchlist.length || 2} />
               ) : sortedQuotes.length === 0 ? (
@@ -1356,7 +1429,7 @@ export default function StockFullView() {
                                   dragHandle={dragHandle}
                                   portfolioMode={portfolioMode}
                                   portfolio={portfolio[q.symbol]}
-                                  onPortfolioChange={updatePortfolioPrice}
+                                  onPortfolioChange={updatePortfolioEntry}
                                 />
                               )}
                             </SortableQuoteRow>
@@ -1375,7 +1448,7 @@ export default function StockFullView() {
                           flash={flashMap[q.symbol]}
                           portfolioMode={portfolioMode}
                           portfolio={portfolio[q.symbol]}
-                          onPortfolioChange={updatePortfolioPrice}
+                          onPortfolioChange={updatePortfolioEntry}
                         />
                       ))}
                     </div>

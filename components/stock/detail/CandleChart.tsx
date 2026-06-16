@@ -8,6 +8,25 @@ import { formatPrice } from "@/lib/stocks/utils";
 const RISE = "var(--stock-rise)";
 const FALL = "var(--stock-fall)";
 
+/** 이동평균선 정의 (기간·색·라벨) */
+const MA_LINES = [
+  { period: 5, color: "#F59E0B", label: "MA5" },
+  { period: 20, color: "#6366F1", label: "MA20" },
+  { period: 60, color: "#10B981", label: "MA60" },
+] as const;
+
+/** 오름차순 종가에서 단순이동평균 산출 — 윈도우가 찬 인덱스만 값, 그 외 null */
+function movingAverage(closes: number[], period: number): (number | null)[] {
+  const out: (number | null)[] = new Array(closes.length).fill(null);
+  let sum = 0;
+  for (let i = 0; i < closes.length; i++) {
+    sum += closes[i];
+    if (i >= period) sum -= closes[i - period];
+    if (i >= period - 1) out[i] = sum / period;
+  }
+  return out;
+}
+
 const PRESETS: Record<CandleInterval, { label: string; count: number }[]> = {
   "1d": [
     { label: "1개월", count: 20 },
@@ -58,6 +77,7 @@ export default function CandleChart({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  const [showMA, setShowMA] = useState(true);
 
   const firstRunRef = useRef(true);
   const abortRef = useRef<AbortController | null>(null);
@@ -118,6 +138,19 @@ export default function CandleChart({
   const bodyW = Math.max(1, Math.min(slot * 0.66, 9));
 
   const priceY = (price: number) => PRICE_TOP + ((priceMax - price) / priceRange) * PRICE_H;
+
+  // 이동평균선 — 오름차순 종가 기준, 윈도우가 찬 구간만 polyline 좌표로 변환
+  const closes = candles.map((c) => c.close);
+  const maPolylines = showMA
+    ? MA_LINES.map(({ period, color, label }) => {
+        const series = movingAverage(closes, period);
+        const points = series
+          .map((value, i) => (value != null ? `${slot * i + slot / 2},${priceY(value)}` : null))
+          .filter((point): point is string => point !== null)
+          .join(" ");
+        return { color, label, points };
+      }).filter((line) => line.points.length > 0)
+    : [];
 
   const onMove = (clientX: number, target: SVGSVGElement) => {
     if (n === 0) return;
@@ -182,6 +215,23 @@ export default function CandleChart({
         )}
       </div>
 
+      {/* 이동평균선 범례 + 표시 토글 */}
+      <button
+        type="button"
+        onClick={() => setShowMA((value) => !value)}
+        className="flex items-center gap-2 self-start rounded-md px-1.5 py-0.5 transition-opacity"
+        style={{ opacity: showMA ? 1 : 0.45 }}
+        aria-pressed={showMA}
+        aria-label="이동평균선 표시 전환"
+      >
+        {MA_LINES.map(({ color, label }) => (
+          <span key={label} className="flex items-center gap-1 text-[9px] font-bold tabular-nums" style={{ color: "var(--text-muted)" }}>
+            <span className="inline-block h-0.5 w-3 rounded-full" style={{ background: color }} />
+            {label}
+          </span>
+        ))}
+      </button>
+
       <div className="relative overflow-hidden rounded-xl p-2" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid var(--border)" }}>
         {loading && (
           <div className="absolute inset-0 z-10 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.25)" }}>
@@ -222,6 +272,18 @@ export default function CandleChart({
                 </g>
               );
             })}
+            {maPolylines.map((line) => (
+              <polyline
+                key={line.label}
+                points={line.points}
+                fill="none"
+                stroke={line.color}
+                strokeWidth={1}
+                strokeLinejoin="round"
+                strokeLinecap="round"
+                vectorEffect="non-scaling-stroke"
+              />
+            ))}
             {hoverIndex != null && (
               <line
                 x1={slot * hoverIndex + slot / 2}

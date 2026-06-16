@@ -86,8 +86,27 @@ export default function OrderbookPanel({ orderbook, price }: { orderbook: Orderb
   const bestBidPrice = bids[0]?.price;
   const hasPrice = Number.isFinite(price) && price > 0;
 
+  // 총잔량(매도·매수)과 매수 우위 비율 — 호가창 매수/매도 압력 시각화
+  const totalAsk = asks.reduce((sum, level) => sum + (level.volume || 0), 0);
+  const totalBid = bids.reduce((sum, level) => sum + (level.volume || 0), 0);
+  const totalAll = totalAsk + totalBid;
+  const bidPct = totalAll > 0 ? (totalBid / totalAll) * 100 : 50;
+  const askPct = 100 - bidPct;
+
   return (
     <div className="rounded-xl px-2 py-2" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid var(--border)" }}>
+      {totalAll > 0 && (
+        <div className="mb-1.5 flex flex-col gap-1">
+          <div className="flex items-center justify-between text-[10px] font-bold tabular-nums">
+            <span style={{ color: FALL }}>매도 {totalAsk.toLocaleString()}</span>
+            <span style={{ color: RISE }}>매수 {totalBid.toLocaleString()}</span>
+          </div>
+          <div className="flex h-1.5 overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,0.08)" }}>
+            <span style={{ width: `${askPct}%`, background: `rgba(var(--stock-fall-rgb),0.55)` }} />
+            <span style={{ width: `${bidPct}%`, background: `rgba(var(--stock-rise-rgb),0.55)` }} />
+          </div>
+        </div>
+      )}
       <div className="flex flex-col gap-0.5">
         {askRows.map((level, index) => (
           <Row key={`ask-${level.price}-${index}`} level={level} max={maxVolume} side="ask" isBest={level.price === bestAskPrice} />
