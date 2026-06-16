@@ -13,6 +13,7 @@ import {
   type WatchlistItem,
 } from "@/lib/stocks/types";
 import { getKrxMarketWindow } from "@/lib/stocks/cache-policy";
+import { fetchTossPrices, fetchTossCandles, deriveTossMetrics, type TossCandlesResult } from "@/lib/stocks/toss";
 
 const KRX_DOMAIN = "https://data-dbg.krx.co.kr";
 const DEFAULT_SYMBOLS = ["005930", "000660", "035420", "005380"];
@@ -47,12 +48,6 @@ const STATIC_INDEX_RESULTS: StockSearchResult[] = [
 
 const INDEX_SEARCH_KEYWORDS = ["kospi", "kosdaq", "코스피", "코스닥", "지수", "krx", "200", "300"];
 
-const NAVER_INDEX_CODE_BY_SYMBOL: Record<string, string> = {
-  IDX_1: "KOSPI",
-  IDX_2: "KOSDAQ",
-  IDX_4: "KPI200",
-};
-
 type KrxConfig = {
   authKey: string;
   domain: string;
@@ -61,40 +56,6 @@ type KrxConfig = {
 type KrxApiResponse = {
   OutBlock_1?: Record<string, unknown>[];
   output?: Record<string, unknown>[];
-};
-
-type NaverCompareToPreviousPrice = {
-  code?: string;
-  text?: string;
-  name?: string;
-};
-
-type NaverBasicResponse = {
-  stockEndType?: "stock" | "etf" | "index";
-  itemCode?: string;
-  stockName?: string;
-  closePrice?: string;
-  compareToPreviousClosePrice?: string;
-  compareToPreviousPrice?: NaverCompareToPreviousPrice;
-  fluctuationsRatio?: string;
-  marketStatus?: string;
-  localTradedAt?: string;
-  stockExchangeType?: {
-    nameKor?: string;
-    nameEng?: string;
-    name?: string;
-  };
-  overMarketPriceInfo?: {
-    overMarketStatus?: string;
-    overPrice?: string;
-    compareToPreviousClosePrice?: string;
-    fluctuationsRatio?: string;
-    localTradedAt?: string;
-  };
-};
-
-type NaverIntegrationResponse = {
-  totalInfos?: { code?: string; value?: string }[];
 };
 
 function readConfig(): KrxConfig | null {
@@ -146,101 +107,6 @@ function toNumber(value: unknown): number {
   if (!normalized || normalized === "-") return 0;
   const num = Number(normalized);
   return Number.isFinite(num) ? num : 0;
-}
-
-function infoValue(items: { code?: string; value?: string }[], code: string): string {
-  return items.find((item) => item.code === code)?.value?.trim() ?? "";
-}
-
-function parseScaledNumber(value: string): number {
-  const trimmed = value.trim();
-  if (!trimmed) return 0;
-  if (trimmed.includes("백만")) return toNumber(trimmed.replace("백만", "")) * 1_000_000;
-  if (trimmed.includes("천주")) return toNumber(trimmed.replace("천주", "")) * 1_000;
-  return toNumber(trimmed);
-}
-
-function parseKoreanMarketCap(value: string): number {
-  const trimmed = value.trim();
-  if (!trimmed) return 0;
-  const joMatch = trimmed.match(/([\d,.]+)\s*조/);
-  const ukMatch = trimmed.match(/([\d,.]+)\s*억/);
-  return toNumber(joMatch?.[1] ?? "0") * 1_000_000_000_000 + toNumber(ukMatch?.[1] ?? "0") * 100_000_000;
-}
-
-function resolveNaverQuotePrice(basic: NaverBasicResponse): number {
-  const over = basic.overMarketPriceInfo;
-  if (over?.overMarketStatus === "OPEN") {
-    const overPrice = toNumber(over.overPrice ?? "");
-    if (overPrice > 0) return overPrice;
-  }
-  return toNumber(basic.closePrice ?? "");
-}
-
-async function fetchNaverBasicQuote(item: WatchlistItem): Promise<NaverBasicResponse> {
-  const indexCode = item.assetType === "index" ? NAVER_INDEX_CODE_BY_SYMBOL[item.symbol] : null;
-  const endpoint = item.assetType === "index"
-    ? `https://m.stock.naver.com/api/index/${encodeURIComponent(indexCode ?? item.symbol.replace("IDX_", ""))}/basic`
-    : `https://m.stock.naver.com/api/stock/${encodeURIComponent(item.symbol)}/basic`;
-  const res = await fetch(endpoint, {
-    method: "GET",
-    headers: { accept: "application/json" },
-    cache: "no-store",
-    signal: AbortSignal.timeout(5_000),
-  });
-  if (!res.ok) throw new Error(`Naver basic HTTP ${res.status}`);
-  return (await res.json()) as NaverBasicResponse;
-}
-
-async function fetchNaverIntegration(symbol: string): Promise<Partial<StockQuote>> {
-  const res = await fetch(`https://m.stock.naver.com/api/stock/${encodeURIComponent(symbol)}/integration`, {
-    method: "GET",
-    headers: { accept: "application/json" },
-    cache: "no-store",
-    signal: AbortSignal.timeout(5_000),
-  });
-  if (!res.ok) throw new Error(`Naver integration HTTP ${res.status}`);
-  const data = (await res.json()) as NaverIntegrationResponse;
-  const infos = Array.isArray(data.totalInfos) ? data.totalInfos : [];
-  const high52 = toNumber(infoValue(infos, "highPriceOf52Weeks"));
-  const low52 = toNumber(infoValue(infos, "lowPriceOf52Weeks"));
-  return {
-    open: parseScaledNumber(infoValue(infos, "openPrice")),
-    high: parseScaledNumber(infoValue(infos, "highPrice")),
-    low: parseScaledNumber(infoValue(infos, "lowPrice")),
-    volume: parseScaledNumber(infoValue(infos, "accumulatedTradingVolume")),
-    tradingValue: parseScaledNumber(infoValue(infos, "accumulatedTradingValue")),
-    marketCap: parseKoreanMarketCap(infoValue(infos, "marketValue")),
-    ...(high52 > 0 ? { fiftyTwoWeekHigh: high52 } : {}),
-    ...(low52 > 0 ? { fiftyTwoWeekLow: low52 } : {}),
-    per: infoValue(infos, "per") || infoValue(infos, "cnsPer"),
-    pbr: infoValue(infos, "pbr"),
-    eps: infoValue(infos, "eps") || infoValue(infos, "cnsEps"),
-    dividendYield: infoValue(infos, "dividendYieldRatio"),
-    foreignRate: infoValue(infos, "foreignRate"),
-  };
-}
-
-async function fetchNaverIndexIntegration(symbol: string): Promise<Partial<StockQuote>> {
-  const code = NAVER_INDEX_CODE_BY_SYMBOL[symbol] ?? symbol.replace("IDX_", "");
-  const res = await fetch(`https://m.stock.naver.com/api/index/${encodeURIComponent(code)}/integration`, {
-    method: "GET",
-    headers: { accept: "application/json" },
-    cache: "no-store",
-    signal: AbortSignal.timeout(5_000),
-  });
-  if (!res.ok) throw new Error(`Naver index integration HTTP ${res.status}`);
-  const data = (await res.json()) as NaverIntegrationResponse;
-  const infos = Array.isArray(data.totalInfos) ? data.totalInfos : [];
-  return {
-    open: parseScaledNumber(infoValue(infos, "openPrice")),
-    high: parseScaledNumber(infoValue(infos, "highPrice")),
-    low: parseScaledNumber(infoValue(infos, "lowPrice")),
-    volume: parseScaledNumber(infoValue(infos, "accumulatedTradingVolume")),
-    tradingValue: parseScaledNumber(infoValue(infos, "accumulatedTradingValue")),
-    fiftyTwoWeekHigh: parseScaledNumber(infoValue(infos, "highPriceOf52Weeks")),
-    fiftyTwoWeekLow: parseScaledNumber(infoValue(infos, "lowPriceOf52Weeks")),
-  };
 }
 
 function firstText(record: Record<string, unknown>, keys: string[]): string {
@@ -537,35 +403,6 @@ async function fetchLatestMarketRowsFresh(config: KrxConfig): Promise<{ baseDate
   throw new Error("최근 14일 안에 조회 가능한 KRX 일별 매매정보가 없습니다.");
 }
 
-async function fetchHistory(config: KrxConfig, symbol: string, assetType: AssetType = "stock", maxPoints = 10): Promise<number[]> {
-  const today = new Date();
-
-  // 후보 거래일 수집 (주말 제외, 버퍼 포함)
-  const candidateDates: string[] = [];
-  for (let offset = 0; offset < 45 && candidateDates.length < maxPoints + 10; offset += 1) {
-    const target = new Date(today.getTime() - offset * 86_400_000);
-    const day = target.getDay();
-    if (day === 0 || day === 6) continue;
-    candidateDates.push(formatKrxDate(target));
-  }
-
-  // 캐시를 공유하는 병렬 fetch — 여러 심볼이 같은 날짜를 재사용
-  const results = await Promise.allSettled(
-    candidateDates.map((baseDate) => assetType === "etf" ? getCachedEtfRows(config, baseDate) : getCachedMarketRows(config, baseDate)),
-  );
-
-  const values: number[] = [];
-  for (let i = 0; i < results.length && values.length < maxPoints; i += 1) {
-    const result = results[i];
-    if (result.status !== "fulfilled" || result.value.length === 0) continue;
-    const row = result.value.find((item) => firstText(item, ["ISU_CD", "isuCd"]) === symbol);
-    const close = row ? toNumber(row.TDD_CLSPRC ?? row.tddClsprc) : 0;
-    if (close > 0) values.push(close);
-  }
-
-  return values.reverse();
-}
-
 function mapQuote(record: Record<string, unknown>, baseDate: string, assetType: AssetType = "stock"): StockQuote {
   const symbol = firstText(record, ["ISU_CD", "isuCd"]);
   const change = toNumber(record.CMPPREVDD_PRC ?? record.cmpprevddPrc);
@@ -635,39 +472,49 @@ function mapIndexQuote(record: Record<string, unknown>, baseDate: string): Stock
   };
 }
 
-function overlayWithRealtimeQuote(
-  quote: StockQuote,
-  basic: NaverBasicResponse,
-  detail?: Partial<StockQuote>,
+/**
+ * 토스 시세(lastPrice) + 일봉(candles)으로 KRX base quote를 오버레이한다.
+ * - KRX base는 시총·상장주식수·NAV·AUM 등 펀더멘털 필드를 제공(보존).
+ * - 시세/등락/OHLCV/스파크라인/52주는 토스 candles 기반 deriveTossMetrics로 산출.
+ * - 토스 데이터가 없으면 시세만(가능 시) 덮어쓰고 등락은 KRX base 유지.
+ */
+function overlayWithToss(
+  base: StockQuote,
+  lastPrice: number,
+  candlesResult: TossCandlesResult | null,
+  sessionDay: string,
+  withSparkline: boolean,
 ): StockQuote {
-  const price = resolveNaverQuotePrice(basic);
-  const change = toNumber(basic.overMarketPriceInfo?.compareToPreviousClosePrice ?? basic.compareToPreviousClosePrice ?? "");
-  const changePct = toNumber(basic.overMarketPriceInfo?.fluctuationsRatio ?? basic.fluctuationsRatio ?? "");
-  const previousClose = price > 0 ? price - change : quote.previousClose;
-  const market = basic.stockExchangeType?.nameKor || basic.stockExchangeType?.nameEng || basic.stockExchangeType?.name || quote.market;
+  const metrics = deriveTossMetrics(candlesResult?.candles ?? [], lastPrice, sessionDay, withSparkline);
+
+  if (!metrics) {
+    // 캔들 없음 — 시세만 오버레이(가능 시), 등락은 base 유지
+    const price = lastPrice > 0 ? lastPrice : base.price;
+    return { ...base, price, sparkline: [], fetchedAt: new Date().toISOString(), source: "TOSS" };
+  }
+
+  // 52주 고/저는 KRX base 값도 후보에 포함해 더 넓은 범위를 반영
+  const hiCandidates = [metrics.fiftyTwoWeekHigh];
+  if ((base.fiftyTwoWeekHigh ?? 0) > 0) hiCandidates.push(base.fiftyTwoWeekHigh as number);
+  const loCandidates = [metrics.fiftyTwoWeekLow];
+  if ((base.fiftyTwoWeekLow ?? 0) > 0) loCandidates.push(base.fiftyTwoWeekLow as number);
 
   return {
-    ...quote,
-    market,
-    name: basic.stockName?.trim() || quote.name,
-    price: price > 0 ? price : quote.price,
-    change,
-    changePct,
-    previousClose,
-    fetchedAt: basic.localTradedAt || quote.fetchedAt,
-    ...(detail?.open && detail.open > 0 ? { open: detail.open } : {}),
-    ...(detail?.high && detail.high > 0 ? { high: detail.high } : {}),
-    ...(detail?.low && detail.low > 0 ? { low: detail.low } : {}),
-    ...(detail?.volume && detail.volume > 0 ? { volume: detail.volume } : {}),
-    ...(detail?.tradingValue && detail.tradingValue > 0 ? { tradingValue: detail.tradingValue } : {}),
-    ...(detail?.fiftyTwoWeekHigh && detail.fiftyTwoWeekHigh > 0 ? { fiftyTwoWeekHigh: detail.fiftyTwoWeekHigh } : {}),
-    ...(detail?.fiftyTwoWeekLow && detail.fiftyTwoWeekLow > 0 ? { fiftyTwoWeekLow: detail.fiftyTwoWeekLow } : {}),
-    ...(detail?.marketCap && detail.marketCap > 0 ? { marketCap: detail.marketCap } : {}),
-    ...(detail?.per ? { per: detail.per } : {}),
-    ...(detail?.pbr ? { pbr: detail.pbr } : {}),
-    ...(detail?.eps ? { eps: detail.eps } : {}),
-    ...(detail?.dividendYield ? { dividendYield: detail.dividendYield } : {}),
-    ...(detail?.foreignRate ? { foreignRate: detail.foreignRate } : {}),
+    ...base,
+    price: metrics.price,
+    change: metrics.change,
+    changePct: metrics.changePct,
+    open: metrics.open || base.open,
+    high: metrics.high || base.high,
+    low: metrics.low || base.low,
+    volume: metrics.volume || base.volume,
+    previousClose: metrics.previousClose,
+    sparkline: metrics.sparkline,
+    fiftyTwoWeekHigh: Math.max(...hiCandidates),
+    fiftyTwoWeekLow: Math.min(...loCandidates),
+    fetchedAt: new Date().toISOString(),
+    baseDate: metrics.baseDate,
+    source: "TOSS",
   };
 }
 
@@ -873,70 +720,38 @@ export async function fetchStockOverview(
     const fixedIndexCodes = ["1", "2"];
     const indexCodes = [...new Set([...fixedIndexCodes, ...requestedIndexCodes])];
 
-    // 스파크라인 — noSparkline 모드면 스킵해서 빠르게 반환
-    let quotesWithHistory: StockQuote[];
+    // 토스증권 시세·일봉 오버레이 — KRX base quote에 lastPrice/등락/OHLCV/스파크라인을 덮어쓴다.
+    // 펀더멘털(시총·상장주식수 등)은 KRX base 유지. 토스 실패 심볼은 KRX 종가로 graceful fallback.
     const errors: string[] = [];
-    if (options.noSparkline) {
-      quotesWithHistory = stockEtfQuotes.map((quote) => ({ ...quote, sparkline: [] }));
-    } else {
-      const historyResults = await Promise.allSettled(stockEtfQuotes.map((quote) => fetchHistory(config, quote.symbol, quote.assetType)));
-      quotesWithHistory = stockEtfQuotes.map((quote, index) => ({
-        ...quote,
-        sparkline: historyResults[index]?.status === "fulfilled" ? historyResults[index].value : [],
-        fiftyTwoWeekHigh: Math.max(quote.fiftyTwoWeekHigh ?? quote.price, ...(historyResults[index]?.status === "fulfilled" ? historyResults[index].value : [])),
-        fiftyTwoWeekLow: Math.min(quote.fiftyTwoWeekLow ?? quote.price, ...(historyResults[index]?.status === "fulfilled" ? historyResults[index].value : [])),
-      }));
-      historyResults.forEach((result, index) => {
-        if (result.status === "rejected") {
-          errors.push(`${stockEtfQuotes[index].symbol}: ${result.reason instanceof Error ? result.reason.message : "차트 조회 실패"}`);
-        }
-      });
-      const integrationResults = await Promise.allSettled(stockEtfQuotes.map((quote) => fetchNaverIntegration(quote.symbol)));
-      quotesWithHistory = quotesWithHistory.map((quote, index) => ({
-        ...quote,
-        ...(integrationResults[index]?.status === "fulfilled" ? integrationResults[index].value : {}),
-      }));
+    const sessionDay = getKrxMarketWindow().mostRecentTradingDay;
+    const candleCount = options.noSparkline ? 2 : 60;
+
+    let tossPriceMap = new Map<string, number>();
+    try {
+      const prices = await fetchTossPrices(stockEtfQuotes.map((quote) => quote.symbol));
+      tossPriceMap = new Map(prices.map((price) => [price.symbol, price.lastPrice]));
+    } catch (error) {
+      errors.push(`toss-prices: ${error instanceof Error ? error.message : "토스 시세 조회 실패"}`);
     }
 
-    const naverWatchlistResults = await Promise.allSettled(
-      stockEtfItems.map(async (item) => {
-        const basic = await fetchNaverBasicQuote(item);
-        const detail = options.noSparkline ? undefined : await fetchNaverIntegration(item.symbol);
-        return { item, basic, detail };
-      }),
+    const candleResults = await Promise.allSettled(
+      stockEtfQuotes.map((quote) => fetchTossCandles(quote.symbol, "1d", candleCount)),
     );
-    const naverWatchlistMap = new Map(
-      naverWatchlistResults
-        .flatMap((result) => result.status === "fulfilled" ? [[result.value.item.symbol, result.value]] : []),
-    );
-    quotesWithHistory = quotesWithHistory.map((quote) => {
-      const realtime = naverWatchlistMap.get(quote.symbol);
-      return realtime ? overlayWithRealtimeQuote(quote, realtime.basic, realtime.detail) : quote;
-    });
-    naverWatchlistResults.forEach((result, index) => {
-      if (result.status === "rejected") {
-        errors.push(`${stockEtfItems[index].symbol}: ${result.reason instanceof Error ? result.reason.message : "실시간 시세 조회 실패"}`);
+
+    const quotesWithHistory: StockQuote[] = stockEtfQuotes.map((quote, index) => {
+      const result = candleResults[index];
+      const candles = result?.status === "fulfilled" ? result.value : null;
+      const lastPrice = tossPriceMap.get(quote.symbol) ?? 0;
+      if (result?.status === "rejected") {
+        errors.push(`${quote.symbol}: ${result.reason instanceof Error ? result.reason.message : "토스 캔들 조회 실패"}`);
       }
+      // 토스 데이터가 전혀 없으면 KRX base 그대로 사용
+      if (!candles && lastPrice <= 0) return quote;
+      return overlayWithToss(quote, lastPrice, candles, sessionDay, !options.noSparkline);
     });
 
-    // 지수 quotes
-    let indexQuotes = await fetchIndexQuotesWithFallback(config, baseDate, indexCodes);
-    const naverIndexItems: WatchlistItem[] = indexCodes.map((code) => ({ symbol: `IDX_${code}`, assetType: "index" }));
-    const naverIndexResults = await Promise.allSettled(
-      naverIndexItems.map(async (item) => {
-        const basic = await fetchNaverBasicQuote(item);
-        const detail = options.noSparkline ? undefined : await fetchNaverIndexIntegration(item.symbol);
-        return { item, basic, detail };
-      }),
-    );
-    const naverIndexMap = new Map(
-      naverIndexResults
-        .flatMap((result) => result.status === "fulfilled" ? [[result.value.item.symbol, result.value]] : []),
-    );
-    indexQuotes = indexQuotes.map((quote) => {
-      const realtime = naverIndexMap.get(quote.symbol);
-      return realtime ? overlayWithRealtimeQuote(quote, realtime.basic, realtime.detail) : quote;
-    });
+    // 지수 quotes — KRX 그대로 유지 (네이버 오버레이 제거, source "KRX")
+    const indexQuotes = await fetchIndexQuotesWithFallback(config, baseDate, indexCodes);
     const marketIndices = indexQuotes
       .filter((quote) => fixedIndexCodes.includes(quote.symbol.replace("IDX_", "")))
       .sort((a, b) => fixedIndexCodes.indexOf(a.symbol.replace("IDX_", "")) - fixedIndexCodes.indexOf(b.symbol.replace("IDX_", "")));
@@ -962,7 +777,7 @@ export async function fetchStockOverview(
 
     const overviewResult: StockOverviewResponse = {
       status: "live",
-      provider: "Naver 실시간 + KRX",
+      provider: "토스증권 + KRX",
       fetchedAt: new Date().toISOString(),
       baseDate: normalizeDate(baseDate),
       marketDivCode: "KRX",

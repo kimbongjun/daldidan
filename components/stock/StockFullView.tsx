@@ -44,9 +44,15 @@ import {
   type SortingState,
 } from "@tanstack/react-table";
 import Sparkline from "@/components/Sparkline";
+import CandleChart from "@/components/stock/detail/CandleChart";
+import OrderbookPanel from "@/components/stock/detail/OrderbookPanel";
+import TradesTape from "@/components/stock/detail/TradesTape";
+import PriceLimitGauge from "@/components/stock/detail/PriceLimitGauge";
+import WarningBadges from "@/components/stock/detail/WarningBadges";
 import {
   STOCK_RANKING_KINDS,
   type AssetType,
+  type StockDetailResponse,
   type StockOverviewResponse,
   type StockQuote,
   type StockRankingItem,
@@ -662,7 +668,14 @@ function IndexSummaryCards({ indices }: { indices: StockQuote[] }) {
   );
 }
 
+const DETAIL_COUNT = 120;
+type DetailPhase = "loading" | "ready" | "error" | "not_configured";
+
 function QuoteDetailModal({ quote, onClose }: { quote: StockQuote; onClose: () => void }) {
+  const [detail, setDetail] = useState<StockDetailResponse | null>(null);
+  const [phase, setPhase] = useState<DetailPhase>("loading");
+  const pollAbortRef = useRef<AbortController | null>(null);
+
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") onClose();
@@ -671,7 +684,48 @@ function QuoteDetailModal({ quote, onClose }: { quote: StockQuote; onClose: () =
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
 
-  const color = changeColor(quote.changePct);
+  const fetchDetail = useCallback(async (signal: AbortSignal, silent: boolean) => {
+    if (!silent) setPhase("loading");
+    try {
+      const res = await fetch(`/api/stocks/${quote.symbol}/detail?interval=1d&count=${DETAIL_COUNT}`, { signal });
+      const json = (await res.json()) as StockDetailResponse;
+      if (signal.aborted) return;
+      setDetail(json);
+      setPhase(json.status === "not_configured" ? "not_configured" : json.status === "error" ? "error" : "ready");
+    } catch {
+      if (signal.aborted) return;
+      if (!silent) setPhase("error");
+    }
+  }, [quote.symbol]);
+
+  // 오픈 시 1회 호출 + 장중·탭 활성일 때만 7초 폴링 (호가/체결 실시간성)
+  useEffect(() => {
+    const initialController = new AbortController();
+    void fetchDetail(initialController.signal, false);
+
+    const timer = window.setInterval(() => {
+      if (!getKrxMarketWindow().open) return;
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      pollAbortRef.current?.abort();
+      const controller = new AbortController();
+      pollAbortRef.current = controller;
+      void fetchDetail(controller.signal, true);
+    }, 7_000);
+
+    return () => {
+      initialController.abort();
+      pollAbortRef.current?.abort();
+      window.clearInterval(timer);
+    };
+  }, [fetchDetail]);
+
+  // 시세는 detail(토스)가 더 신선하면 우선, 없으면 모달을 연 쪽의 quote 사용.
+  // 단, 종목명/시장/심볼은 토스 시세에 없으므로 항상 quote 값을 표시.
+  const live = detail?.quote && detail.quote.price > 0 ? detail.quote : null;
+  const displayPrice = live?.price ?? quote.price;
+  const displayChange = live?.change ?? quote.change;
+  const displayChangePct = live?.changePct ?? quote.changePct;
+
   const range = getRangePosition(quote);
   const stats = [
     { label: "시가", value: formatPrice(quote.open) },
@@ -682,19 +736,19 @@ function QuoteDetailModal({ quote, onClose }: { quote: StockQuote; onClose: () =
     { label: "거래대금", value: formatTradingValue(quote.tradingValue) },
     { label: "시가총액", value: formatMoney(quote.marketCap ?? 0) },
     { label: quote.assetType === "etf" ? "순자산" : "상장주식", value: quote.assetType === "etf" ? formatMoney(quote.aum ?? 0) : formatVolume(quote.listedShares ?? 0).replace("주", "") },
-    ...(quote.per ? [{ label: "PER", value: quote.per }] : []),
-    ...(quote.pbr ? [{ label: "PBR", value: quote.pbr }] : []),
-    ...(quote.dividendYield ? [{ label: "배당", value: quote.dividendYield }] : []),
   ];
+
+  const rangeColor = changeColor(displayChangePct);
 
   return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/55 px-4 py-6" onMouseDown={onClose}>
       <div
-        className="w-full max-w-lg rounded-2xl p-4 shadow-2xl"
+        className="flex max-h-[88vh] w-full max-w-lg flex-col rounded-2xl shadow-2xl"
         onMouseDown={(event) => event.stopPropagation()}
         style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
       >
-        <div className="flex items-start justify-between gap-3">
+        {/* 헤더 (고정) */}
+        <div className="flex items-start justify-between gap-3 p-4 pb-3">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-1.5">
               <h3 className="truncate text-base font-black" style={{ color: "var(--text-primary)" }}>{quote.name}</h3>
@@ -703,6 +757,11 @@ function QuoteDetailModal({ quote, onClose }: { quote: StockQuote; onClose: () =
             <p className="mt-0.5 text-[11px]" style={{ color: "var(--text-muted)" }}>
               {quote.symbol} · {quote.market}{quote.underlyingIndex ? ` · ${quote.underlyingIndex}` : ""}
             </p>
+            {detail && detail.warnings.length > 0 && (
+              <div className="mt-1.5">
+                <WarningBadges warnings={detail.warnings} />
+              </div>
+            )}
           </div>
           <button
             type="button"
@@ -715,37 +774,71 @@ function QuoteDetailModal({ quote, onClose }: { quote: StockQuote; onClose: () =
           </button>
         </div>
 
-        <div className="mt-4 grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3">
-          <div>
-            <p className="text-2xl font-black tabular-nums" style={{ color: "var(--text-primary)" }}>{formatPrice(quote.price)}</p>
-            <ChangeBadge change={quote.change} changePct={quote.changePct} />
+        {/* 본문 (스크롤) */}
+        <div className="flex flex-col gap-4 overflow-y-auto px-4 pb-4 scrollbar-hide">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3">
+            <div>
+              <p className="text-2xl font-black tabular-nums" style={{ color: "var(--text-primary)" }}>{formatPrice(displayPrice)}</p>
+              <ChangeBadge change={displayChange} changePct={displayChangePct} />
+            </div>
+            <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>{quote.baseDate}</p>
           </div>
-          <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>{quote.baseDate}</p>
-        </div>
 
-        <div className="mt-4 overflow-hidden rounded-xl p-3" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid var(--border)" }}>
-          <Sparkline data={quote.sparkline.length > 0 ? quote.sparkline : [quote.previousClose, quote.price]} color={color} width={320} height={92} />
-        </div>
+          {phase === "loading" ? (
+            <div className="flex h-[200px] items-center justify-center rounded-xl" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid var(--border)" }}>
+              <Loader2 size={20} className="animate-spin" style={{ color: ACCENT }} />
+            </div>
+          ) : phase === "not_configured" ? (
+            <div className="rounded-xl px-4 py-6 text-center text-xs" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid var(--border)", color: "var(--text-muted)" }}>
+              토스 OpenAPI 키가 설정되지 않았습니다.
+            </div>
+          ) : phase === "error" ? (
+            <div className="rounded-xl px-4 py-6 text-center text-xs" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid var(--border)", color: "var(--text-muted)" }}>
+              토스 데이터를 불러오지 못했습니다.
+            </div>
+          ) : detail ? (
+            <>
+              <CandleChart symbol={quote.symbol} initialCandles={detail.candles} initialInterval={detail.interval} />
 
-        {range.high > range.low && (
-          <div className="mt-4">
-            <div className="mb-1 flex items-center justify-between text-[10px] font-bold" style={{ color: "var(--text-muted)" }}>
-              <span>52W {formatPrice(range.low)}</span>
-              <span>{formatPrice(range.high)}</span>
+              {detail.priceLimit && (
+                <PriceLimitGauge priceLimit={detail.priceLimit} price={displayPrice} />
+              )}
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                {detail.orderbook && (detail.orderbook.asks.length > 0 || detail.orderbook.bids.length > 0) && (
+                  <div className="flex flex-col gap-1.5">
+                    <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>호가</p>
+                    <OrderbookPanel orderbook={detail.orderbook} price={displayPrice} />
+                  </div>
+                )}
+                <div className="flex flex-col gap-1.5">
+                  <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>체결</p>
+                  <TradesTape trades={detail.trades} />
+                </div>
+              </div>
+            </>
+          ) : null}
+
+          {range.high > range.low && (
+            <div>
+              <div className="mb-1 flex items-center justify-between text-[10px] font-bold" style={{ color: "var(--text-muted)" }}>
+                <span>52W {formatPrice(range.low)}</span>
+                <span>{formatPrice(range.high)}</span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,0.08)" }}>
+                <div className="h-full rounded-full" style={{ width: `${range.pct}%`, background: rangeColor }} />
+              </div>
             </div>
-            <div className="h-2 overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,0.08)" }}>
-              <div className="h-full rounded-full" style={{ width: `${range.pct}%`, background: color }} />
-            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {stats.map((stat) => (
+              <div key={stat.label} className="rounded-lg px-2.5 py-2" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid var(--border)" }}>
+                <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>{stat.label}</p>
+                <p className="mt-0.5 truncate text-xs font-black tabular-nums" style={{ color: "var(--text-primary)" }}>{stat.value}</p>
+              </div>
+            ))}
           </div>
-        )}
-
-        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {stats.map((stat) => (
-            <div key={stat.label} className="rounded-lg px-2.5 py-2" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid var(--border)" }}>
-              <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>{stat.label}</p>
-              <p className="mt-0.5 truncate text-xs font-black tabular-nums" style={{ color: "var(--text-primary)" }}>{stat.value}</p>
-            </div>
-          ))}
         </div>
       </div>
     </div>,
