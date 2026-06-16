@@ -14,38 +14,50 @@ import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } 
 import { CSS } from "@dnd-kit/utilities";
 import {
   ArrowDown,
+  ArrowRight,
   ArrowUp,
+  Activity,
+  BarChart3,
+  Bell,
   ChevronLeft,
   ChevronRight,
+  ChevronsUpDown,
   GripVertical,
+  LineChart,
   Loader2,
   Plus,
   RefreshCw,
   Search,
   Settings2,
+  Star,
   Trash2,
+  TrendingDown,
+  TrendingUp,
   WalletCards,
   X,
 } from "lucide-react";
-import Sparkline from "@/components/Sparkline";
-import IndexBar from "@/components/stock/IndexBar";
-import CandleChart from "@/components/stock/detail/CandleChart";
-import OrderbookPanel from "@/components/stock/detail/OrderbookPanel";
-import TradesTape from "@/components/stock/detail/TradesTape";
-import PriceLimitGauge from "@/components/stock/detail/PriceLimitGauge";
-import WarningBadges from "@/components/stock/detail/WarningBadges";
 import {
+  getCoreRowModel,
+  getSortedRowModel,
+  useReactTable,
+  type ColumnDef,
+  type SortingState,
+} from "@tanstack/react-table";
+import Sparkline from "@/components/Sparkline";
+import {
+  STOCK_RANKING_KINDS,
   type AssetType,
-  type StockDetailResponse,
   type StockOverviewResponse,
   type StockQuote,
   type StockRankingItem,
   type StockRankingKind,
   type StockSearchResult,
+  type StockTheme,
   type WatchlistItem,
 } from "@/lib/stocks/types";
 import {
   sanitizeSymbol,
+  sanitizeIndexSymbol,
   formatPrice,
   formatVolume,
   formatTradingValue,
@@ -59,21 +71,30 @@ const STORAGE_KEY = "daldidan-stock-watchlist";
 const PORTFOLIO_STORAGE_KEY = "daldidan-stock-portfolio";
 const RESPONSE_STORAGE_PREFIX = "daldidan-stock-response";
 const PAGE_SIZE = 5;
+const FIXED_INDEX_SYMBOLS = ["IDX_1", "IDX_2"];
 const DEFAULT_WATCHLIST: WatchlistItem[] = [
   { symbol: "005930", assetType: "stock" },
   { symbol: "000660", assetType: "stock" },
 ];
 
+type Tab = "watch" | "rank" | "ipo";
 type LoadPhase = "idle" | "quotes" | "charts" | "done" | "error";
 type WatchSort = "manual" | "change" | "value" | "name";
 type FlashDirection = "up" | "down";
-type PortfolioEntry = { avgPrice: number; qty?: number };
-type PortfolioMap = Record<string, PortfolioEntry>;
+type PortfolioMap = Record<string, { avgPrice: number }>;
 type StockCacheSnapshot = {
   data: StockOverviewResponse;
   bucketKey: string | null;
   tradingDay: string | null;
   savedAt: string;
+};
+
+const RANK_META: Record<StockRankingKind, { label: string; icon: React.ReactNode }> = {
+  amount: { label: "거래대금", icon: <BarChart3 size={11} /> },
+  volume: { label: "거래량", icon: <LineChart size={11} /> },
+  rise: { label: "급상승", icon: <TrendingUp size={11} /> },
+  fall: { label: "급하락", icon: <TrendingDown size={11} /> },
+  popular: { label: "인기", icon: <Star size={11} /> },
 };
 
 function formatDateTime(value?: string): string {
@@ -97,15 +118,11 @@ function formatAbsoluteDateTime(value?: string): string {
   });
 }
 
-/** 상장일 등 ISO/날짜 문자열을 YYYY.MM.DD 로 포맷 */
-function formatListDate(value?: string): string {
-  if (!value) return "";
+function formatDate(value?: string): string {
+  if (!value) return "일정 확인";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}.${m}.${d}`;
+  return date.toLocaleDateString("ko-KR", { month: "2-digit", day: "2-digit" });
 }
 
 function formatMoney(value: number): string {
@@ -141,31 +158,6 @@ function changeColor(value: number): string {
   if (value > 0) return RISE;
   if (value < 0) return FALL;
   return "var(--text-muted)";
-}
-
-/** 랭킹 항목(StockRankingItem) → 상세 모달이 요구하는 StockQuote 로 어댑트.
- * 누락 필드는 0/기본값으로 채운다. 모달은 symbol 로 detail 을 재조회하므로
- * 0 값들은 시각적으로 안전(getRangePosition·Sparkline 이 0 을 방어). */
-function rankingItemToQuote(item: StockRankingItem, baseDate: string): StockQuote {
-  return {
-    symbol: item.symbol,
-    name: item.name,
-    market: "",
-    assetType: "stock",
-    price: item.price,
-    change: item.change,
-    changePct: item.changePct,
-    volume: item.volume,
-    tradingValue: item.tradingValue,
-    open: 0,
-    high: 0,
-    low: 0,
-    previousClose: 0,
-    sparkline: [],
-    fetchedAt: new Date().toISOString(),
-    baseDate,
-    source: "TOSS",
-  };
 }
 
 function makeStockRequestKey(items: WatchlistItem[]): string {
@@ -258,7 +250,7 @@ function StatusPill({ data, phase, marketStatus }: { data: StockOverviewResponse
   const label =
     phase === "quotes" ? "시세 수신 중..." :
     phase === "charts" ? "차트 준비 중..." :
-    isLive ? `토스 ${marketStatus.label}` :
+    isLive ? `KRX ${marketStatus.label}` :
     data?.status === "not_configured" ? "API 설정 필요" : "오류";
   const color =
     isLoading ? "#F59E0B" :
@@ -351,18 +343,16 @@ function QuoteRow({
   flash?: FlashDirection;
   dragHandle?: React.ReactNode;
   portfolioMode: boolean;
-  portfolio?: PortfolioEntry;
-  onPortfolioChange: (symbol: string, field: "avgPrice" | "qty", value: number) => void;
+  portfolio?: { avgPrice: number };
+  onPortfolioChange: (symbol: string, avgPrice: number) => void;
 }) {
   const color = changeColor(quote.changePct);
   const isIndex = quote.assetType === "index";
   const range = getRangePosition(quote);
   const avgPrice = portfolio?.avgPrice ?? 0;
-  const qty = portfolio?.qty ?? 0;
   const profit = avgPrice > 0 ? quote.price - avgPrice : 0;
   const profitPct = avgPrice > 0 ? (profit / avgPrice) * 100 : 0;
   const profitColor = changeColor(profitPct);
-  const evalProfit = avgPrice > 0 && qty > 0 ? profit * qty : 0;
   const rowColumns = dragHandle
     ? "grid-cols-[auto_minmax(0,1.3fr)_auto_auto_auto]"
     : "grid-cols-[minmax(0,1.3fr)_auto_auto_auto]";
@@ -413,39 +403,21 @@ function QuoteRow({
           </div>
         )}
         {portfolioMode && !isIndex && (
-          <div className="mt-2 flex flex-col gap-1.5">
-            <div className="grid grid-cols-2 gap-2">
-              <input
-                value={avgPrice > 0 ? String(avgPrice) : ""}
-                onClick={(event) => event.stopPropagation()}
-                onKeyDown={(event) => event.stopPropagation()}
-                onChange={(event) => onPortfolioChange(quote.symbol, "avgPrice", Number(event.target.value.replace(/[^\d.]/g, "")))}
-                inputMode="decimal"
-                placeholder="매입가"
-                className="h-7 rounded-md border bg-transparent px-2 text-[11px] outline-none"
-                style={{ borderColor: "var(--border)", color: "var(--text-primary)" }}
-              />
-              <input
-                value={qty > 0 ? String(qty) : ""}
-                onClick={(event) => event.stopPropagation()}
-                onKeyDown={(event) => event.stopPropagation()}
-                onChange={(event) => onPortfolioChange(quote.symbol, "qty", Number(event.target.value.replace(/[^\d.]/g, "")))}
-                inputMode="decimal"
-                placeholder="수량"
-                className="h-7 rounded-md border bg-transparent px-2 text-[11px] outline-none"
-                style={{ borderColor: "var(--border)", color: "var(--text-primary)" }}
-              />
-            </div>
-            <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] font-bold">
-              <span style={{ color: "var(--text-muted)" }}>수익률</span>
-              <span className="tabular-nums" style={{ color: profitColor }}>{avgPrice > 0 ? `${profitPct > 0 ? "+" : ""}${profitPct.toFixed(2)}%` : "-"}</span>
-              <span className="tabular-nums" style={{ color: profitColor }}>{avgPrice > 0 ? formatSignedPrice(profit) : ""}</span>
-              {avgPrice > 0 && qty > 0 && (
-                <>
-                  <span style={{ color: "var(--text-muted)" }}>· 평가손익</span>
-                  <span className="tabular-nums" style={{ color: profitColor }}>{formatSignedPrice(evalProfit)}</span>
-                </>
-              )}
+          <div className="mt-2 grid grid-cols-[86px_minmax(0,1fr)] items-center gap-2">
+            <input
+              value={avgPrice > 0 ? String(avgPrice) : ""}
+              onClick={(event) => event.stopPropagation()}
+              onKeyDown={(event) => event.stopPropagation()}
+              onChange={(event) => onPortfolioChange(quote.symbol, Number(event.target.value.replace(/[^\d.]/g, "")))}
+              inputMode="decimal"
+              placeholder="매입가"
+              className="h-7 rounded-md border bg-transparent px-2 text-[11px] outline-none"
+              style={{ borderColor: "var(--border)", color: "var(--text-primary)" }}
+            />
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-[10px] font-bold">
+              <span style={{ color: "var(--text-muted)" }}>평단 {avgPrice > 0 ? formatPrice(avgPrice) : "-"}</span>
+              <span className="tabular-nums" style={{ color: profitColor }}>{avgPrice > 0 ? `${profitPct > 0 ? "+" : ""}${profitPct.toFixed(2)}%` : "-%"}</span>
+              <span className="tabular-nums" style={{ color: profitColor }}>{avgPrice > 0 ? formatSignedPrice(profit) : "-"}</span>
             </div>
           </div>
         )}
@@ -508,6 +480,97 @@ function SortableQuoteRow({
   );
 }
 
+function RankingRow({ item }: { item: StockRankingItem }) {
+  return (
+    <div
+      className="grid min-h-[54px] grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-3 rounded-xl px-3 py-2"
+      style={{ background: "rgba(255,255,255,0.045)", border: "1px solid transparent" }}
+    >
+      <div className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-black tabular-nums" style={{ background: `${ACCENT}18`, color: ACCENT }}>
+        {item.rank}
+      </div>
+      <div className="min-w-0">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <p className="truncate text-xs font-bold" style={{ color: "var(--text-primary)" }}>{item.name || item.symbol}</p>
+          {item.symbol && <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>{item.symbol}</span>}
+        </div>
+        <p className="mt-0.5 text-[10px]" style={{ color: "var(--text-muted)" }}>
+          {item.scoreLabel}{" "}
+          {item.kind === "volume"
+            ? formatVolume(item.scoreValue)
+            : item.kind === "amount"
+            ? formatTradingValue(item.scoreValue)
+            : item.kind === "popular"
+            ? `${item.rank}위`
+            : `${item.scoreValue.toFixed(2)}%`}
+        </p>
+      </div>
+      <div className="text-right">
+        <p className="text-xs font-black tabular-nums" style={{ color: "var(--text-primary)" }}>{formatPrice(item.price)}</p>
+        <ChangeBadge change={item.change} changePct={item.changePct} />
+      </div>
+    </div>
+  );
+}
+
+function ThemeStrip({
+  themes,
+  expandedTheme,
+  onToggle,
+}: {
+  themes: StockTheme[];
+  expandedTheme: string | null;
+  onToggle: (label: string) => void;
+}) {
+  if (themes.length === 0) return null;
+  const selected = themes.find((theme) => theme.label === expandedTheme);
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-0.5">
+        {themes.map((theme) => {
+          const color = theme.tone === "hot" ? RISE : theme.tone === "cool" ? FALL : "var(--text-muted)";
+          const active = expandedTheme === theme.label;
+          return (
+            <button
+              key={theme.label}
+              type="button"
+              onClick={() => onToggle(theme.label)}
+              className="min-w-[124px] rounded-xl px-3 py-2 text-left transition-colors"
+              style={{ background: active ? `${ACCENT}15` : "rgba(255,255,255,0.045)", border: `1px solid ${active ? `${ACCENT}44` : "var(--border)"}` }}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-bold" style={{ color: "var(--text-primary)" }}>{theme.label}</span>
+                <span className="text-[11px] font-black tabular-nums" style={{ color }}>
+                  {theme.avgChangePct > 0 ? "+" : ""}{theme.avgChangePct.toFixed(1)}%
+                </span>
+              </div>
+              <p className="mt-1 truncate text-[10px]" style={{ color: "var(--text-muted)" }}>
+                {theme.leaders.join(" · ")}
+              </p>
+            </button>
+          );
+        })}
+      </div>
+      {selected && selected.members.length > 0 && (
+        <div className="grid gap-1.5 sm:grid-cols-2">
+          {selected.members.map((item) => (
+            <div
+              key={`${selected.label}-${item.symbol}`}
+              className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-lg px-2.5 py-1.5"
+              style={{ background: "rgba(255,255,255,0.04)", border: "1px solid var(--border)" }}
+            >
+              <span className="truncate text-[11px] font-bold" style={{ color: "var(--text-primary)" }}>{item.name}</span>
+              <span className="text-[11px] font-black tabular-nums" style={{ color: changeColor(item.changePct) }}>
+                {item.changePct > 0 ? "+" : ""}{item.changePct.toFixed(2)}%
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SearchResultGroup({
   results,
   focusedIndex,
@@ -557,14 +620,49 @@ function SearchResultGroup({
   );
 }
 
-const DETAIL_COUNT = 120;
-type DetailPhase = "loading" | "ready" | "error" | "not_configured";
+function IndexSummaryCards({ indices }: { indices: StockQuote[] }) {
+  const bySymbol = new Map(indices.map((quote) => [quote.symbol, quote]));
+  const cards = FIXED_INDEX_SYMBOLS.map((symbol) => bySymbol.get(symbol) ?? {
+    symbol,
+    name: symbol === "IDX_1" ? "KOSPI 종합" : "KOSDAQ 종합",
+    market: "KRX",
+    assetType: "index" as AssetType,
+    price: 0,
+    change: 0,
+    changePct: 0,
+    volume: 0,
+    tradingValue: 0,
+    open: 0,
+    high: 0,
+    low: 0,
+    previousClose: 0,
+    sparkline: [],
+    fetchedAt: "",
+    baseDate: "",
+    source: "KRX" as const,
+  });
+
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      {cards.map((quote) => (
+        <div
+          key={quote.symbol}
+          className="rounded-xl px-3 py-2.5"
+          style={{ background: "rgba(245,158,11,0.10)", border: "1px solid rgba(245,158,11,0.22)" }}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <span className="truncate text-xs font-black" style={{ color: "var(--text-primary)" }}>{quote.name.replace(" 종합", "")}</span>
+            <Activity size={12} style={{ color: "#F59E0B" }} />
+          </div>
+          <p className="mt-1 text-base font-black tabular-nums" style={{ color: "var(--text-primary)" }}>{formatPrice(quote.price)}</p>
+          <ChangeBadge change={quote.change} changePct={quote.changePct} />
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function QuoteDetailModal({ quote, onClose }: { quote: StockQuote; onClose: () => void }) {
-  const [detail, setDetail] = useState<StockDetailResponse | null>(null);
-  const [phase, setPhase] = useState<DetailPhase>("loading");
-  const pollAbortRef = useRef<AbortController | null>(null);
-
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") onClose();
@@ -573,48 +671,7 @@ function QuoteDetailModal({ quote, onClose }: { quote: StockQuote; onClose: () =
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
 
-  const fetchDetail = useCallback(async (signal: AbortSignal, silent: boolean) => {
-    if (!silent) setPhase("loading");
-    try {
-      const res = await fetch(`/api/stocks/${quote.symbol}/detail?interval=1d&count=${DETAIL_COUNT}`, { signal });
-      const json = (await res.json()) as StockDetailResponse;
-      if (signal.aborted) return;
-      setDetail(json);
-      setPhase(json.status === "not_configured" ? "not_configured" : json.status === "error" ? "error" : "ready");
-    } catch {
-      if (signal.aborted) return;
-      if (!silent) setPhase("error");
-    }
-  }, [quote.symbol]);
-
-  // 오픈 시 1회 호출 + 장중·탭 활성일 때만 7초 폴링 (호가/체결 실시간성)
-  useEffect(() => {
-    const initialController = new AbortController();
-    void fetchDetail(initialController.signal, false);
-
-    const timer = window.setInterval(() => {
-      if (!getKrxMarketWindow().open) return;
-      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
-      pollAbortRef.current?.abort();
-      const controller = new AbortController();
-      pollAbortRef.current = controller;
-      void fetchDetail(controller.signal, true);
-    }, 7_000);
-
-    return () => {
-      initialController.abort();
-      pollAbortRef.current?.abort();
-      window.clearInterval(timer);
-    };
-  }, [fetchDetail]);
-
-  // 시세는 detail(토스)가 더 신선하면 우선, 없으면 모달을 연 쪽의 quote 사용.
-  // 단, 종목명/시장/심볼은 토스 시세에 없으므로 항상 quote 값을 표시.
-  const live = detail?.quote && detail.quote.price > 0 ? detail.quote : null;
-  const displayPrice = live?.price ?? quote.price;
-  const displayChange = live?.change ?? quote.change;
-  const displayChangePct = live?.changePct ?? quote.changePct;
-
+  const color = changeColor(quote.changePct);
   const range = getRangePosition(quote);
   const stats = [
     { label: "시가", value: formatPrice(quote.open) },
@@ -624,39 +681,28 @@ function QuoteDetailModal({ quote, onClose }: { quote: StockQuote; onClose: () =
     { label: "거래량", value: formatVolume(quote.volume) },
     { label: "거래대금", value: formatTradingValue(quote.tradingValue) },
     { label: "시가총액", value: formatMoney(quote.marketCap ?? 0) },
-    { label: quote.assetType === "etf" ? "상장좌수" : "상장주식", value: formatVolume(quote.listedShares ?? 0).replace("주", "") },
-    ...(quote.listDate ? [{ label: "상장일", value: formatListDate(quote.listDate) }] : []),
+    { label: quote.assetType === "etf" ? "순자산" : "상장주식", value: quote.assetType === "etf" ? formatMoney(quote.aum ?? 0) : formatVolume(quote.listedShares ?? 0).replace("주", "") },
+    ...(quote.per ? [{ label: "PER", value: quote.per }] : []),
+    ...(quote.pbr ? [{ label: "PBR", value: quote.pbr }] : []),
+    ...(quote.dividendYield ? [{ label: "배당", value: quote.dividendYield }] : []),
   ];
-
-  const rangeColor = changeColor(displayChangePct);
 
   return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/55 px-4 py-6" onMouseDown={onClose}>
       <div
-        className="flex max-h-[88vh] w-full max-w-lg flex-col rounded-2xl shadow-2xl"
+        className="w-full max-w-lg rounded-2xl p-4 shadow-2xl"
         onMouseDown={(event) => event.stopPropagation()}
         style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
       >
-        {/* 헤더 (고정) */}
-        <div className="flex items-start justify-between gap-3 p-4 pb-3">
+        <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-1.5">
               <h3 className="truncate text-base font-black" style={{ color: "var(--text-primary)" }}>{quote.name}</h3>
               <AssetTypeBadge assetType={quote.assetType} />
-              {quote.nxtSupported && (
-                <span className="shrink-0 rounded px-1.5 py-0.5 text-[9px] font-black uppercase" style={{ background: "rgba(16,185,129,0.18)", color: "#10B981" }}>
-                  NXT
-                </span>
-              )}
             </div>
             <p className="mt-0.5 text-[11px]" style={{ color: "var(--text-muted)" }}>
-              {quote.symbol} · {quote.market}{quote.englishName ? ` · ${quote.englishName}` : ""}
+              {quote.symbol} · {quote.market}{quote.underlyingIndex ? ` · ${quote.underlyingIndex}` : ""}
             </p>
-            {detail && detail.warnings.length > 0 && (
-              <div className="mt-1.5">
-                <WarningBadges warnings={detail.warnings} />
-              </div>
-            )}
           </div>
           <button
             type="button"
@@ -669,71 +715,37 @@ function QuoteDetailModal({ quote, onClose }: { quote: StockQuote; onClose: () =
           </button>
         </div>
 
-        {/* 본문 (스크롤) */}
-        <div className="flex flex-col gap-4 overflow-y-auto px-4 pb-4 scrollbar-hide">
-          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3">
-            <div>
-              <p className="text-2xl font-black tabular-nums" style={{ color: "var(--text-primary)" }}>{formatPrice(displayPrice)}</p>
-              <ChangeBadge change={displayChange} changePct={displayChangePct} />
-            </div>
-            <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>{quote.baseDate}</p>
+        <div className="mt-4 grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3">
+          <div>
+            <p className="text-2xl font-black tabular-nums" style={{ color: "var(--text-primary)" }}>{formatPrice(quote.price)}</p>
+            <ChangeBadge change={quote.change} changePct={quote.changePct} />
           </div>
+          <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>{quote.baseDate}</p>
+        </div>
 
-          {phase === "loading" ? (
-            <div className="flex h-[200px] items-center justify-center rounded-xl" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid var(--border)" }}>
-              <Loader2 size={20} className="animate-spin" style={{ color: ACCENT }} />
+        <div className="mt-4 overflow-hidden rounded-xl p-3" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid var(--border)" }}>
+          <Sparkline data={quote.sparkline.length > 0 ? quote.sparkline : [quote.previousClose, quote.price]} color={color} width={320} height={92} />
+        </div>
+
+        {range.high > range.low && (
+          <div className="mt-4">
+            <div className="mb-1 flex items-center justify-between text-[10px] font-bold" style={{ color: "var(--text-muted)" }}>
+              <span>52W {formatPrice(range.low)}</span>
+              <span>{formatPrice(range.high)}</span>
             </div>
-          ) : phase === "not_configured" ? (
-            <div className="rounded-xl px-4 py-6 text-center text-xs" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid var(--border)", color: "var(--text-muted)" }}>
-              토스 OpenAPI 키가 설정되지 않았습니다.
+            <div className="h-2 overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,0.08)" }}>
+              <div className="h-full rounded-full" style={{ width: `${range.pct}%`, background: color }} />
             </div>
-          ) : phase === "error" ? (
-            <div className="rounded-xl px-4 py-6 text-center text-xs" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid var(--border)", color: "var(--text-muted)" }}>
-              토스 데이터를 불러오지 못했습니다.
-            </div>
-          ) : detail ? (
-            <>
-              <CandleChart symbol={quote.symbol} initialCandles={detail.candles} initialInterval={detail.interval} />
-
-              {detail.priceLimit && (
-                <PriceLimitGauge priceLimit={detail.priceLimit} price={displayPrice} />
-              )}
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                {detail.orderbook && (detail.orderbook.asks.length > 0 || detail.orderbook.bids.length > 0) && (
-                  <div className="flex flex-col gap-1.5">
-                    <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>호가</p>
-                    <OrderbookPanel orderbook={detail.orderbook} price={displayPrice} />
-                  </div>
-                )}
-                <div className="flex flex-col gap-1.5">
-                  <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>체결</p>
-                  <TradesTape trades={detail.trades} />
-                </div>
-              </div>
-            </>
-          ) : null}
-
-          {range.high > range.low && (
-            <div>
-              <div className="mb-1 flex items-center justify-between text-[10px] font-bold" style={{ color: "var(--text-muted)" }}>
-                <span>52W {formatPrice(range.low)}</span>
-                <span>{formatPrice(range.high)}</span>
-              </div>
-              <div className="h-2 overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,0.08)" }}>
-                <div className="h-full rounded-full" style={{ width: `${range.pct}%`, background: rangeColor }} />
-              </div>
-            </div>
-          )}
-
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {stats.map((stat) => (
-              <div key={stat.label} className="rounded-lg px-2.5 py-2" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid var(--border)" }}>
-                <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>{stat.label}</p>
-                <p className="mt-0.5 truncate text-xs font-black tabular-nums" style={{ color: "var(--text-primary)" }}>{stat.value}</p>
-              </div>
-            ))}
           </div>
+        )}
+
+        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {stats.map((stat) => (
+            <div key={stat.label} className="rounded-lg px-2.5 py-2" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid var(--border)" }}>
+              <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>{stat.label}</p>
+              <p className="mt-0.5 truncate text-xs font-black tabular-nums" style={{ color: "var(--text-primary)" }}>{stat.value}</p>
+            </div>
+          ))}
         </div>
       </div>
     </div>,
@@ -741,125 +753,9 @@ function QuoteDetailModal({ quote, onClose }: { quote: StockQuote; onClose: () =
   );
 }
 
-type RankingTab = Extract<StockRankingKind, "rise" | "fall" | "amount" | "volume">;
-
-const RANKING_TABS: { key: RankingTab; label: string }[] = [
-  { key: "rise", label: "상승률" },
-  { key: "fall", label: "하락률" },
-  { key: "amount", label: "거래대금" },
-  { key: "volume", label: "거래량" },
-];
-
-/** 랭킹 행 우측에 표시할 보조 점수(대금/거래량). 상승·하락은 등락률이 이미 헤드라인이라 생략. */
-function rankingScoreText(item: StockRankingItem): string | null {
-  if (item.kind === "amount") return formatTradingValue(item.scoreValue || item.tradingValue);
-  if (item.kind === "volume") return formatVolume(item.scoreValue || item.volume);
-  return null;
-}
-
-function RankingRow({ item, onOpen }: { item: StockRankingItem; onOpen: (item: StockRankingItem) => void }) {
-  const color = changeColor(item.changePct);
-  const Icon = item.changePct > 0 ? ArrowUp : item.changePct < 0 ? ArrowDown : null;
-  const score = rankingScoreText(item);
-  return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={() => onOpen(item)}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          onOpen(item);
-        }
-      }}
-      className="grid w-full cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:opacity-90"
-      style={{ background: "rgba(255,255,255,0.045)", border: "1px solid var(--border)" }}
-    >
-      <span
-        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-[11px] font-black tabular-nums"
-        style={{
-          background: item.rank <= 3 ? `${ACCENT}22` : "rgba(255,255,255,0.06)",
-          color: item.rank <= 3 ? ACCENT : "var(--text-muted)",
-        }}
-      >
-        {item.rank}
-      </span>
-      <div className="min-w-0">
-        <p className="truncate text-sm font-black" style={{ color: "var(--text-primary)" }}>{item.name}</p>
-        <p className="truncate text-[10px] tabular-nums" style={{ color: "var(--text-muted)" }}>
-          {formatPrice(item.price)}
-          {score ? ` · ${score}` : ""}
-        </p>
-      </div>
-      <span className="inline-flex items-center justify-end gap-0.5 text-sm font-bold tabular-nums" style={{ color }}>
-        {Icon && <Icon size={12} />}
-        {item.changePct > 0 ? "+" : ""}
-        {item.changePct.toFixed(2)}%
-      </span>
-    </div>
-  );
-}
-
-function RankingSection({
-  rankings,
-  baseDate,
-  loading,
-  onOpen,
-}: {
-  rankings: StockOverviewResponse["rankings"] | undefined;
-  baseDate: string;
-  loading: boolean;
-  onOpen: (quote: StockQuote) => void;
-}) {
-  const [tab, setTab] = useState<RankingTab>("rise");
-  const items = useMemo(() => (rankings?.[tab] ?? []).slice(0, 10), [rankings, tab]);
-
-  return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-col gap-0.5">
-        <h3 className="text-base font-black" style={{ color: "var(--text-primary)" }}>주요 종목 랭킹</h3>
-        <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
-          시장 전체가 아닌 주요 종목 30선 기준 추정 순위입니다.
-        </p>
-      </div>
-
-      <div className="flex gap-1.5 overflow-x-auto scrollbar-hide">
-        {RANKING_TABS.map(({ key, label }) => {
-          const active = tab === key;
-          return (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setTab(key)}
-              className="tag shrink-0"
-              style={{ background: active ? ACCENT : `${ACCENT}15`, color: active ? "#fff" : "var(--text-muted)" }}
-            >
-              {label}
-            </button>
-          );
-        })}
-      </div>
-
-      {loading && items.length === 0 ? (
-        <SkeletonRows count={5} />
-      ) : items.length === 0 ? (
-        <EmptyState title="랭킹 데이터가 없습니다" detail="주요 종목 시세가 준비되면 순위가 표시됩니다." />
-      ) : (
-        <div className="flex flex-col gap-2">
-          {items.map((item) => (
-            <RankingRow
-              key={`${item.kind}-${item.symbol}-${item.rank}`}
-              item={item}
-              onOpen={() => onOpen(rankingItemToQuote(item, baseDate))}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function StockFullView() {
+  const [activeTab, setActiveTab] = useState<Tab>("watch");
+  const [activeRank, setActiveRank] = useState<StockRankingKind>("amount");
   const [watchSort, setWatchSort] = useState<WatchSort>("manual");
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>(DEFAULT_WATCHLIST);
   const [portfolioMode, setPortfolioMode] = useState(false);
@@ -879,6 +775,7 @@ export default function StockFullView() {
     return { open, label };
   });
   const [selectedQuote, setSelectedQuote] = useState<StockQuote | null>(null);
+  const [expandedTheme, setExpandedTheme] = useState<string | null>(null);
 
   const [input, setInput] = useState("");
   const [searchResults, setSearchResults] = useState<StockSearchResult[]>([]);
@@ -888,6 +785,8 @@ export default function StockFullView() {
   const [feedback, setFeedback] = useState<{ msg: string; type: "success" | "warn" | "error" } | null>(null);
 
   const [watchPage, setWatchPage] = useState(0);
+  const [rankPage, setRankPage] = useState(0);
+  const [ipoPage, setIpoPage] = useState(0);
 
   const searchRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -932,8 +831,9 @@ export default function StockFullView() {
                     if (typeof item === "object" && item !== null && "symbol" in item) {
                       const raw = item as Record<string, unknown>;
                       const rawSym = typeof raw.symbol === "string" ? raw.symbol : "";
-                      const validSym = sanitizeSymbol(rawSym);
-                      const validAt: AssetType = raw.assetType === "etf" ? "etf" : "stock";
+                      const validSym = sanitizeSymbol(rawSym) ?? sanitizeIndexSymbol(rawSym) ?? null;
+                      const rawAt = raw.assetType;
+                      const validAt: AssetType = rawAt === "etf" || rawAt === "index" ? rawAt : "stock";
                       return validSym ? { symbol: validSym, assetType: validAt } : null;
                     }
                     return null;
@@ -969,8 +869,9 @@ export default function StockFullView() {
                   if (typeof item === "object" && item !== null && "symbol" in item) {
                     const raw = item as Record<string, unknown>;
                     const rawSym = typeof raw.symbol === "string" ? raw.symbol : "";
-                    const validSym = sanitizeSymbol(rawSym);
-                    const validAt: AssetType = raw.assetType === "etf" ? "etf" : "stock";
+                    const validSym = sanitizeSymbol(rawSym) ?? sanitizeIndexSymbol(rawSym) ?? null;
+                    const rawAt = raw.assetType;
+                    const validAt: AssetType = rawAt === "etf" || rawAt === "index" ? rawAt : "stock";
                     return validSym ? { symbol: validSym, assetType: validAt } : null;
                   }
                   return null;
@@ -993,14 +894,12 @@ export default function StockFullView() {
           const parsedPortfolio = JSON.parse(savedPortfolio) as unknown;
           if (parsedPortfolio && typeof parsedPortfolio === "object") {
             const nextPortfolio = Object.entries(parsedPortfolio as Record<string, unknown>).reduce<PortfolioMap>((acc, [symbol, value]) => {
-              const isObj = typeof value === "object" && value !== null;
-              const avgPrice = isObj
-                ? Number((value as { avgPrice?: unknown }).avgPrice)
-                : Number(value);
-              const qtyRaw = isObj ? Number((value as { qty?: unknown }).qty) : NaN;
-              const qty = Number.isFinite(qtyRaw) && qtyRaw > 0 ? qtyRaw : undefined;
+              const avgPrice =
+                typeof value === "object" && value !== null && "avgPrice" in value
+                  ? Number((value as { avgPrice?: unknown }).avgPrice)
+                  : Number(value);
               if (sanitizeSymbol(symbol) && Number.isFinite(avgPrice) && avgPrice > 0) {
-                acc[symbol] = qty ? { avgPrice, qty } : { avgPrice };
+                acc[symbol] = { avgPrice };
               }
               return acc;
             }, {});
@@ -1048,6 +947,13 @@ export default function StockFullView() {
     setLoadPhase("done");
   }, [requestKey]);
 
+  const changeTab = useCallback((tab: Tab) => {
+    setActiveTab(tab);
+    if (tab === "watch") setWatchPage(0);
+    if (tab === "rank") setRankPage(0);
+    if (tab === "ipo") setIpoPage(0);
+  }, []);
+
   const showFeedback = useCallback((msg: string, type: "success" | "warn" | "error") => {
     if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
     setFeedback({ msg, type });
@@ -1069,6 +975,7 @@ export default function StockFullView() {
     setLoadPhase("quotes");
     const baseParams = new URLSearchParams({
       items: watchlist.map(({ symbol, assetType }) => `${symbol}:${assetType}`).join(","),
+      rankings: STOCK_RANKING_KINDS.join(","),
     });
     if (force) {
       baseParams.set("force", "true");
@@ -1102,9 +1009,9 @@ export default function StockFullView() {
       if (signal?.aborted) return;
       setData({
         status: "error",
-        provider: "토스증권",
+        provider: "KRX Open API",
         fetchedAt: new Date().toISOString(),
-        marketDivCode: "TOSS",
+        marketDivCode: "KRX",
         quotes: [],
         marketIndices: [],
         rankings: { amount: [], volume: [], rise: [], fall: [], popular: [] },
@@ -1233,11 +1140,12 @@ export default function StockFullView() {
   const groupedSearch = useMemo(() => {
     const stocks = searchResults.filter((r) => r.assetType === "stock");
     const etfs   = searchResults.filter((r) => r.assetType === "etf");
-    return { stocks, etfs };
+    const indices = searchResults.filter((r) => r.assetType === "index");
+    return { stocks, etfs, indices };
   }, [searchResults]);
 
   const visibleSearchResults = useMemo(
-    () => [...groupedSearch.stocks, ...groupedSearch.etfs],
+    () => [...groupedSearch.stocks, ...groupedSearch.etfs, ...groupedSearch.indices],
     [groupedSearch],
   );
 
@@ -1255,6 +1163,7 @@ export default function StockFullView() {
     setSearchResults([]);
     setDropdownOpen(false);
     setFocusedIndex(-1);
+    setActiveTab("watch");
   }, [watchlist, showFeedback]);
 
   const addSymbol = useCallback(() => {
@@ -1263,20 +1172,24 @@ export default function StockFullView() {
       selectResult(target);
       return;
     }
-    const symbol = sanitizeSymbol(input);
+    const stockSym = sanitizeSymbol(input);
+    const indexSym = sanitizeIndexSymbol(input);
+    const symbol = stockSym ?? indexSym;
     if (!symbol) return;
+    const assetType: AssetType = indexSym ? "index" : "stock";
     if (watchlist.some((item) => item.symbol === symbol)) {
       showFeedback("이미 관심종목에 있습니다", "warn");
     } else if (watchlist.length >= 10) {
       showFeedback("최대 10개까지 추가할 수 있습니다", "error");
     } else {
-      setWatchlist((prev) => [...prev, { symbol, assetType: "stock" }]);
+      setWatchlist((prev) => [...prev, { symbol, assetType }]);
       showFeedback(`${symbol} 추가됨`, "success");
       setWatchPage(0);
     }
     setInput("");
     setSearchResults([]);
     setDropdownOpen(false);
+    setActiveTab("watch");
   }, [input, dropdownOpen, focusedIndex, visibleSearchResults, selectResult, watchlist, showFeedback]);
 
   const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -1309,13 +1222,17 @@ export default function StockFullView() {
     setWatchPage(0);
   }, []);
 
+  const currentRankings = data?.rankings[activeRank] ?? [];
+  const ipos = data?.ipos ?? [];
   const isConfigured = data?.status !== "not_configured";
   const isLoading = loadPhase === "quotes" || loadPhase === "charts";
+  const marketIndices = data?.marketIndices ?? [];
   const canManualDrag = watchSort === "manual";
   const latestMarketTimestamp = useMemo(() => {
     const candidates = [
       data?.fetchedAt,
       ...(data?.quotes ?? []).map((quote) => quote.fetchedAt),
+      ...(data?.marketIndices ?? []).map((quote) => quote.fetchedAt),
     ].filter((value): value is string => Boolean(value));
     if (candidates.length === 0) return "";
     return candidates.reduce((latest, current) => {
@@ -1332,7 +1249,26 @@ export default function StockFullView() {
     return next;
   }, [quotes, watchSort]);
 
+  const [rankSorting, setRankSorting] = useState<SortingState>([]);
+  const rankColumns = useMemo<ColumnDef<StockRankingItem>[]>(() => [
+    { accessorKey: "name",       header: "종목명" },
+    { accessorKey: "price",      header: "현재가" },
+    { accessorKey: "changePct",  header: "등락률" },
+    { accessorKey: "scoreValue", header: "지표값" },
+  ], []);
+  const rankTable = useReactTable({
+    data: currentRankings,
+    columns: rankColumns,
+    state: { sorting: rankSorting },
+    onSortingChange: setRankSorting,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+  });
+  const sortedRankings = rankTable.getRowModel().rows.map((r) => r.original);
+
   const pagedQuotes = sortedQuotes.slice(watchPage * PAGE_SIZE, (watchPage + 1) * PAGE_SIZE);
+  const pagedRankings = sortedRankings.slice(rankPage * PAGE_SIZE, (rankPage + 1) * PAGE_SIZE);
+  const pagedIpos = ipos.slice(ipoPage * PAGE_SIZE, (ipoPage + 1) * PAGE_SIZE);
 
   const handleWatchDragEnd = useCallback(({ active, over }: DragEndEvent) => {
     if (!over || active.id === over.id || watchSort !== "manual") return;
@@ -1344,44 +1280,17 @@ export default function StockFullView() {
     });
   }, [watchSort]);
 
-  const updatePortfolioEntry = useCallback((symbol: string, field: "avgPrice" | "qty", value: number) => {
+  const updatePortfolioPrice = useCallback((symbol: string, avgPrice: number) => {
     setPortfolio((prev) => {
       const next = { ...prev };
-      const current = next[symbol] ?? { avgPrice: 0 };
-      const avgPrice = field === "avgPrice"
-        ? (Number.isFinite(value) && value > 0 ? value : 0)
-        : current.avgPrice;
-      const qty = field === "qty"
-        ? (Number.isFinite(value) && value > 0 ? value : undefined)
-        : current.qty;
-      // 매입가가 없으면 항목 자체 제거 (수량만 남는 무의미한 상태 방지)
-      if (!avgPrice || avgPrice <= 0) {
+      if (!Number.isFinite(avgPrice) || avgPrice <= 0) {
         delete next[symbol];
       } else {
-        next[symbol] = qty ? { avgPrice, qty } : { avgPrice };
+        next[symbol] = { avgPrice };
       }
       return next;
     });
   }, []);
-
-  // 포트폴리오 총괄 — 매입가·수량이 모두 있는 보유 종목 전체(quotes) 기준 집계
-  const portfolioSummary = useMemo(() => {
-    let cost = 0;
-    let value = 0;
-    let count = 0;
-    for (const quote of quotes) {
-      const entry = portfolio[quote.symbol];
-      const avg = entry?.avgPrice ?? 0;
-      const qty = entry?.qty ?? 0;
-      if (avg <= 0 || qty <= 0 || quote.price <= 0) continue;
-      cost += avg * qty;
-      value += quote.price * qty;
-      count += 1;
-    }
-    const profit = value - cost;
-    const profitPct = cost > 0 ? (profit / cost) * 100 : 0;
-    return { cost, value, profit, profitPct, count };
-  }, [quotes, portfolio]);
 
   return (
     <div className="flex flex-col gap-3">
@@ -1399,7 +1308,7 @@ export default function StockFullView() {
           <div className="mt-1 flex flex-wrap items-center gap-2">
             <StatusPill data={data} phase={loadPhase} marketStatus={marketStatus} />
             <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>
-              {data?.provider ?? "토스증권"}
+              {data?.provider ?? "KRX Open API"}
               {latestMarketTimestamp
                 ? ` · 갱신 ${formatAbsoluteDateTime(latestMarketTimestamp)}`
                 : data?.fetchedAt
@@ -1418,27 +1327,50 @@ export default function StockFullView() {
           >
             <RefreshCw size={13} className={isLoading ? "animate-spin" : ""} />
           </button>
+          <a
+            href="https://data.krx.co.kr/contents/MDC/MAIN/main/index.cmd"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition-opacity hover:opacity-70"
+            style={{ background: `${ACCENT}22`, color: ACCENT }}
+          >
+            KRX <ArrowRight size={11} />
+          </a>
         </div>
       </div>
 
       <LoadProgress phase={loadPhase} />
 
+      {/* 탭 */}
+      <div className="flex gap-1.5">
+        {(["watch", "rank", "ipo"] as const).map((key) => {
+          const meta = { watch: { label: "관심", icon: <Star size={11} /> }, rank: { label: "랭킹", icon: <BarChart3 size={11} /> }, ipo: { label: "상장", icon: <Bell size={11} /> } }[key];
+          const active = activeTab === key;
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => changeTab(key)}
+              className="flex flex-1 items-center justify-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all"
+              style={{ background: active ? ACCENT : `${ACCENT}15`, color: active ? "#fff" : "var(--text-muted)" }}
+            >
+              {meta.icon}{meta.label}
+            </button>
+          );
+        })}
+      </div>
+
       {!isConfigured ? (
         <EmptyState
-          title="토스증권 API 설정이 필요합니다"
-          detail="TOSS_OPENAPI_CLIENT_ID · TOSS_OPENAPI_CLIENT_SECRET를 .env.local에 설정하면 토스증권 실시간 시세를 표시합니다."
+          title="KRX Open API 설정이 필요합니다"
+          detail="KRX_OPENAPI_KEY를 .env.local에 설정하면 한국거래소 실시간 데이터를 표시합니다."
         />
       ) : (
         <>
-          <div className="stock-tab-content flex flex-col gap-5">
+          <div key={activeTab} className="stock-tab-content flex flex-col gap-3">
 
-          {/* ── 지수 바 (시장 분위기) ── */}
-          {(data?.marketIndices?.length ?? 0) > 0 && (
-            <IndexBar indices={data?.marketIndices ?? []} />
-          )}
-
-          {/* ── 관심종목 ── */}
-          {(
+          {/* ── 관심 탭 ── */}
+          {activeTab === "watch" && (
             <div className="flex flex-col gap-3">
               <div ref={searchRef} className="relative">
                 <div className="flex gap-2">
@@ -1449,7 +1381,7 @@ export default function StockFullView() {
                       onChange={(e) => handleInputChange(e.target.value)}
                       onKeyDown={handleKeyDown}
                       onFocus={() => { if (searchResults.length > 0) setDropdownOpen(true); }}
-                      placeholder="주식·ETF·코드 검색"
+                      placeholder="주식·ETF·지수·코드 검색"
                       autoComplete="off"
                       className="h-9 w-full rounded-lg border bg-transparent pl-8 pr-8 text-xs outline-none"
                       style={{ borderColor: "var(--border)", color: "var(--text-primary)" }}
@@ -1487,6 +1419,12 @@ export default function StockFullView() {
                           <SearchResultGroup results={groupedSearch.etfs} focusedIndex={focusedIndex} globalOffset={groupedSearch.stocks.length} onSelect={selectResult} onHover={setFocusedIndex} />
                         </>
                       )}
+                      {groupedSearch.indices.length > 0 && (
+                        <>
+                          <p className="px-2 pt-2 pb-0.5 text-[9px] font-black uppercase tracking-wider" style={{ color: "#F59E0B" }}>지수</p>
+                          <SearchResultGroup results={groupedSearch.indices} focusedIndex={focusedIndex} globalOffset={groupedSearch.stocks.length + groupedSearch.etfs.length} onSelect={selectResult} onHover={setFocusedIndex} />
+                        </>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1503,6 +1441,8 @@ export default function StockFullView() {
                   {feedback.msg}
                 </div>
               )}
+
+              <IndexSummaryCards indices={marketIndices} />
 
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex gap-1.5 overflow-x-auto scrollbar-hide">
@@ -1536,33 +1476,10 @@ export default function StockFullView() {
                 </button>
               </div>
 
-              {portfolioMode && portfolioSummary.count > 0 && (
-                <div
-                  className="grid grid-cols-3 gap-2 rounded-xl px-3 py-2.5"
-                  style={{ background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.25)" }}
-                >
-                  <div className="min-w-0">
-                    <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>평가금액</p>
-                    <p className="mt-0.5 truncate text-sm font-black tabular-nums" style={{ color: "var(--text-primary)" }}>{formatMoney(portfolioSummary.value)}</p>
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>매입금액</p>
-                    <p className="mt-0.5 truncate text-sm font-black tabular-nums" style={{ color: "var(--text-primary)" }}>{formatMoney(portfolioSummary.cost)}</p>
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>총 손익</p>
-                    <p className="mt-0.5 truncate text-sm font-black tabular-nums" style={{ color: changeColor(portfolioSummary.profit) }}>
-                      {formatSignedPrice(portfolioSummary.profit)}
-                      <span className="ml-1 text-[11px]">({portfolioSummary.profitPct > 0 ? "+" : ""}{portfolioSummary.profitPct.toFixed(2)}%)</span>
-                    </p>
-                  </div>
-                </div>
-              )}
-
               {isLoading && !data ? (
                 <SkeletonRows count={watchlist.length || 2} />
               ) : sortedQuotes.length === 0 ? (
-                <EmptyState title="관심종목 시세가 없습니다" detail="종목명·ETF·6자리 코드를 검색해서 추가하세요." />
+                <EmptyState title="관심종목 매매정보가 없습니다" detail="종목명·ETF·지수명을 검색해서 추가하세요." />
               ) : (
                 <>
                   {canManualDrag ? (
@@ -1580,7 +1497,7 @@ export default function StockFullView() {
                                   dragHandle={dragHandle}
                                   portfolioMode={portfolioMode}
                                   portfolio={portfolio[q.symbol]}
-                                  onPortfolioChange={updatePortfolioEntry}
+                                  onPortfolioChange={updatePortfolioPrice}
                                 />
                               )}
                             </SortableQuoteRow>
@@ -1599,7 +1516,7 @@ export default function StockFullView() {
                           flash={flashMap[q.symbol]}
                           portfolioMode={portfolioMode}
                           portfolio={portfolio[q.symbol]}
-                          onPortfolioChange={updatePortfolioEntry}
+                          onPortfolioChange={updatePortfolioPrice}
                         />
                       ))}
                     </div>
@@ -1610,13 +1527,117 @@ export default function StockFullView() {
             </div>
           )}
 
-          {/* ── 주요 종목 랭킹 ── */}
-          <RankingSection
-            rankings={data?.rankings}
-            baseDate={data?.baseDate ?? ""}
-            loading={isLoading}
-            onOpen={setSelectedQuote}
-          />
+          {/* ── 랭킹 탭 ── */}
+          {activeTab === "rank" && (
+            <div className="flex flex-col gap-3">
+              <div className="flex gap-1.5 overflow-x-auto scrollbar-hide">
+                {STOCK_RANKING_KINDS.map((kind) => {
+                  const active = activeRank === kind;
+                  return (
+                    <button
+                      key={kind}
+                      type="button"
+                      onClick={() => { setActiveRank(kind); setRankPage(0); setRankSorting([]); }}
+                      className="tag shrink-0 gap-1"
+                      style={{ background: active ? ACCENT : `${ACCENT}15`, color: active ? "#fff" : "var(--text-muted)" }}
+                    >
+                      {RANK_META[kind].icon}{RANK_META[kind].label}
+                    </button>
+                  );
+                })}
+              </div>
+              <ThemeStrip
+                themes={data?.themes ?? []}
+                expandedTheme={expandedTheme}
+                onToggle={(label) => setExpandedTheme((current) => current === label ? null : label)}
+              />
+              {isLoading && !data ? (
+                <SkeletonRows count={watchlist.length || 2} />
+              ) : currentRankings.length === 0 ? (
+                <EmptyState title="랭킹 데이터가 없습니다" detail="KRX API 권한 및 호출 제한 상태를 확인하세요." />
+              ) : (
+                <>
+                  <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide">
+                    {rankTable.getAllColumns().filter((c) => c.id !== "name").map((column) => {
+                      const sorted = column.getIsSorted();
+                      const SortIcon = sorted === "asc" ? ArrowUp : sorted === "desc" ? ArrowDown : ChevronsUpDown;
+                      return (
+                        <button
+                          key={column.id}
+                          type="button"
+                          onClick={column.getToggleSortingHandler()}
+                          className="tag shrink-0 gap-1 transition-all"
+                          style={{ background: sorted ? `${ACCENT}25` : `${ACCENT}10`, color: sorted ? ACCENT : "var(--text-muted)" }}
+                        >
+                          {column.columnDef.header as string}
+                          <SortIcon size={9} />
+                        </button>
+                      );
+                    })}
+                    {rankSorting.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setRankSorting([])}
+                        className="tag shrink-0"
+                        style={{ background: "rgba(255,255,255,0.06)", color: "var(--text-muted)" }}
+                      >
+                        초기화
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    {pagedRankings.map((item) => (
+                      <RankingRow key={`${activeRank}-${item.symbol}-${item.rank}`} item={item} />
+                    ))}
+                  </div>
+                  <Pagination page={rankPage} total={sortedRankings.length} onChange={setRankPage} />
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ── 상장 탭 ── */}
+          {activeTab === "ipo" && (
+            <div className="flex flex-col gap-3">
+              {ipos.length === 0 ? (
+                <EmptyState title="최근 신규 상장 정보가 없습니다" detail="KRX 종목기본정보 기준으로 최근 상장 항목이 조회되지 않았습니다." />
+              ) : (
+                <>
+                  <div className="flex flex-col gap-2">
+                    {pagedIpos.map((item) => (
+                      <a
+                        key={item.id}
+                        href={item.detailUrl ?? "https://kind.krx.co.kr"}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex min-h-[68px] items-center gap-3 rounded-xl px-3 py-2.5 transition-opacity hover:opacity-80"
+                        style={{ background: "rgba(255,255,255,0.045)", border: "1px solid var(--border)" }}
+                      >
+                        <div
+                          className="flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-xl"
+                          style={{ background: `${ACCENT}18`, color: ACCENT }}
+                        >
+                          <span className="text-[9px] font-bold">상장</span>
+                          <span className="text-xs font-black">{formatDate(item.listingDate)}</span>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-xs font-bold" style={{ color: "var(--text-primary)" }}>{item.name}</p>
+                          <p className="mt-0.5 truncate text-[10px]" style={{ color: "var(--text-muted)" }}>
+                            {item.market} · {item.category}
+                          </p>
+                          <p className="mt-0.5 truncate text-[10px]" style={{ color: "var(--text-muted)" }}>
+                            {item.symbol || "종목코드 미정"}{item.leadManager ? ` · ${item.leadManager}` : ""}
+                          </p>
+                        </div>
+                        <ArrowRight size={12} style={{ color: "var(--text-muted)" }} />
+                      </a>
+                    ))}
+                  </div>
+                  <Pagination page={ipoPage} total={ipos.length} onChange={setIpoPage} />
+                </>
+              )}
+            </div>
+          )}
 
           </div>
         </>

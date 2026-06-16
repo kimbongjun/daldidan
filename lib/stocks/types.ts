@@ -33,89 +33,14 @@ export interface StockQuote {
   nav?: number;
   aum?: number;
   underlyingIndex?: string;
-  // ── 토스 마스터(/api/v1/stocks) 파생 필드 ──
-  englishName?: string;
-  isinCode?: string;
-  securityType?: string;
-  listDate?: string;
-  delistDate?: string | null;
-  /** NXT(대체거래소) 거래 지원 여부 */
-  nxtSupported?: boolean;
-  /** 레버리지/인버스 배수 (해당 시) */
-  leverageFactor?: number | null;
+  per?: string;
+  pbr?: string;
+  eps?: string;
+  dividendYield?: string;
+  foreignRate?: string;
   fetchedAt: string;
   baseDate: string;
-  source: "KRX" | "TOSS";
-}
-
-export type CandleInterval = "1d" | "1m";
-
-export interface Candle {
-  timestamp: string;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  volume: number;
-}
-
-export interface OrderbookLevel {
-  price: number;
-  volume: number;
-}
-
-export interface Orderbook {
-  timestamp: string;
-  currency: string;
-  asks: OrderbookLevel[];
-  bids: OrderbookLevel[];
-}
-
-export interface TradeTick {
-  price: number;
-  volume: number;
-  timestamp: string;
-  currency: string;
-}
-
-export interface PriceLimit {
-  upperLimitPrice: number;
-  lowerLimitPrice: number;
-  currency: string;
-  timestamp: string;
-}
-
-/** 토스증권 StockWarning — openapi.json StockWarning 스키마 기준 */
-export type StockWarningType =
-  | "LIQUIDATION_TRADING"
-  | "OVERHEATED"
-  | "INVESTMENT_WARNING"
-  | "INVESTMENT_RISK"
-  | "VI_STATIC"
-  | "VI_DYNAMIC"
-  | "VI_STATIC_AND_DYNAMIC"
-  | "STOCK_WARRANTS";
-
-export interface StockWarning {
-  warningType: StockWarningType | string;
-  exchange: string;
-  startDate: string;
-  endDate: string | null;
-}
-
-export interface StockDetailResponse {
-  status: StockApiStatus;
-  symbol: string;
-  quote: StockQuote | null;
-  candles: Candle[];
-  interval: CandleInterval;
-  orderbook: Orderbook | null;
-  trades: TradeTick[];
-  priceLimit: PriceLimit | null;
-  warnings: StockWarning[];
-  provider: string;
-  fetchedAt: string;
-  message?: string;
+  source: "KRX";
 }
 
 export interface StockRankingItem {

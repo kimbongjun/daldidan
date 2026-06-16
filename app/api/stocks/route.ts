@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { fetchStockOverview } from "@/lib/stocks/toss";
+import { fetchStockOverview } from "@/lib/stocks/krx";
 import { getKrxMarketWindow } from "@/lib/stocks/cache-policy";
-import { type AssetType, type WatchlistItem } from "@/lib/stocks/types";
+import { STOCK_RANKING_KINDS, type AssetType, type StockRankingKind, type WatchlistItem } from "@/lib/stocks/types";
 
 function parseItems(value: string | null): WatchlistItem[] | null {
   if (!value) return null;
@@ -32,6 +32,16 @@ function parseSymbolsAsItems(value: string | null): WatchlistItem[] {
     .map((symbol) => ({ symbol, assetType: "stock" as const }));
 }
 
+function parseRankingKinds(value: string | null): StockRankingKind[] {
+  if (!value) return [...STOCK_RANKING_KINDS];
+  const allowed = new Set<string>(STOCK_RANKING_KINDS);
+  const kinds = value
+    .split(",")
+    .map((kind) => kind.trim())
+    .filter((kind): kind is StockRankingKind => allowed.has(kind));
+  return kinds.length > 0 ? kinds : [...STOCK_RANKING_KINDS];
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
 
@@ -43,7 +53,11 @@ export async function GET(request: NextRequest) {
   const noSparkline = searchParams.get("noSparkline") === "true";
   const force = searchParams.get("force") === "true";
 
-  const data = await fetchStockOverview(watchlistItems, { noSparkline, force });
+  const data = await fetchStockOverview(
+    watchlistItems,
+    parseRankingKinds(searchParams.get("rankings")),
+    { noSparkline, force },
+  );
 
   const windowInfo = getKrxMarketWindow();
 

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import {
+  Activity,
   ArrowDown,
   ArrowRight,
   ArrowUp,
@@ -16,9 +17,8 @@ import {
   type StockQuote,
   type WatchlistItem,
 } from "@/lib/stocks/types";
-import { sanitizeSymbol, formatPrice } from "@/lib/stocks/utils";
+import { sanitizeSymbol, sanitizeIndexSymbol, formatPrice } from "@/lib/stocks/utils";
 import { getKrxMarketWindow } from "@/lib/stocks/cache-policy";
-import Sparkline from "@/components/Sparkline";
 import { queryKeys } from "@/lib/queryKeys";
 import { createClient } from "@/lib/supabase/client";
 import type { AuthUser as User } from "@supabase/supabase-js";
@@ -27,6 +27,7 @@ const ACCENT = "#F05C6E";
 const RISE = "var(--stock-rise)";
 const FALL = "var(--stock-fall)";
 const STORAGE_KEY = "daldidan-stock-watchlist";
+const FIXED_INDEX_SYMBOLS = ["IDX_1", "IDX_2"];
 const DEFAULT_WATCHLIST: WatchlistItem[] = [
   { symbol: "005930", assetType: "stock" },
   { symbol: "000660", assetType: "stock" },
@@ -39,36 +40,6 @@ function changeColor(value: number): string {
   return "var(--text-muted)";
 }
 
-/**
- * 지수 요약 한 줄 (컴팩트).
- * ⚠️ marketIndices[].price 는 프록시 ETF 체결가라 지수 포인트가 아니다.
- * 미니 위젯에서는 등락률만 노출하고, 추정값임을 아주 작게 표기한다.
- */
-function IndexSummary({ indices }: { indices: StockQuote[] }) {
-  if (!indices || indices.length === 0) return null;
-  return (
-    <div
-      className="flex items-center gap-3 overflow-x-auto rounded-xl px-3 py-2 scrollbar-hide"
-      style={{ background: "rgba(255,255,255,0.045)", border: "1px solid var(--border)" }}
-    >
-      {indices.slice(0, 3).map((idx) => {
-        const color = changeColor(idx.changePct);
-        const Icon = idx.changePct > 0 ? ArrowUp : idx.changePct < 0 ? ArrowDown : null;
-        return (
-          <div key={idx.symbol} className="flex shrink-0 items-center gap-1.5">
-            <span className="truncate text-[11px] font-bold" style={{ color: "var(--text-muted)" }}>{idx.name}</span>
-            <span className="inline-flex items-center gap-0.5 text-[11px] font-black tabular-nums" style={{ color }}>
-              {Icon && <Icon size={9} />}
-              {idx.changePct > 0 ? "+" : ""}{idx.changePct.toFixed(2)}%
-            </span>
-          </div>
-        );
-      })}
-      <span className="ml-auto shrink-0 text-[8px] font-bold" style={{ color: "var(--text-muted)" }}>ETF 추정</span>
-    </div>
-  );
-}
-
 function StatusPill({ isLoading, isError, marketStatus }: { isLoading: boolean; isError: boolean; marketStatus: { open: boolean; label: string } }) {
   const color =
     isLoading ? "#F59E0B" :
@@ -76,7 +47,7 @@ function StatusPill({ isLoading, isError, marketStatus }: { isLoading: boolean; 
     isError ? ACCENT : "var(--text-muted)";
   const label =
     isLoading ? "시세 수신 중..." :
-    !isError ? `토스 ${marketStatus.label}` :
+    !isError ? `KRX ${marketStatus.label}` :
     "오류";
 
   return (
@@ -93,22 +64,46 @@ function StatusPill({ isLoading, isError, marketStatus }: { isLoading: boolean; 
   );
 }
 
+function IndexCard({ quote }: { quote: StockQuote | null; symbol: string }) {
+  const name = quote?.name?.replace(" 종합", "") ?? (quote?.symbol === "IDX_1" ? "KOSPI" : "KOSDAQ");
+  const price = quote?.price ?? 0;
+  const changePct = quote?.changePct ?? 0;
+  const change = quote?.change ?? 0;
+  const color = changeColor(changePct);
+  const Icon = changePct > 0 ? ArrowUp : changePct < 0 ? ArrowDown : null;
+
+  return (
+    <div
+      className="flex-1 rounded-xl px-3 py-2"
+      style={{ background: "rgba(245,158,11,0.10)", border: "1px solid rgba(245,158,11,0.22)" }}
+    >
+      <div className="flex items-center justify-between gap-1">
+        <span className="truncate text-[11px] font-black" style={{ color: "var(--text-primary)" }}>{name}</span>
+        <Activity size={11} style={{ color: "#F59E0B" }} />
+      </div>
+      <p className="text-sm font-black tabular-nums" style={{ color: "var(--text-primary)" }}>
+        {price > 0 ? formatPrice(price) : "—"}
+      </p>
+      <span className="inline-flex items-center gap-0.5 text-[10px] font-bold tabular-nums" style={{ color }}>
+        {Icon && <Icon size={9} />}
+        {changePct > 0 ? "+" : ""}{changePct.toFixed(2)}%
+        {change !== 0 && <span className="hidden sm:inline"> {change > 0 ? "+" : ""}{change.toLocaleString()}</span>}
+      </span>
+    </div>
+  );
+}
+
 function WatchRow({ quote }: { quote: StockQuote }) {
   const color = changeColor(quote.changePct);
   const Icon = quote.changePct > 0 ? ArrowUp : quote.changePct < 0 ? ArrowDown : null;
   return (
     <div
-      className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2.5 rounded-xl px-3 py-2"
+      className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-xl px-3 py-2"
       style={{ background: "rgba(255,255,255,0.045)", border: "1px solid var(--border)" }}
     >
       <div className="min-w-0">
         <p className="truncate text-xs font-black" style={{ color: "var(--text-primary)" }}>{quote.name}</p>
         <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>{quote.symbol}</p>
-      </div>
-      <div className="flex h-7 w-[52px] shrink-0 items-center justify-center">
-        {quote.sparkline.length >= 2
-          ? <Sparkline data={quote.sparkline} color={color} width={52} height={28} />
-          : <span className="h-px w-6 rounded-full" style={{ background: "var(--border)" }} />}
       </div>
       <div className="text-right">
         <p className="text-xs font-black tabular-nums" style={{ color: "var(--text-primary)" }}>{formatPrice(quote.price)}</p>
@@ -132,9 +127,10 @@ function parseAndSetWatchlist(raw: string): WatchlistItem[] | null {
       }
       if (typeof item === "object" && item !== null && "symbol" in item) {
         const raw2 = item as Record<string, unknown>;
-        const sym = sanitizeSymbol(String(raw2.symbol ?? ""));
+        const sym = sanitizeSymbol(String(raw2.symbol ?? "")) ?? sanitizeIndexSymbol(String(raw2.symbol ?? "")) ?? null;
         if (!sym) return null;
-        const validAt: AssetType = raw2.assetType === "etf" ? "etf" : "stock";
+        const at = raw2.assetType;
+        const validAt: AssetType = at === "etf" || at === "index" ? at : "stock";
         return { symbol: sym, assetType: validAt };
       }
       return null;
@@ -182,9 +178,10 @@ export default function StockWidget() {
                 .map((item): WatchlistItem | null => {
                   if (typeof item !== "object" || item === null || !("symbol" in item)) return null;
                   const raw = item as Record<string, unknown>;
-                  const sym = sanitizeSymbol(String(raw.symbol ?? ""));
+                  const sym = sanitizeSymbol(String(raw.symbol ?? "")) ?? sanitizeIndexSymbol(String(raw.symbol ?? "")) ?? null;
                   if (!sym) return null;
-                  const validAt: AssetType = raw.assetType === "etf" ? "etf" : "stock";
+                  const at = raw.assetType;
+                  const validAt: AssetType = at === "etf" || at === "index" ? at : "stock";
                   return { symbol: sym, assetType: validAt };
                 })
                 .filter((x): x is WatchlistItem => x !== null);
@@ -218,6 +215,7 @@ export default function StockWidget() {
     queryFn: async ({ signal }): Promise<StockOverviewResponse> => {
       const params = new URLSearchParams({
         items: watchlistKey,
+        noSparkline: "true",
         ts: String(Date.now()),
       });
       const res = await fetch(`/api/stocks?${params.toString()}`, {
@@ -236,6 +234,10 @@ export default function StockWidget() {
     const map = new Map((data?.quotes ?? []).map((q) => [q.symbol, q]));
     return watchlist.map(({ symbol }) => map.get(symbol)).filter((q): q is StockQuote => Boolean(q));
   }, [data?.quotes, watchlist]);
+
+  const indexBySymbol = useMemo(() => {
+    return new Map((data?.marketIndices ?? []).map((q) => [q.symbol, q]));
+  }, [data?.marketIndices]);
 
   const visibleQuotes = quotes.slice(0, MAX_ROWS);
   const remaining = Math.max(0, quotes.length - MAX_ROWS);
@@ -271,10 +273,12 @@ export default function StockWidget() {
         </div>
       </div>
 
-      {/* 지수 요약 한 줄 */}
-      {(data?.marketIndices?.length ?? 0) > 0 && (
-        <IndexSummary indices={data?.marketIndices ?? []} />
-      )}
+      {/* 지수 카드 */}
+      <div className="flex gap-2">
+        {FIXED_INDEX_SYMBOLS.map((sym) => (
+          <IndexCard key={sym} symbol={sym} quote={indexBySymbol.get(sym) ?? null} />
+        ))}
+      </div>
 
       {/* 관심종목 목록 */}
       <div className="flex flex-col gap-2 flex-1">
