@@ -28,6 +28,7 @@ import {
   X,
 } from "lucide-react";
 import Sparkline from "@/components/Sparkline";
+import IndexBar from "@/components/stock/IndexBar";
 import CandleChart from "@/components/stock/detail/CandleChart";
 import OrderbookPanel from "@/components/stock/detail/OrderbookPanel";
 import TradesTape from "@/components/stock/detail/TradesTape";
@@ -38,6 +39,8 @@ import {
   type StockDetailResponse,
   type StockOverviewResponse,
   type StockQuote,
+  type StockRankingItem,
+  type StockRankingKind,
   type StockSearchResult,
   type WatchlistItem,
 } from "@/lib/stocks/types";
@@ -138,6 +141,31 @@ function changeColor(value: number): string {
   if (value > 0) return RISE;
   if (value < 0) return FALL;
   return "var(--text-muted)";
+}
+
+/** 랭킹 항목(StockRankingItem) → 상세 모달이 요구하는 StockQuote 로 어댑트.
+ * 누락 필드는 0/기본값으로 채운다. 모달은 symbol 로 detail 을 재조회하므로
+ * 0 값들은 시각적으로 안전(getRangePosition·Sparkline 이 0 을 방어). */
+function rankingItemToQuote(item: StockRankingItem, baseDate: string): StockQuote {
+  return {
+    symbol: item.symbol,
+    name: item.name,
+    market: "",
+    assetType: "stock",
+    price: item.price,
+    change: item.change,
+    changePct: item.changePct,
+    volume: item.volume,
+    tradingValue: item.tradingValue,
+    open: 0,
+    high: 0,
+    low: 0,
+    previousClose: 0,
+    sparkline: [],
+    fetchedAt: new Date().toISOString(),
+    baseDate,
+    source: "TOSS",
+  };
 }
 
 function makeStockRequestKey(items: WatchlistItem[]): string {
@@ -713,6 +741,124 @@ function QuoteDetailModal({ quote, onClose }: { quote: StockQuote; onClose: () =
   );
 }
 
+type RankingTab = Extract<StockRankingKind, "rise" | "fall" | "amount" | "volume">;
+
+const RANKING_TABS: { key: RankingTab; label: string }[] = [
+  { key: "rise", label: "상승률" },
+  { key: "fall", label: "하락률" },
+  { key: "amount", label: "거래대금" },
+  { key: "volume", label: "거래량" },
+];
+
+/** 랭킹 행 우측에 표시할 보조 점수(대금/거래량). 상승·하락은 등락률이 이미 헤드라인이라 생략. */
+function rankingScoreText(item: StockRankingItem): string | null {
+  if (item.kind === "amount") return formatTradingValue(item.scoreValue || item.tradingValue);
+  if (item.kind === "volume") return formatVolume(item.scoreValue || item.volume);
+  return null;
+}
+
+function RankingRow({ item, onOpen }: { item: StockRankingItem; onOpen: (item: StockRankingItem) => void }) {
+  const color = changeColor(item.changePct);
+  const Icon = item.changePct > 0 ? ArrowUp : item.changePct < 0 ? ArrowDown : null;
+  const score = rankingScoreText(item);
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => onOpen(item)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onOpen(item);
+        }
+      }}
+      className="grid w-full cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:opacity-90"
+      style={{ background: "rgba(255,255,255,0.045)", border: "1px solid var(--border)" }}
+    >
+      <span
+        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-[11px] font-black tabular-nums"
+        style={{
+          background: item.rank <= 3 ? `${ACCENT}22` : "rgba(255,255,255,0.06)",
+          color: item.rank <= 3 ? ACCENT : "var(--text-muted)",
+        }}
+      >
+        {item.rank}
+      </span>
+      <div className="min-w-0">
+        <p className="truncate text-sm font-black" style={{ color: "var(--text-primary)" }}>{item.name}</p>
+        <p className="truncate text-[10px] tabular-nums" style={{ color: "var(--text-muted)" }}>
+          {formatPrice(item.price)}
+          {score ? ` · ${score}` : ""}
+        </p>
+      </div>
+      <span className="inline-flex items-center justify-end gap-0.5 text-sm font-bold tabular-nums" style={{ color }}>
+        {Icon && <Icon size={12} />}
+        {item.changePct > 0 ? "+" : ""}
+        {item.changePct.toFixed(2)}%
+      </span>
+    </div>
+  );
+}
+
+function RankingSection({
+  rankings,
+  baseDate,
+  loading,
+  onOpen,
+}: {
+  rankings: StockOverviewResponse["rankings"] | undefined;
+  baseDate: string;
+  loading: boolean;
+  onOpen: (quote: StockQuote) => void;
+}) {
+  const [tab, setTab] = useState<RankingTab>("rise");
+  const items = useMemo(() => (rankings?.[tab] ?? []).slice(0, 10), [rankings, tab]);
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-0.5">
+        <h3 className="text-base font-black" style={{ color: "var(--text-primary)" }}>주요 종목 랭킹</h3>
+        <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+          시장 전체가 아닌 주요 종목 30선 기준 추정 순위입니다.
+        </p>
+      </div>
+
+      <div className="flex gap-1.5 overflow-x-auto scrollbar-hide">
+        {RANKING_TABS.map(({ key, label }) => {
+          const active = tab === key;
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setTab(key)}
+              className="tag shrink-0"
+              style={{ background: active ? ACCENT : `${ACCENT}15`, color: active ? "#fff" : "var(--text-muted)" }}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+
+      {loading && items.length === 0 ? (
+        <SkeletonRows count={5} />
+      ) : items.length === 0 ? (
+        <EmptyState title="랭킹 데이터가 없습니다" detail="주요 종목 시세가 준비되면 순위가 표시됩니다." />
+      ) : (
+        <div className="flex flex-col gap-2">
+          {items.map((item) => (
+            <RankingRow
+              key={`${item.kind}-${item.symbol}-${item.rank}`}
+              item={item}
+              onOpen={() => onOpen(rankingItemToQuote(item, baseDate))}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function StockFullView() {
   const [watchSort, setWatchSort] = useState<WatchSort>("manual");
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>(DEFAULT_WATCHLIST);
@@ -1284,7 +1430,12 @@ export default function StockFullView() {
         />
       ) : (
         <>
-          <div className="stock-tab-content flex flex-col gap-3">
+          <div className="stock-tab-content flex flex-col gap-5">
+
+          {/* ── 지수 바 (시장 분위기) ── */}
+          {(data?.marketIndices?.length ?? 0) > 0 && (
+            <IndexBar indices={data?.marketIndices ?? []} />
+          )}
 
           {/* ── 관심종목 ── */}
           {(
@@ -1458,6 +1609,14 @@ export default function StockFullView() {
               )}
             </div>
           )}
+
+          {/* ── 주요 종목 랭킹 ── */}
+          <RankingSection
+            rankings={data?.rankings}
+            baseDate={data?.baseDate ?? ""}
+            loading={isLoading}
+            onOpen={setSelectedQuote}
+          />
 
           </div>
         </>

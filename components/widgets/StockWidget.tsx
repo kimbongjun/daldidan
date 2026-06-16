@@ -39,6 +39,36 @@ function changeColor(value: number): string {
   return "var(--text-muted)";
 }
 
+/**
+ * 지수 요약 한 줄 (컴팩트).
+ * ⚠️ marketIndices[].price 는 프록시 ETF 체결가라 지수 포인트가 아니다.
+ * 미니 위젯에서는 등락률만 노출하고, 추정값임을 아주 작게 표기한다.
+ */
+function IndexSummary({ indices }: { indices: StockQuote[] }) {
+  if (!indices || indices.length === 0) return null;
+  return (
+    <div
+      className="flex items-center gap-3 overflow-x-auto rounded-xl px-3 py-2 scrollbar-hide"
+      style={{ background: "rgba(255,255,255,0.045)", border: "1px solid var(--border)" }}
+    >
+      {indices.slice(0, 3).map((idx) => {
+        const color = changeColor(idx.changePct);
+        const Icon = idx.changePct > 0 ? ArrowUp : idx.changePct < 0 ? ArrowDown : null;
+        return (
+          <div key={idx.symbol} className="flex shrink-0 items-center gap-1.5">
+            <span className="truncate text-[11px] font-bold" style={{ color: "var(--text-muted)" }}>{idx.name}</span>
+            <span className="inline-flex items-center gap-0.5 text-[11px] font-black tabular-nums" style={{ color }}>
+              {Icon && <Icon size={9} />}
+              {idx.changePct > 0 ? "+" : ""}{idx.changePct.toFixed(2)}%
+            </span>
+          </div>
+        );
+      })}
+      <span className="ml-auto shrink-0 text-[8px] font-bold" style={{ color: "var(--text-muted)" }}>ETF 추정</span>
+    </div>
+  );
+}
+
 function StatusPill({ isLoading, isError, marketStatus }: { isLoading: boolean; isError: boolean; marketStatus: { open: boolean; label: string } }) {
   const color =
     isLoading ? "#F59E0B" :
@@ -240,6 +270,11 @@ export default function StockWidget() {
           </Link>
         </div>
       </div>
+
+      {/* 지수 요약 한 줄 */}
+      {(data?.marketIndices?.length ?? 0) > 0 && (
+        <IndexSummary indices={data?.marketIndices ?? []} />
+      )}
 
       {/* 관심종목 목록 */}
       <div className="flex flex-col gap-2 flex-1">

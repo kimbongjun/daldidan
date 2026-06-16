@@ -501,6 +501,215 @@ function emptyRankings(): Record<StockRankingKind, StockRankingItem[]> {
   return { amount: [], volume: [], rise: [], fall: [], popular: [] };
 }
 
+// ── 지수·랭킹 (토스 가용 데이터 우회 구현) ────────────────────────
+// 토스는 지수값/랭킹을 직접 제공하지 않으므로:
+//  - 지수: 지수추종 ETF의 등락률을 "방향 프록시"로 사용 (price는 ETF lastPrice, 지수포인트 아님).
+//  - 랭킹: 큐레이션된 ~30종목 universe에서 등락/거래대금/거래량으로 산출.
+
+/** 지수 프록시 ETF 정의 (코스피200 ← KODEX 200, 코스닥150 ← KODEX 코스닥150) */
+const INDEX_PROXIES: { indexName: string; symbol: string; fundName: string }[] = [
+  { indexName: "코스피200", symbol: "069500", fundName: "KODEX 200" },
+  { indexName: "코스닥150", symbol: "229200", fundName: "KODEX 코스닥150" },
+];
+
+/**
+ * 랭킹 산출용 큐레이션 universe (대형주 30종목).
+ * symbol-dictionary.ts 대표 종목에서 선별. ETF/지수프록시는 제외(순수 종목 랭킹).
+ * 캔들 호출이 종목당 1회라 universe 크기는 30으로 고정(BASIC tier 레이트리밋 보호).
+ */
+const RANKING_UNIVERSE: string[] = [
+  "005930", // 삼성전자
+  "000660", // SK하이닉스
+  "373220", // LG에너지솔루션
+  "207940", // 삼성바이오로직스
+  "005380", // 현대차
+  "000270", // 기아
+  "012330", // 현대모비스
+  "035420", // NAVER
+  "035720", // 카카오
+  "051910", // LG화학
+  "006400", // 삼성SDI
+  "005490", // POSCO홀딩스
+  "068270", // 셀트리온
+  "105560", // KB금융
+  "055550", // 신한지주
+  "086790", // 하나금융지주
+  "316140", // 우리금융지주
+  "015760", // 한국전력
+  "017670", // SK텔레콤
+  "030200", // KT
+  "033780", // KT&G
+  "009150", // 삼성전기
+  "042700", // 한미반도체
+  "247540", // 에코프로비엠
+  "086520", // 에코프로
+  "196170", // 알테오젠
+  "259960", // 크래프톤
+  "323410", // 카카오뱅크
+  "267250", // HD현대
+  "010130", // 고려아연
+];
+
+const INDEX_RANKING_CANDLE_CHUNK = 8;
+
+/** 배열을 size 단위 청크로 분할 (캔들 호출 버스트 방지) */
+function chunk<T>(items: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
+/** 청크 단위로 순차 실행하여 종목별 캔들을 동시성 제한하에 조회 */
+async function fetchCandlesChunked(
+  symbols: string[],
+  count: number,
+  chunkSize: number,
+): Promise<Map<string, TossCandlesResult>> {
+  const map = new Map<string, TossCandlesResult>();
+  for (const group of chunk(symbols, chunkSize)) {
+    const results = await Promise.allSettled(group.map((sym) => fetchTossCandles(sym, "1d", count)));
+    results.forEach((r, i) => {
+      if (r.status === "fulfilled") map.set(group[i], r.value);
+    });
+  }
+  return map;
+}
+
+export type MarketSnapshot = {
+  marketIndices: StockQuote[];
+  rankings: Record<StockRankingKind, StockRankingItem[]>;
+};
+
+function emptyMarketSnapshot(): MarketSnapshot {
+  return { marketIndices: [], rankings: emptyRankings() };
+}
+
+/** 지수·랭킹 전용 캐시 (watchlist 무관) + single-flight (캐시 키 단위) */
+const _marketSnapshotCache = new Map<string, { data: MarketSnapshot; expiry: number }>();
+const _marketSnapshotInflight = new Map<string, Promise<MarketSnapshot>>();
+
+/** quote → ranking item 변환 (kind/score는 호출부에서 부여) */
+function quoteToRankingItem(
+  quote: StockQuote,
+  kind: StockRankingKind,
+  rank: number,
+  scoreLabel: string,
+  scoreValue: number,
+): StockRankingItem {
+  return {
+    kind,
+    rank,
+    symbol: quote.symbol,
+    name: quote.name,
+    price: quote.price,
+    change: quote.change,
+    changePct: quote.changePct,
+    volume: quote.volume,
+    tradingValue: quote.tradingValue,
+    scoreLabel,
+    scoreValue,
+  };
+}
+
+/** 정렬·상위 10개 추출 → StockRankingItem[] (rank 1부터) */
+function buildRanking(
+  quotes: StockQuote[],
+  kind: StockRankingKind,
+  scoreLabel: string,
+  scoreOf: (q: StockQuote) => number,
+  desc: boolean,
+): StockRankingItem[] {
+  const sorted = [...quotes].sort((a, b) => (desc ? scoreOf(b) - scoreOf(a) : scoreOf(a) - scoreOf(b)));
+  return sorted.slice(0, 10).map((q, i) => quoteToRankingItem(q, kind, i + 1, scoreLabel, scoreOf(q)));
+}
+
+/**
+ * 지수(프록시 ETF) + 랭킹(universe)을 토스 가용 데이터로 산출한다.
+ * 공유 배치(prices/master)는 universe+지수ETF 합집합으로 1회씩만 호출하고,
+ * 종목별 캔들은 청크 단위로 동시성 제한하여 호출한다(BASIC tier 보호).
+ */
+async function computeMarketSnapshot(noSparkline: boolean): Promise<MarketSnapshot> {
+  const indexSymbols = INDEX_PROXIES.map((p) => p.symbol);
+  // 공유 배치 대상: 지수ETF + universe (중복 제거)
+  const batchSymbols = [...new Set([...indexSymbols, ...RANKING_UNIVERSE])];
+
+  const [pricesR, masterR] = await Promise.allSettled([
+    fetchTossPrices(batchSymbols),
+    fetchTossStockMaster(batchSymbols),
+  ]);
+
+  const priceMap = new Map<string, number>(
+    pricesR.status === "fulfilled" ? pricesR.value.map((p) => [p.symbol, p.lastPrice]) : [],
+  );
+  const masterMap = new Map<string, TossStockMaster>(
+    masterR.status === "fulfilled" ? masterR.value.map((m) => [m.symbol, m]) : [],
+  );
+
+  // 지수 프록시: 캔들 count 적게 (스파크라인 생략 시 2)
+  const indexCandleCount = noSparkline ? 2 : 30;
+  const indexCandleMap = await fetchCandlesChunked(indexSymbols, indexCandleCount, INDEX_RANKING_CANDLE_CHUNK);
+
+  const marketIndices: StockQuote[] = INDEX_PROXIES.map((proxy) => {
+    const quote = buildTossQuote(
+      proxy.symbol,
+      priceMap.get(proxy.symbol) ?? 0,
+      indexCandleMap.get(proxy.symbol) ?? null,
+      masterMap.get(proxy.symbol),
+      "index",
+    );
+    // 후처리: 지수명/프록시 ETF명으로 표시 필드 덮어쓰기
+    return { ...quote, name: proxy.indexName, englishName: proxy.fundName };
+  });
+
+  // 랭킹: universe 캔들 (등락률 필요 → count 2면 충분하나 거래량/거래대금도 c0에서 산출)
+  const universeCandleMap = await fetchCandlesChunked(RANKING_UNIVERSE, 2, INDEX_RANKING_CANDLE_CHUNK);
+  const universeQuotes: StockQuote[] = RANKING_UNIVERSE.map((sym) =>
+    buildTossQuote(sym, priceMap.get(sym) ?? 0, universeCandleMap.get(sym) ?? null, masterMap.get(sym), "stock"),
+  ).filter((q) => q.price > 0);
+
+  const rankings: Record<StockRankingKind, StockRankingItem[]> = {
+    rise: buildRanking(universeQuotes, "rise", "등락률", (q) => q.changePct, true),
+    fall: buildRanking(universeQuotes, "fall", "등락률", (q) => q.changePct, false),
+    amount: buildRanking(universeQuotes, "amount", "거래대금", (q) => q.tradingValue, true),
+    volume: buildRanking(universeQuotes, "volume", "거래량", (q) => q.volume, true),
+    popular: [], // 토스 인기 신호 없음 — 빈 배열 유지(조작 금지)
+  };
+
+  return { marketIndices, rankings };
+}
+
+/**
+ * 지수·랭킹 스냅샷을 전용 캐시로 가져온다.
+ * - 캐시 키: 시장 윈도우(거래일 + 장중/마감) — watchlist·30초 버킷과 무관한 coarse 키.
+ * - TTL: 장중 max(cacheTtlMs, 3분), 장마감 다음 세션까지(cacheTtlMs).
+ * - single-flight로 cold 동시 요청의 캔들 버스트를 방지한다.
+ */
+async function getMarketSnapshot(noSparkline: boolean, force: boolean): Promise<MarketSnapshot> {
+  const windowInfo = getKrxMarketWindow();
+  // coarse 키: 거래일 + 장중여부 + 스파크라인 여부 (30초 bucketKey 사용 금지)
+  const cacheKey = `${windowInfo.mostRecentTradingDay}_${windowInfo.open ? "open" : "closed"}_ns${noSparkline ? 1 : 0}`;
+  const cached = _marketSnapshotCache.get(cacheKey);
+  if (!force && cached && cached.expiry > Date.now()) return cached.data;
+
+  const inflight = _marketSnapshotInflight.get(cacheKey);
+  if (inflight) return inflight;
+
+  const promise = computeMarketSnapshot(noSparkline)
+    .then((data) => {
+      const ttl = windowInfo.open ? Math.max(windowInfo.cacheTtlMs, 180_000) : windowInfo.cacheTtlMs;
+      _marketSnapshotCache.set(cacheKey, { data, expiry: Date.now() + ttl });
+      _marketSnapshotInflight.delete(cacheKey);
+      return data;
+    })
+    .catch((err: unknown) => {
+      _marketSnapshotInflight.delete(cacheKey);
+      throw err;
+    });
+
+  _marketSnapshotInflight.set(cacheKey, promise);
+  return promise;
+}
+
 // 마켓윈도우 단위 오버뷰 캐시
 const _overviewCache = new Map<string, { data: StockOverviewResponse; expiry: number }>();
 
@@ -538,6 +747,9 @@ export async function fetchStockOverview(
   const resolvedItems = compactSymbols(watchlistItems.length > 0 ? watchlistItems : defaultStockWatchlist());
   const noSparkline = options.noSparkline ?? false;
 
+  // 지수·랭킹은 watchlist 무관 → 실패해도 quotes에 영향 없게 격리
+  const snapshot = await getMarketSnapshot(noSparkline, options.force ?? false).catch(() => emptyMarketSnapshot());
+
   if (resolvedItems.length === 0) {
     return {
       status: "live",
@@ -545,8 +757,8 @@ export async function fetchStockOverview(
       fetchedAt,
       marketDivCode: "TOSS",
       quotes: [],
-      marketIndices: [],
-      rankings: emptyRankings(),
+      marketIndices: snapshot.marketIndices,
+      rankings: snapshot.rankings,
       themes: [],
       ipos: [],
     };
@@ -609,8 +821,8 @@ export async function fetchStockOverview(
     baseDate: windowInfo.mostRecentTradingDay,
     marketDivCode: "TOSS",
     quotes,
-    marketIndices: [],
-    rankings: emptyRankings(),
+    marketIndices: snapshot.marketIndices,
+    rankings: snapshot.rankings,
     themes: [],
     ipos: [],
     ...(errors.length > 0 ? { errors, message: errors[0] } : {}),
