@@ -179,7 +179,8 @@ function BentoGrid({ initialBlogPosts }: { initialBlogPosts: BlogPostSummary[] }
     };
   }, []);
 
-  const desktopWidgets = hydrated ? widgetOrder : DEFAULT_WIDGET_ORDER;
+  // 저장된 순서에 삭제된 위젯 id가 남아 있어도 렌더에서 걸러낸다 (WIDGET_META 미존재 → 크래시 방지)
+  const desktopWidgets = (hydrated ? widgetOrder : DEFAULT_WIDGET_ORDER).filter((id) => WIDGET_META[id] !== undefined);
 
   function getWidgetContent(id: WidgetId): React.ReactNode {
     switch (id) {

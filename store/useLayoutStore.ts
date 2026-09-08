@@ -80,7 +80,10 @@ export const useLayoutStore = create<LayoutState>()(
       name: "daldidan-layout",
       storage: safeJSONStorage,
       skipHydration: true,
-      version: 2,
+      // v3: 운세·놀이터 위젯 삭제(8a58b35)가 버전을 올리지 않아, 구 위젯 id가 남은
+      // v2 저장 상태에서 migrate가 실행되지 않고 WIDGET_META[id]가 undefined가 되어
+      // 홈이 크래시했다 (Edge 등 과거 사용 브라우저의 'minHeight' TypeError).
+      version: 3,
       migrate: async (persisted) => migrateLayoutState(persisted),
     },
   ),
