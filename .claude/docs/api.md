@@ -55,8 +55,21 @@
 |--------|------|------|---------|
 | `GET` | `/api/calendar` | 캘린더 이벤트 목록 | `?year=&month=` |
 | `POST` | `/api/calendar` | 이벤트 추가 | Body: CalendarEventPayload |
+| `PATCH` | `/api/calendar/[id]` | 이벤트 수정 (event_type은 schedule·anniversary만 허용) | Body: Partial<CalendarEventPayload> |
 | `DELETE` | `/api/calendar/[id]` | 이벤트 삭제 | - |
-| `POST` | `/api/calendar/remind` | D-1 푸시 발송 (Vercel Cron) | `Authorization: Bearer {CRON_SECRET}` |
+| `GET`·`POST` | `/api/calendar/remind` | 일정 리마인드 푸시 발송 (Vercel Cron은 GET 호출, 24h look-ahead 배치) | `Authorization: Bearer {CRON_SECRET}` |
+
+---
+
+## 로또
+
+| 메서드 | 경로 | 설명 | 파라미터 |
+|--------|------|------|---------|
+| `GET` | `/api/lotto/latest` | 최신 회차 당첨번호 (DB 우선, 라이브 폴백) | - |
+| `GET` | `/api/lotto/generate` | AI 추천 번호 생성 + 핫넘버 | - |
+| `POST` | `/api/lotto/check` | 생성/티켓 번호 등수 확인 | Body: `{ numbers, drw_no? }` |
+| `GET`·`POST` | `/api/lotto/crawl` | 최신·직전 회차 크롤링 후 DB upsert (Vercel Cron은 GET, `?drwNo=`로 특정 회차) | `Authorization: Bearer {CRON_SECRET}` |
+| `POST` | `/api/lotto/qr` | 로또 QR 티켓 파싱 | Body: `{ qr }` |
 
 ---
 

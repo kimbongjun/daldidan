@@ -136,6 +136,7 @@ export async function getFirebaseAccessToken() {
       grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
       assertion,
     }),
+    signal: AbortSignal.timeout(10_000),
   });
 
   if (!response.ok) {
@@ -212,6 +213,7 @@ export async function sendFcmMessage(params: SendFcmMessageParams) {
           },
         },
       }),
+      signal: AbortSignal.timeout(10_000),
     },
   );
 

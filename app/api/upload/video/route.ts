@@ -5,6 +5,7 @@ import {
   getCloudflareStreamConfig,
   getCloudflareStreamVideoDetails,
 } from "@/lib/cloudflare-stream";
+import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -14,6 +15,12 @@ function errorResponse(message: string, status = 500) {
 }
 
 export async function POST(request: NextRequest) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const { accountId, apiToken } = getCloudflareStreamConfig();
     const tusResumable = request.headers.get("Tus-Resumable");
@@ -45,7 +52,8 @@ export async function POST(request: NextRequest) {
 
     if (!upstream.ok) {
       const text = await upstream.text();
-      return errorResponse(`Cloudflare Stream 업로드 URL 생성 실패 (${upstream.status}) ${text}`.trim(), upstream.status);
+      console.error(`[upload/video] Cloudflare Stream 업로드 URL 생성 실패 (${upstream.status}):`, text);
+      return errorResponse("Cloudflare Stream 업로드 URL 생성에 실패했습니다.", upstream.status);
     }
 
     const location = upstream.headers.get("Location");
@@ -71,6 +79,12 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const uid = request.nextUrl.searchParams.get("uid")?.trim();
   if (!uid) return errorResponse("Cloudflare Stream video uid가 필요합니다.", 400);
 

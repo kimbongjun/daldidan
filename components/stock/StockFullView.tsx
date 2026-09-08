@@ -63,6 +63,7 @@ import {
   formatTradingValue,
 } from "@/lib/stocks/utils";
 import { getKrxMarketWindow } from "@/lib/stocks/cache-policy";
+import { anySignal } from "@/lib/abort-signal";
 
 const ACCENT = "#F05C6E";
 const RISE = "var(--stock-rise)";
@@ -914,7 +915,10 @@ export default function StockFullView() {
 
   useEffect(() => {
     if (!hydrated) return;
-    localStorage.setItem(watchlistKey, JSON.stringify(watchlist));
+    // 스토리지 차단 브라우저(Edge InPrivate 등)에서 setItem throw → 페이지 오류 방지
+    try {
+      localStorage.setItem(watchlistKey, JSON.stringify(watchlist));
+    } catch {}
     if (userId) {
       if (watchlistApiSaveRef.current) clearTimeout(watchlistApiSaveRef.current);
       watchlistApiSaveRef.current = setTimeout(() => {
@@ -929,7 +933,9 @@ export default function StockFullView() {
 
   useEffect(() => {
     if (!hydrated) return;
-    localStorage.setItem(portfolioKey, JSON.stringify(portfolio));
+    try {
+      localStorage.setItem(portfolioKey, JSON.stringify(portfolio));
+    } catch {}
   }, [hydrated, portfolio, portfolioKey]);
 
   useEffect(() => {
@@ -994,9 +1000,7 @@ export default function StockFullView() {
     };
 
     try {
-      const p1Signal = signal
-        ? AbortSignal.any([signal, AbortSignal.timeout(25_000)])
-        : AbortSignal.timeout(25_000);
+      const p1Signal = anySignal([signal], 25_000);
       const phase1Params = new URLSearchParams(baseParams);
       phase1Params.set("noSparkline", "true");
       const res = await fetch(`/api/stocks?${phase1Params.toString()}`, { cache: fetchCacheMode, signal: p1Signal });
@@ -1031,9 +1035,7 @@ export default function StockFullView() {
     }
 
     try {
-      const p2Signal = signal
-        ? AbortSignal.any([signal, AbortSignal.timeout(30_000)])
-        : AbortSignal.timeout(30_000);
+      const p2Signal = anySignal([signal], 30_000);
       const res = await fetch(`/api/stocks?${baseParams.toString()}`, { cache: fetchCacheMode, signal: p2Signal });
       const d = await res.json() as StockOverviewResponse;
       if (!signal?.aborted) {

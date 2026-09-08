@@ -14,7 +14,11 @@ export async function POST(request: NextRequest) {
 
   const deviceType = (body.deviceType ?? "web") as "web" | "ios" | "android";
   const userAgent = (request.headers.get("user-agent") ?? "").slice(0, 500);
-  const installationId = body.installationId?.trim().slice(0, 120) ?? "";
+  // LIKE 패턴에 삽입되므로 안전 문자셋만 허용 — `%`/`_` 와일드카드가 통과하면
+  // 무인증 요청 한 번으로 전체(또는 타인) 구독 행이 매칭·삭제될 수 있다.
+  // 정상 클라이언트는 UUID 또는 `${timestamp}-${hex}` 형식만 생성한다 (Header.tsx).
+  const rawInstallationId = body.installationId?.trim().slice(0, 120) ?? "";
+  const installationId = /^[A-Za-z0-9-]+$/.test(rawInstallationId) ? rawInstallationId : "";
   const installationTag = installationId ? ` [iid:${installationId}]` : "";
   const storedUserAgent = `${userAgent}${installationTag}`.slice(0, 500);
 

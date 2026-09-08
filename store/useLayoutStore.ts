@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { safeJSONStorage } from "@/lib/safe-storage";
 
 export type WidgetId =
   | "lotto"
@@ -77,6 +78,7 @@ export const useLayoutStore = create<LayoutState>()(
     }),
     {
       name: "daldidan-layout",
+      storage: safeJSONStorage,
       skipHydration: true,
       version: 2,
       migrate: async (persisted) => migrateLayoutState(persisted),

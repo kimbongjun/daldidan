@@ -1,6 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
+function isAllowedPhotoUrl(url: string): boolean {
+  try {
+    const allowedHost = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").hostname;
+    return new URL(url).hostname === allowedHost;
+  } catch {
+    return false;
+  }
+}
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -23,6 +32,10 @@ export async function PATCH(
     province?: string | null;
     drive_link?: string | null;
   };
+
+  if (body.photo_url && !isAllowedPhotoUrl(body.photo_url)) {
+    return NextResponse.json({ error: "photo_url은 자체 스토리지 URL만 허용됩니다." }, { status: 400 });
+  }
 
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (body.country !== undefined) updates.country = body.country.trim();

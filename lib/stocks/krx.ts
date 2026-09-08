@@ -499,18 +499,33 @@ async function getCachedEtfRows(config: KrxConfig, baseDate: string, options: { 
   return promise;
 }
 
-async function fetchLatestMarketRows(config: KrxConfig): Promise<{ baseDate: string; rows: Record<string, unknown>[] }> {
+// KRX가 응답 지연(타임아웃) 중일 때 과거 날짜를 계속 재시도하면 날짜당 최대 10초씩
+// 누적돼 라우트가 플랫폼 함수 타임아웃(504)으로 죽는다. 타임아웃 계열 오류는 이전
+// 날짜도 똑같이 걸리므로 즉시 중단하고, '데이터 없음'일 때만 이전 거래일을 시도한다.
+function isTimeoutLikeError(err: unknown): boolean {
+  return err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError");
+}
+
+const LATEST_ROWS_BUDGET_MS = 12_000;
+
+async function fetchLatestMarketRowsWith(
+  config: KrxConfig,
+  fetchRows: (config: KrxConfig, baseDate: string) => Promise<Record<string, unknown>[]>,
+): Promise<{ baseDate: string; rows: Record<string, unknown>[] }> {
   const today = new Date();
+  const deadline = Date.now() + LATEST_ROWS_BUDGET_MS;
   for (let offset = 0; offset < 14; offset += 1) {
+    if (Date.now() > deadline) break;
     const target = new Date(today.getTime() - offset * 86_400_000);
     const day = target.getDay();
     if (day === 0 || day === 6) continue;
 
     const baseDate = formatKrxDate(target);
     try {
-      const rows = await getCachedMarketRows(config, baseDate);
+      const rows = await fetchRows(config, baseDate);
       if (rows.length > 0) return { baseDate, rows };
-    } catch {
+    } catch (err) {
+      if (isTimeoutLikeError(err)) break;
       // 해당 날짜 데이터 없음, 다음 날짜 시도
     }
   }
@@ -518,23 +533,12 @@ async function fetchLatestMarketRows(config: KrxConfig): Promise<{ baseDate: str
   throw new Error("최근 14일 안에 조회 가능한 KRX 일별 매매정보가 없습니다.");
 }
 
+async function fetchLatestMarketRows(config: KrxConfig): Promise<{ baseDate: string; rows: Record<string, unknown>[] }> {
+  return fetchLatestMarketRowsWith(config, (cfg, baseDate) => getCachedMarketRows(cfg, baseDate));
+}
+
 async function fetchLatestMarketRowsFresh(config: KrxConfig): Promise<{ baseDate: string; rows: Record<string, unknown>[] }> {
-  const today = new Date();
-  for (let offset = 0; offset < 14; offset += 1) {
-    const target = new Date(today.getTime() - offset * 86_400_000);
-    const day = target.getDay();
-    if (day === 0 || day === 6) continue;
-
-    const baseDate = formatKrxDate(target);
-    try {
-      const rows = await getCachedMarketRows(config, baseDate, { force: true });
-      if (rows.length > 0) return { baseDate, rows };
-    } catch {
-      // 해당 날짜 데이터 없음, 다음 날짜 시도
-    }
-  }
-
-  throw new Error("최근 14일 안에 조회 가능한 KRX 일별 매매정보가 없습니다.");
+  return fetchLatestMarketRowsWith(config, (cfg, baseDate) => getCachedMarketRows(cfg, baseDate, { force: true }));
 }
 
 async function fetchHistory(config: KrxConfig, symbol: string, assetType: AssetType = "stock", maxPoints = 10): Promise<number[]> {
@@ -876,6 +880,8 @@ export async function fetchStockOverview(
     // 스파크라인 — noSparkline 모드면 스킵해서 빠르게 반환
     let quotesWithHistory: StockQuote[];
     const errors: string[] = [];
+    // 심볼당 integration 응답 재사용 맵 — 아래 워치리스트 오버레이에서 재호출하지 않는다
+    const integrationMap = new Map<string, Partial<StockQuote>>();
     if (options.noSparkline) {
       quotesWithHistory = stockEtfQuotes.map((quote) => ({ ...quote, sparkline: [] }));
     } else {
@@ -892,6 +898,9 @@ export async function fetchStockOverview(
         }
       });
       const integrationResults = await Promise.allSettled(stockEtfQuotes.map((quote) => fetchNaverIntegration(quote.symbol)));
+      integrationResults.forEach((result, index) => {
+        if (result.status === "fulfilled") integrationMap.set(stockEtfQuotes[index].symbol, result.value);
+      });
       quotesWithHistory = quotesWithHistory.map((quote, index) => ({
         ...quote,
         ...(integrationResults[index]?.status === "fulfilled" ? integrationResults[index].value : {}),
@@ -901,7 +910,7 @@ export async function fetchStockOverview(
     const naverWatchlistResults = await Promise.allSettled(
       stockEtfItems.map(async (item) => {
         const basic = await fetchNaverBasicQuote(item);
-        const detail = options.noSparkline ? undefined : await fetchNaverIntegration(item.symbol);
+        const detail = options.noSparkline ? undefined : integrationMap.get(item.symbol);
         return { item, basic, detail };
       }),
     );

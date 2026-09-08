@@ -3,6 +3,8 @@ import { fetchStockOverview } from "@/lib/stocks/krx";
 import { getKrxMarketWindow } from "@/lib/stocks/cache-policy";
 import { STOCK_RANKING_KINDS, type AssetType, type StockRankingKind, type WatchlistItem } from "@/lib/stocks/types";
 
+export const maxDuration = 30;
+
 function parseItems(value: string | null): WatchlistItem[] | null {
   if (!value) return null;
   const items: WatchlistItem[] = [];

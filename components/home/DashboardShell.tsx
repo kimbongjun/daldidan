@@ -4,14 +4,15 @@ import { useEffect, useState, useDeferredValue, Suspense, lazy, startTransition,
 import {
   DndContext,
   DragOverlay,
-  MouseSensor,
+  PointerSensor,
+  KeyboardSensor,
   closestCenter,
   useSensor,
   useSensors,
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { SortableContext, arrayMove, rectSortingStrategy } from "@dnd-kit/sortable";
+import { SortableContext, arrayMove, rectSortingStrategy, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import Footer from "@/components/Footer";
 import Header from "@/components/Header";
 import BiometricSetupBanner from "@/components/auth/BiometricSetupBanner";
@@ -127,7 +128,8 @@ function BentoGrid({ initialBlogPosts }: { initialBlogPosts: BlogPostSummary[] }
   const deferredStockReady = useDeferredValue(stockReady);
 
   const sensors = useSensors(
-    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
   useEffect(() => {

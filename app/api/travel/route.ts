@@ -1,6 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
+function isAllowedPhotoUrl(url: string): boolean {
+  try {
+    const allowedHost = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").hostname;
+    return new URL(url).hostname === allowedHost;
+  } catch {
+    return false;
+  }
+}
+
 export async function GET() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -39,6 +48,10 @@ export async function POST(request: NextRequest) {
   if (!body.travel_date) return NextResponse.json({ error: "날짜를 입력하세요." }, { status: 400 });
   if (typeof body.lat !== "number" || typeof body.lng !== "number") {
     return NextResponse.json({ error: "좌표가 올바르지 않습니다." }, { status: 400 });
+  }
+
+  if (body.photo_url && !isAllowedPhotoUrl(body.photo_url)) {
+    return NextResponse.json({ error: "photo_url은 자체 스토리지 URL만 허용됩니다." }, { status: 400 });
   }
 
   const { data, error } = await supabase

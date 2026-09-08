@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import sharp from "sharp";
 import { createAdminClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
+
+const ALLOWED = new Set(["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif"]);
 
 export async function POST(request: NextRequest) {
   const formData = await request.formData();
@@ -11,8 +14,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "파일이 없습니다." }, { status: 400 });
   }
 
-  if (!file.type.startsWith("image/")) {
-    return NextResponse.json({ error: "이미지 파일만 업로드 가능합니다." }, { status: 400 });
+  if (!ALLOWED.has(file.type)) {
+    return NextResponse.json({ error: "지원하지 않는 이미지 형식입니다." }, { status: 415 });
   }
 
   const maxSize = 5 * 1024 * 1024; // 5MB
@@ -20,16 +23,24 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "파일 크기는 5MB 이하여야 합니다." }, { status: 400 });
   }
 
+  // 원본을 신뢰하지 않고 항상 sharp로 재인코딩 — 저장형 XSS·악성 페이로드 차단
+  let outputBuffer: Buffer;
+  try {
+    outputBuffer = await sharp(Buffer.from(await file.arrayBuffer()), { animated: true })
+      .rotate()
+      .webp({ quality: 82 })
+      .toBuffer();
+  } catch {
+    return NextResponse.json({ error: "지원하지 않는 이미지 형식입니다." }, { status: 415 });
+  }
+
   const admin = createAdminClient();
-  const rawExt = file.name.includes(".") ? file.name.split(".").pop()!.toLowerCase().replace(/[^a-z0-9]/g, "") : "";
-  const ext = rawExt || "jpg";
-  const fileName = `${crypto.randomUUID()}.${ext}`;
+  const fileName = `${crypto.randomUUID()}.webp`;
   const path = `comments/${fileName}`;
 
-  const arrayBuffer = await file.arrayBuffer();
   const { error } = await admin.storage
     .from("comment-images")
-    .upload(path, arrayBuffer, { contentType: file.type, upsert: false });
+    .upload(path, outputBuffer, { contentType: "image/webp", upsert: false });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

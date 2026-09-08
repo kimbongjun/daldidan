@@ -79,6 +79,7 @@ export async function POST(request: NextRequest) {
         ],
         content: message,
       }),
+      signal: AbortSignal.timeout(8_000),
     });
 
     if (!resp.ok) {

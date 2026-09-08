@@ -151,6 +151,7 @@ function SubscriptionTab() {
     queryKey: queryKeys.realEstate.subscriptions,
     queryFn: async ({ signal }) => {
       const res = await fetchWithTimeout("/api/realestate/subscriptions", { signal }, 12000);
+      if (!res.ok) throw new Error("청약 정보를 불러오지 못했습니다.");
       return res.json() as Promise<{ subscriptions: DisplaySubscriptionItem[]; isMock?: boolean }>;
     },
     staleTime: 10 * 60 * 1000,
@@ -229,7 +230,7 @@ function SubscriptionTab() {
                   {item.region} · {item.totalUnits > 0 ? `${item.totalUnits.toLocaleString()}세대` : "세대수 미정"}
                 </p>
                 <p className="text-[10px] mt-0.5" style={{ color: "var(--text-muted)" }}>
-                  {item.startDate.slice(5)} ~ {item.endDate.slice(5)}
+                  {item.startDate?.slice(5) ?? "-"} ~ {item.endDate?.slice(5) ?? "-"}
                 </p>
               </div>
               {/* 분양가 + 타입 */}
@@ -295,6 +296,7 @@ function TransactionTab() {
     queryKey: queryKeys.realEstate.transactions,
     queryFn: async ({ signal }) => {
       const res = await fetchWithTimeout("/api/realestate/transactions", { signal }, 12000);
+      if (!res.ok) throw new Error("실거래 데이터를 불러오지 못했습니다.");
       return res.json() as Promise<{ transactions: TransactionItem[]; isMock?: boolean }>;
     },
     staleTime: 10 * 60 * 1000,
@@ -457,6 +459,7 @@ function RateTab() {
     queryKey: queryKeys.realEstate.rates,
     queryFn: async ({ signal }) => {
       const res = await fetchWithTimeout("/api/realestate/rates", { signal }, 12000);
+      if (!res.ok) throw new Error("금리 정보를 불러오지 못했습니다.");
       return res.json() as Promise<{ rates: PolicyRate[] }>;
     },
     staleTime: 10 * 60 * 1000,
@@ -494,7 +497,7 @@ function RateTab() {
               {rate.minRate}~{rate.maxRate}%
             </p>
             <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>
-              {rate.updatedAt.slice(0, 7)} 기준
+              {rate.updatedAt?.slice(0, 7) ?? "-"} 기준
             </p>
           </div>
         </a>
@@ -512,6 +515,7 @@ function IllegalResupplyTab() {
     queryKey: queryKeys.realEstate.illegalResupply,
     queryFn: async ({ signal }) => {
       const res = await fetchWithTimeout("/api/realestate/illegal-resupply", { signal }, 12000);
+      if (!res.ok) throw new Error("재공급 일정을 불러오지 못했습니다.");
       return res.json() as Promise<{ items: IllegalResupplyItem[]; isMock?: boolean }>;
     },
     staleTime: 10 * 60 * 1000,
@@ -583,14 +587,14 @@ function IllegalResupplyTab() {
                   {item.region} · {item.units > 0 ? `${item.units}세대` : "세대수 미정"}
                 </p>
                 <p className="text-[10px] mt-0.5" style={{ color: "var(--text-muted)" }}>
-                  공고 {item.announcementDate.slice(5)} · 발표 {item.winnerAnnouncementDate ? item.winnerAnnouncementDate.slice(5) : "-"}
+                  공고 {item.announcementDate?.slice(5) ?? "-"} · 발표 {item.winnerAnnouncementDate ? item.winnerAnnouncementDate.slice(5) : "-"}
                 </p>
               </div>
               {/* 전매제한 배지 */}
               <div className="text-right shrink-0 max-w-[80px]">
                 <span className="text-[10px] px-1.5 py-0.5 rounded-md block truncate"
                   style={{ background: "rgba(244,63,94,0.12)", color: "#F43F5E" }}>
-                  {item.transferRestriction.length > 8 ? item.transferRestriction.slice(0, 8) + "…" : item.transferRestriction}
+                  {(item.transferRestriction?.length ?? 0) > 8 ? item.transferRestriction.slice(0, 8) + "…" : item.transferRestriction}
                 </span>
               </div>
             </a>

@@ -86,7 +86,7 @@ export default function BiometricSetupBanner() {
       setDone(true);
       setTimeout(() => setVisible(false), 2000);
     } catch (e) {
-      const msg = (e as Error).message;
+      const msg = e instanceof Error ? e.message : String(e ?? "");
       if (msg.includes("cancelled") || msg.includes("NotAllowed") || msg.includes("AbortError")) {
         setLoading(false);
         return;

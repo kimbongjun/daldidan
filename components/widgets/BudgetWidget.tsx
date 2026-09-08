@@ -116,7 +116,7 @@ export default function BudgetWidget() {
   );
 
   const { expense, averageExpense, topCategory, topCategoryAmount, topCategoryShare } = useMemo(() => {
-    const exp = expenseTransactions.reduce((s, t) => s + t.amount, 0);
+    const exp = expenseTransactions.reduce((s, t) => s + (t.amount ?? 0), 0);
     const categoryTotals = expenseTransactions.reduce<Record<string, number>>((acc, t) => {
       acc[t.category] = (acc[t.category] ?? 0) + t.amount;
       return acc;
@@ -277,12 +277,12 @@ export default function BudgetWidget() {
                     {tx.merchant_name || tx.note || tx.category}
                   </p>
                   <p className="text-[10px] truncate" style={{ color: "var(--text-muted)" }}>
-                    {[tx.buyer, tx.date.slice(5)].filter(Boolean).join(" · ")}
+                    {[tx.buyer, tx.date?.slice(5) ?? ""].filter(Boolean).join(" · ")}
                   </p>
                 </div>
               </div>
               <span className="text-xs font-black shrink-0" style={{ color: "#F43F5E" }}>
-                −{tx.amount.toLocaleString()}
+                −{(tx.amount ?? 0).toLocaleString()}
               </span>
             </button>
           ))}

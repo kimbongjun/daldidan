@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import sharp from "sharp";
-import { createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient, createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 // Vercel 기본 4.5 MB body 제한을 30 MB로 상향
 export const maxDuration = 60;
 
-const SVG_MIME = "image/svg+xml";
 const MAX_INPUT_BYTES = 30 * 1024 * 1024; // 30 MB
 
 export async function POST(request: NextRequest) {
@@ -23,6 +22,13 @@ export async function POST(request: NextRequest) {
 }
 
 async function handleUpload(request: NextRequest): Promise<NextResponse> {
+  // service role 업로드 전 반드시 로그인 검증 — 익명 대량 업로드·악성 파일 호스팅 차단
+  const authClient = await createClient();
+  const { data: { user } } = await authClient.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   let formData: FormData;
   try {
     formData = await request.formData();
@@ -43,39 +49,24 @@ async function handleUpload(request: NextRequest): Promise<NextResponse> {
   }
 
   const inputBuffer = Buffer.from(await file.arrayBuffer());
-  const isSvg = file.type === SVG_MIME;
 
+  // 항상 sharp 재인코딩을 거친다 — SVG(스크립트 실행 가능)·클라이언트 선언 MIME을
+  // 신뢰한 원본 저장은 공개 버킷 저장형 XSS 벡터가 되므로 허용하지 않는다.
   let outputBuffer: Buffer;
-  let contentType: string;
-  let ext: string;
-
-  if (isSvg) {
-    outputBuffer = inputBuffer;
-    contentType = SVG_MIME;
-    ext = "svg";
-  } else {
-    try {
-      outputBuffer = await sharp(inputBuffer, { animated: true })
-        .rotate()
-        .webp({ quality: 82 })
-        .toBuffer();
-      contentType = "image/webp";
-      ext = "webp";
-    } catch (err) {
-      console.error("[blog/images] sharp 변환 실패:", err);
-      // sharp 실패 시 원본 그대로 업로드 (폴백)
-      outputBuffer = inputBuffer;
-      const mimeToExt: Record<string, string> = {
-        "image/jpeg": "jpg",
-        "image/png": "png",
-        "image/gif": "gif",
-        "image/webp": "webp",
-        "image/avif": "avif",
-      };
-      ext = mimeToExt[file.type] ?? "bin";
-      contentType = file.type || "application/octet-stream";
-    }
+  try {
+    outputBuffer = await sharp(inputBuffer, { animated: true })
+      .rotate()
+      .webp({ quality: 82 })
+      .toBuffer();
+  } catch (err) {
+    console.error("[blog/images] sharp 변환 실패:", err);
+    return NextResponse.json(
+      { error: "지원하지 않는 이미지 형식입니다. JPEG·PNG·WebP·GIF·AVIF 파일을 사용해 주세요." },
+      { status: 415 },
+    );
   }
+  const contentType = "image/webp";
+  const ext = "webp";
 
   const filename = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
   const storagePath = `uploads/${filename}`;

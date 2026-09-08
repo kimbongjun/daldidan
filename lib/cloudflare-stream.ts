@@ -97,6 +97,7 @@ export async function getCloudflareStreamVideoDetails(uid: string): Promise<Clou
       accept: "application/json",
     },
     cache: "no-store",
+    signal: AbortSignal.timeout(8_000),
   });
 
   const payload = await response.json().catch(() => ({})) as CloudflareEnvelope<CloudflareStreamVideoDetails>;
@@ -139,6 +140,7 @@ export async function listCloudflareStreamVideos(options: {
       accept: "application/json",
     },
     cache: "no-store",
+    signal: AbortSignal.timeout(8_000),
   });
 
   const payload = await res.json().catch(() => ({})) as CloudflareEnvelope<CloudflareStreamListItem[]>;

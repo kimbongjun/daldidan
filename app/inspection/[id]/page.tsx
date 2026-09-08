@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Pencil, Trash2, Images } from "lucide-react";
+import { Pencil, Images } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import { getInspectionRecord } from "@/lib/inspection";
 import InspectionDeleteButton from "@/components/inspection/InspectionDeleteButton";

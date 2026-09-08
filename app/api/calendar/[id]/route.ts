@@ -53,6 +53,11 @@ export async function PATCH(
     if (key in body) patch[key] = body[key];
   }
 
+  // event_type은 위젯이 렌더할 수 있는 값만 허용 (POST와 동일 검증)
+  if ("event_type" in patch && patch.event_type !== "schedule" && patch.event_type !== "anniversary") {
+    return NextResponse.json({ error: "유효하지 않은 일정 유형입니다." }, { status: 400 });
+  }
+
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: "변경할 필드가 없습니다." }, { status: 400 });
   }

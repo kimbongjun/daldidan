@@ -103,6 +103,8 @@ function sanitizeSummary(target: SummaryTarget, summary: string, items: string[]
   return limitTextLength(summary.replace(/^"|"$/g, "").trim(), 20);
 }
 
+// 비로그인 블로그 목록 페이지도 이 엔드포인트로 소개문을 생성하므로 인증을 요구하지
+// 않는다. 대신 항목 수·길이 상한과 캐시로 Anthropic 호출 비용을 제한한다.
 export async function POST(request: NextRequest) {
   let body: unknown;
   try {
@@ -118,7 +120,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "target과 items가 필요합니다." }, { status: 400 });
   }
 
-  const items = rawItems.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+  const items = rawItems
+    .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    .map((item) => item.slice(0, 200));
   if (items.length === 0) {
     return NextResponse.json({ error: "items에는 비어 있지 않은 문자열이 필요합니다." }, { status: 400 });
   }
@@ -155,6 +159,10 @@ export async function POST(request: NextRequest) {
     const block = message.content[0];
     const raw = block?.type === "text" ? block.text : "";
     const summary = sanitizeSummary(target, raw, items);
+    if (cache.size >= 100) {
+      const oldest = cache.keys().next().value;
+      if (oldest !== undefined) cache.delete(oldest);
+    }
     cache.set(cacheKey, { summary, generatedAt: Date.now() });
 
     return NextResponse.json({ summary });

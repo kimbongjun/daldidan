@@ -80,7 +80,7 @@ export default function BiometricLoginButton({ next = "/" }: Props) {
       router.push(next);
       router.refresh();
     } catch (e) {
-      const msg = (e as Error).message;
+      const msg = e instanceof Error ? e.message : String(e ?? "");
       // 사용자가 취소한 경우 조용히 처리
       if (msg.includes("cancelled") || msg.includes("NotAllowed") || msg.includes("AbortError")) {
         setLoading(false);

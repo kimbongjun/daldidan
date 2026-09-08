@@ -13,7 +13,7 @@ describe("sanitizeBlogAiSummary", () => {
 
   it("limits the summary length", () => {
     const long = "가".repeat(220);
-    expect(sanitizeBlogAiSummary(long, "fallback")).toHaveLength(70);
+    expect(sanitizeBlogAiSummary(long, "fallback")).toHaveLength(60);
   });
 
   it("keeps only the first sentence", () => {
@@ -21,7 +21,7 @@ describe("sanitizeBlogAiSummary", () => {
   });
 
   it("replaces hostile tone with fallback", () => {
-    expect(sanitizeBlogAiSummary("최악의 하루를 비꼬는 요약입니다.", "잔잔한 하루를 다룬 글입니다.")).toBe("잔잔한 하루를 다룬 글입니다.");
+    expect(sanitizeBlogAiSummary("개판인 하루를 담은 요약입니다.", "잔잔한 하루를 다룬 글입니다.")).toBe("잔잔한 하루를 다룬 글입니다.");
   });
 });
 

@@ -19,6 +19,7 @@ import {
 } from "@/lib/stocks/types";
 import { sanitizeSymbol, sanitizeIndexSymbol, formatPrice } from "@/lib/stocks/utils";
 import { getKrxMarketWindow } from "@/lib/stocks/cache-policy";
+import { anySignal } from "@/lib/abort-signal";
 import { queryKeys } from "@/lib/queryKeys";
 import { createClient } from "@/lib/supabase/client";
 import type { AuthUser as User } from "@supabase/supabase-js";
@@ -220,7 +221,7 @@ export default function StockWidget() {
       });
       const res = await fetch(`/api/stocks?${params.toString()}`, {
         cache: "no-store",
-        signal: AbortSignal.any([signal, AbortSignal.timeout(20_000)]),
+        signal: anySignal([signal], 20_000),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return res.json() as Promise<StockOverviewResponse>;

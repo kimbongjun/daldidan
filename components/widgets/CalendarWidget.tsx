@@ -637,7 +637,8 @@ function EventDetailModal({
         </div>
         <div className="px-5 pb-5 flex flex-col gap-3">
           {events.map((ev) => {
-            const meta = EVENT_TYPE_META[ev.event_type];
+            // DB CHECK는 'appointment' 등 UI 미지원 값도 허용하므로 렌더 크래시 방어
+            const meta = EVENT_TYPE_META[ev.event_type] ?? EVENT_TYPE_META.schedule;
             return (
               <div
                 key={ev.id}
@@ -1088,7 +1089,7 @@ export default function CalendarWidget() {
           ) : (
             <div className="flex flex-col gap-2 overflow-y-auto scrollbar-hide">
               {upcoming.map((ev) => {
-                const meta = EVENT_TYPE_META[ev.event_type];
+                const meta = EVENT_TYPE_META[ev.event_type] ?? EVENT_TYPE_META.schedule;
                 const authorColor = ev.color ?? (ev.is_shared ? SHARED_COLOR : getAuthorColor(ev.user_id));
                 const [, em, ed] = ev.start_date.split("-").map(Number);
                 const dateLabel = `${em}/${ed}`;

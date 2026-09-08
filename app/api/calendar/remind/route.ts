@@ -3,16 +3,23 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { sendPushToUserIds } from "@/lib/push-notification";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 /**
- * POST /api/calendar/remind
+ * GET·POST /api/calendar/remind
  * reminder_minutes 설정된 일정에 대한 푸시 알림 발송.
- * Vercel Cron 또는 외부 스케줄러에서 15분마다 호출.
+ *
+ * Vercel Cron은 항상 GET으로 호출한다 — 과거 POST만 export해 매일 405로
+ * 실패했으므로 GET을 크론 진입점으로 두고 POST는 수동 실행용으로 유지한다.
  * Authorization: Bearer {CRON_SECRET} 헤더로 보호.
  *
- * 로직: (start_date + start_time) - reminder_minutes분 이 현재 시각 기준 ±5분 이내인 이벤트에 발송
+ * 발송 창: 현재 크론이 하루 1회(vercel.json `0 9 * * *` = KST 18:00)라서
+ * 원래 설계(15분 주기, ±5분 창)로는 알림이 거의 발송되지 않는다.
+ * 따라서 "알림 예정 시각이 지금부터 24시간 이내(또는 5분 이내 과거)"인 일정을
+ * 하루 한 번 몰아서 발송한다. 크론을 15분 주기로 바꾸면(Pro 플랜)
+ * LOOKAHEAD_MS를 15분으로 줄여 원래 정밀도로 복원할 것.
  */
-export async function POST(request: NextRequest) {
+async function handleRemind(request: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
   if (cronSecret) {
     const authHeader = request.headers.get("authorization");
@@ -28,11 +35,9 @@ export async function POST(request: NextRequest) {
   const kstOffset = 9 * 60 * 60 * 1000;
   const nowKst = new Date(nowUtc.getTime() + kstOffset);
 
-  // 앞으로 15분 + 뒤로 5분 범위의 일정을 조회 (최대 reminder_minutes = 720분 = 12시간)
-  // 실제 필터링은 JS에서 수행 (reminder_minutes 값이 각기 다르므로)
-  // 오늘 + 내일 범위 이벤트 조회 (12시간 전 알림 대응)
+  // 오늘 + 내일 범위 이벤트 조회 (24시간 look-ahead 대응)
   const todayKst = nowKst.toISOString().slice(0, 10);
-  const tomorrowKst = new Date(nowKst.getTime() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const dayAfterKst = new Date(nowKst.getTime() + 2 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
   const { data: events, error } = await admin
     .from("calendar_events")
@@ -40,7 +45,7 @@ export async function POST(request: NextRequest) {
     .not("reminder_minutes", "is", null)
     .eq("remind_sent", false)
     .gte("start_date", todayKst)
-    .lte("start_date", tomorrowKst);
+    .lte("start_date", dayAfterKst);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -56,15 +61,9 @@ export async function POST(request: NextRequest) {
     anniversary: "기념일",
   };
 
-  const reminderLabel: Record<number, string> = {
-    15: "15분",
-    30: "30분",
-    60: "1시간",
-    720: "12시간",
-  };
-
   const nowUtcMs = nowUtc.getTime();
-  const WINDOW_MS = 5 * 60 * 1000; // ±5분 허용 오차
+  const PAST_GRACE_MS = 5 * 60 * 1000; // 이미 지난 알림 시각 허용 오차
+  const LOOKAHEAD_MS = 24 * 60 * 60 * 1000; // 하루 1회 크론 기준 look-ahead
 
   let totalSent = 0;
   const sentIds: string[] = [];
@@ -84,16 +83,15 @@ export async function POST(request: NextRequest) {
     // 알림 발송 예정 시각 (이벤트 시작 UTC - reminder_minutes분)
     const alertUtcMs = eventUtcMs - (event.reminder_minutes as number) * 60 * 1000;
 
-    // 현재 UTC와 알림 예정 UTC 비교 (±5분 이내)
-    if (Math.abs(nowUtcMs - alertUtcMs) > WINDOW_MS) continue;
+    // 알림 예정 시각이 [지금-5분, 지금+24시간) 범위일 때 발송
+    if (alertUtcMs < nowUtcMs - PAST_GRACE_MS || alertUtcMs >= nowUtcMs + LOOKAHEAD_MS) continue;
 
     const label = typeLabel[event.event_type as string] ?? "일정";
-    const beforeLabel = reminderLabel[event.reminder_minutes as number] ?? `${event.reminder_minutes}분`;
     const locationStr = event.location ? ` · ${event.location}` : "";
     const body = `${event.start_date} ${timeStr}${locationStr}`;
 
     const result = await sendPushToUserIds([event.user_id as string], {
-      title: `🔔 [${beforeLabel} 전] ${label}: ${event.title}`,
+      title: `🔔 ${label} 알림: ${event.title}`,
       body,
       url: "/",
     }, "all");
@@ -112,4 +110,12 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json({ sent: totalSent, eventsProcessed: events.length });
+}
+
+export async function GET(request: NextRequest) {
+  return handleRemind(request);
+}
+
+export async function POST(request: NextRequest) {
+  return handleRemind(request);
 }

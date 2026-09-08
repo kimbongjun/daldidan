@@ -148,6 +148,15 @@ function parseNaverLottoHtml(html: string, expectedRound: number): LottoFetchRes
   };
 }
 
+// 위젯 클라이언트 타임아웃(7초)보다 서버 외부 호출 합계가 길면 사용자에게는 무조건
+// 오류로 보인다. dhlottery(변형 2회) + 네이버 폴백 합계가 7초 안쪽이 되도록 예산 배분.
+const DHLOTTERY_TIMEOUT_MS = 2500;
+const NAVER_TIMEOUT_MS = 4000;
+
+function isValidLottoNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 45;
+}
+
 export async function fetchFromDhlottery(drwNo: number): Promise<LottoFetchResult> {
   // HTML(봇 차단) 응답 시 헤더 없이 재시도
   const headerVariants: Array<Record<string, string> | undefined> = [DHLOTTERY_HEADERS, undefined];
@@ -155,7 +164,7 @@ export async function fetchFromDhlottery(drwNo: number): Promise<LottoFetchResul
 
   for (const headers of headerVariants) {
     try {
-      const init: RequestInit = { signal: AbortSignal.timeout(10000), cache: "no-store" };
+      const init: RequestInit = { signal: AbortSignal.timeout(DHLOTTERY_TIMEOUT_MS), cache: "no-store" };
       if (headers) init.headers = headers;
 
       const res = await fetch(DHLOTTERY_URL + drwNo, init);
@@ -176,7 +185,13 @@ export async function fetchFromDhlottery(drwNo: number): Promise<LottoFetchResul
 
       const r = data as Record<string, unknown>;
       if (r.returnValue === "fail") return { ok: false, reason: "추첨 전 또는 존재하지 않는 회차" };
-      if (r.returnValue !== "success" || typeof r.drwNo !== "number") {
+      const drawNumbers = [r.drwtNo1, r.drwtNo2, r.drwtNo3, r.drwtNo4, r.drwtNo5, r.drwtNo6, r.bnusNo];
+      if (
+        r.returnValue !== "success" ||
+        typeof r.drwNo !== "number" ||
+        typeof r.drwNoDate !== "string" ||
+        !drawNumbers.every(isValidLottoNumber)
+      ) {
         return { ok: false, reason: "dhlottery 응답 형식 불일치" };
       }
 
@@ -199,6 +214,9 @@ export async function fetchFromDhlottery(drwNo: number): Promise<LottoFetchResul
       };
     } catch (e) {
       lastReason = `dhlottery 네트워크 오류: ${e instanceof Error ? e.message : String(e)}`;
+      // 타임아웃(블랙홀)은 헤더를 바꿔도 똑같이 걸린다 — 재시도 없이 네이버 폴백으로 넘어가
+      // 전체 응답이 위젯 클라이언트 타임아웃(7초)을 넘지 않게 한다.
+      if (e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError")) break;
     }
   }
 
@@ -209,7 +227,7 @@ export async function fetchFromNaverSearch(drwNo: number): Promise<LottoFetchRes
   try {
     const query = encodeURIComponent(`${drwNo}회 로또 당첨번호`);
     const res = await fetch(NAVER_SEARCH_URL + query, {
-      signal: AbortSignal.timeout(10000),
+      signal: AbortSignal.timeout(NAVER_TIMEOUT_MS),
       cache: "no-store",
       headers: NAVER_HEADERS,
     });
@@ -344,8 +362,11 @@ export async function getLatestLottoResult(): Promise<{ data: LottoResultRow | n
     return { data: latestStored, error: null };
   }
 
+  // 저장 데이터가 있으면(직전 회차 등) 최신 회차 1건만 짧게 라이브 시도하고,
+  // 실패 시 즉시 stale 데이터를 반환한다 — 외부 장애가 위젯 오류로 번지지 않게 한다.
+  // 저장 데이터가 전혀 없을 때만(초기 부트스트랩) 이전 회차까지 폭넓게 시도한다.
   const fetchRounds = latestStored
-    ? [latestRound, latestRound - 1, latestRound - 2]
+    ? [latestRound]
     : [latestRound, latestRound - 1, latestRound - 2, latestRound - 3];
 
   for (const round of fetchRounds) {

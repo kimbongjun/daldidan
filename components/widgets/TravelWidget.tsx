@@ -258,7 +258,7 @@ export default function TravelWidget() {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  {place.is_domestic ? (place.province ?? place.country) : place.country} · {place.travel_date.slice(0, 7)}
+                  {place.is_domestic ? (place.province ?? place.country) : place.country} · {place.travel_date?.slice(0, 7) ?? ""}
                 </p>
               </div>
             </button>

@@ -156,7 +156,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "날짜 형식이 올바르지 않습니다." }, { status: 400 });
   }
 
-  const validTypes = ["schedule", "appointment", "anniversary"];
+  // 'appointment'는 UI에서 제거된 레거시 타입 — 위젯 렌더 맵에 없어 허용하지 않는다
+  const validTypes = ["schedule", "anniversary"];
   const event_type = validTypes.includes(body.event_type ?? "") ? body.event_type : "schedule";
 
   const validRecurrences = ["daily", "weekly", "monthly", "yearly"];
